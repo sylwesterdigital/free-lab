@@ -6,6 +6,10 @@ from cryptography.fernet import Fernet, InvalidToken
 
 PROVIDERS={
  'meta': 'Meta Model API (Muse + SAM 3.1)',
+ 'aholo': 'Aholo Labs (Lux3D + reconstruction)',
+ 'openai': 'OpenAI API',
+ 'gemini': 'Google Gemini API',
+ 'xai': 'xAI / Grok Imagine',
  'meshy': 'Meshy 3D generation',
  'tripo': 'Tripo 3D generation',
  'fal': 'fal.ai model gateway',

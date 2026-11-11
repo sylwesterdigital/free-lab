@@ -1,13 +1,15 @@
 {
-  "version": "0.2.0",
-  "title": "Spatial Studio \u00b7 The arrival",
-  "datetime": "2026-11-11 20:12 GMT",
+  "version": "0.3.0",
+  "title": "Spatial Studio · Reality check",
+  "datetime": "2026-11-11 21:40 GMT",
   "changes": [
-    "A cinematic open-canvas landing with animated 3D FREELAB mascot and central XR portal.",
-    "Smaller floating controls, a collapsible collection drawer, and movable XR header.",
-    "Administrator-only encrypted provider key vault: Meta, Meshy, Tripo, fal.ai, Replicate.",
-    "Opt-in interval scanning; every frame uses the shared daily request budget.",
-    "SAM 3.1 single-image segmentation probe with bounding-box overlay and cost controls.",
-    "XR controller/hand diagnostics and pinch/trigger interaction improvements."
+    "Fixed head-following XR interface: panel now remains in the local room reference space, with recentering and header dragging.",
+    "Added visible controller/hand pointing rays, target markers, pinch and trigger selection, plus a private inventory view inside XR.",
+    "Added an explicit camera-readiness diagnostic to distinguish passthrough visualization from actual readable pixels.",
+    "Added Aholo Lux3D, OpenAI, Gemini and Grok/xAI to admin-only model connections.",
+    "API keys may be kept in current-tab RAM or saved encrypted in the Ubuntu vault; new read-only authentication checks avoid inference jobs.",
+    "Added Meshy balance lookup where provided, Meta token usage tracking and a separate FREE LAB rolling request-quota meter.",
+    "SAM 3.1 detected bounding boxes can be saved as private JPEG object crops, not transparent segmentation masks.",
+    "Replaced browser-native scan consent and provider/model selects with floating in-app controls."
   ]
 }

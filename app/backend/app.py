@@ -5,7 +5,7 @@ from pathlib import Path
 from functools import wraps
 from flask import Flask,abort,g,jsonify,request,send_file,session
 from werkzeug.middleware.proxy_fix import ProxyFix
-from . import db,providers,secrets as keyvault,sam
+from . import db,providers,secrets as keyvault,sam,provider_checks
 
 APP_ROOT=Path(__file__).resolve().parents[1]
 DATA_DIR=Path(os.getenv('FREE_LAB_DATA_DIR',APP_ROOT/'var')).resolve()
@@ -133,6 +133,40 @@ def remove_provider(provider):
     keyvault.delete_key(g.con,provider)
     return jsonify(ok=True,provider=provider)
 
+@app.post('/api/admin/providers/<provider>/check')
+@require_admin
+def check_provider(provider):
+    if provider not in keyvault.PROVIDERS:abort(404)
+    supplied=body().get('api_key')
+    if supplied is not None and (not isinstance(supplied,str) or len(supplied)>4096 or len(supplied)<12):
+        return jsonify(error='Invalid temporary key'),400
+    key=supplied or keyvault.get_key(g.con,provider) or (os.getenv('MODEL_API_KEY','') if provider=='meta' else '')
+    if not key:return jsonify(error='Choose a session key or save a server key first'),400
+    result=provider_checks.check(provider,key)
+    return jsonify(result)
+
+@app.get('/api/usage')
+@require_user
+def usage():
+    global_used=g.con.execute("SELECT COUNT(*) AS n FROM inference_calls WHERE julianday(created_at)>=julianday('now')-1").fetchone()['n']
+    mine=g.con.execute("SELECT COUNT(*) AS n FROM inference_calls WHERE user_id=? AND julianday(created_at)>=julianday('now')-1",(g.user['id'],)).fetchone()['n']
+    recent=g.con.execute("SELECT provider,status,created_at,usage_json FROM inference_calls WHERE user_id=? ORDER BY id DESC LIMIT 20",(g.user['id'],)).fetchall()
+    return jsonify(global_last_24h=global_used,user_last_24h=mine,
+        global_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','24')),
+        user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','8')),
+        hard_dollar_cap=False,
+        recent=[{'provider':r['provider'],'status':r['status'],'time':r['created_at'],
+                 'tokens':json.loads(r['usage_json'] or '{}')} for r in recent])
+
+
+def request_meta_key(v):
+    temp=v.get('session_api_key')
+    if temp is not None:
+        if not g.user or g.user['role']!='admin' or not isinstance(temp,str) or not 12<=len(temp)<=4096:
+            abort(403)
+        return temp
+    return keyvault.get_meta_key(g.con)
+
 @app.post('/api/segment')
 @require_user
 def segment_image():
@@ -142,7 +176,7 @@ def segment_image():
     prompt=str(v.get('prompt','')).strip().lower()
     if not re.fullmatch(r'[a-z0-9][a-z0-9 -]{0,58}[a-z0-9]',prompt):
         return jsonify(error='Use one object noun phrase (2–60 characters)'),400
-    api_key=keyvault.get_meta_key(g.con)
+    api_key=request_meta_key(v)
     if not api_key:return jsonify(error='Meta key not configured'),503
     digest=hashlib.sha256(raw+prompt.encode()).hexdigest()
     try:call=db.begin_inference(g.con,g.user['id'],digest,'sam-3.1',
@@ -151,7 +185,35 @@ def segment_image():
     except ValueError as e:return jsonify(error=str(e)),429
     try:
         result=sam.segment_jpeg(raw,prompt,api_key)
-        db.finish_inference(g.con,call,'ok')
+        db.finish_inference(g.con,call,'ok',result.get('usage'))
+        result['saved_ids']=[]
+        if v.get('save') is True and result['boxes']:
+            # Persist bounded IMAGE CROPS (not mask cutouts); usable immediately in inventory.
+            from PIL import Image, ImageOps
+            Image.MAX_IMAGE_PIXELS=12_000_000
+            photo=Image.open(io.BytesIO(raw))
+            if photo.width * photo.height > 12_000_000:
+                raise ValueError('JPEG resolution exceeds safe segmentation crop size')
+            photo=ImageOps.exif_transpose(photo).convert('RGB')
+            for box in result['boxes'][:6]:
+                x1,y1,x2,y2=[int(n) for n in box['box']]
+                w,h=box['image_size']; sx=photo.width/w;sy=photo.height/h
+                crop=photo.crop((max(0,round(x1*sx)),max(0,round(y1*sy)),
+                                 min(photo.width,round((x2+1)*sx)),min(photo.height,round((y2+1)*sy))))
+                if crop.width<8 or crop.height<8:continue
+                crop.thumbnail((960,960))
+                name=secrets.token_hex(16)+'.jpg'
+                out=IMAGE_DIR/name
+                crop.save(out,format='JPEG',quality=78,optimize=True)
+                try:
+                    with g.con:
+                        oid=g.con.execute('INSERT INTO objects(owner_id,label,description,provider,image_name,sha256) VALUES(?,?,?,?,?,?)',
+                        (g.user['id'],prompt,'SAM 3.1 bounding-box crop (not a decoded segmentation mask)',
+                         'sam-3.1-box',name,hashlib.sha256(out.read_bytes()).hexdigest())).lastrowid
+                    result['saved_ids'].append(oid)
+                except Exception:
+                    out.unlink(missing_ok=True)
+                    raise
         return jsonify(result)
     except (RuntimeError,ValueError) as e:
         db.finish_inference(g.con,call,'error')
@@ -247,7 +309,7 @@ def capture():
     except ValueError as e:return jsonify(error=str(e)),400
     digest=hashlib.sha256(raw).hexdigest()
     use_model=v.get('recognize') is True
-    if use_model and not keyvault.get_meta_key(g.con):
+    if use_model and not request_meta_key(v):
         return jsonify(error='Meta API key not configured. Save a manual snapshot instead.'),503
     # For a manual snapshot, use a user-supplied label. Never pretend a mock prediction is AI.
     if not use_model and not str(v.get('label','')).strip():
@@ -261,8 +323,8 @@ def capture():
                   user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','8')))
         except ValueError as e:return jsonify(error=str(e)),429
         try:
-            detections,usage=providers.identify(raw,model,api_key=keyvault.get_meta_key(g.con))
-            db.finish_inference(g.con,call,'ok')
+            detections,usage=providers.identify(raw,model,api_key=request_meta_key(v))
+            db.finish_inference(g.con,call,'ok',usage)
         except Exception as e:
             db.finish_inference(g.con,call,'error')
             return jsonify(error=str(e)),502

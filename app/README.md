@@ -1,25 +1,28 @@
-# FREELAB — Spatial Studio v0.2.0
+# FREELAB — Spatial Studio v0.3.0
 
 Self-hosted Quest 3 mixed-reality discovery MVP. Built for macOS M2 Pro development, Ubuntu serving, and browser-based WebXR. Domain: https://free-lab.cam/.
 
-## What's new in 0.2.0
+## What's new in 0.3.0
 
-- Cinematic dark, progressively lit floor scene with a friendly original soft-body FREELAB creature, fluorescent green silhouette, buoyant ears, floating nameplate, and large XR portal.
-- Three.js r181 enhanced renderer for desktop/Quest Browser when the pinned module can be fetched. Pure local CSS 3D-like mascot fallback works without CDN. See *Offline note* below.
-- Small floating navigation; slide-out private collection; release-note overlay shown once per logged-in user per version.
-- Movable WebXR UI: point at header and hold/pinch the bar to reposition; select/trigger on controls; squeeze for snapshot; hand tip pinch fallback; XR input count shown in HUD. Quest palm menu gestures remain managed by Horizon OS.
-- Admin-only API key vault: Meta, Meshy, Tripo, fal.ai, Replicate. `cryptography.Fernet` encrypts key material before storage in SQLite, with the encryption key root-owned outside Git.
-- Meta key saved in admin settings enables Muse image recognition and SAM 3.1 image probe. Models require a valid API key and are never silently called.
-- Opt-in 20-second snapshot scan. Inference is limited by existing global and per-user rolling daily request limits and cooldowns. No guaranteed dollar cap.
-- `/api/segment` returns SAM 3.1 image bounding boxes in pixel coordinates; masks are available from Meta but are NOT decoded in this build. No pretend 3D meshes.
-- Offline/video CLI `tools/sam_video_probe.py` uploads an explicitly chosen short MP4 after checking the number of frames with ffprobe; converts SAM results into frame/box summaries (no mask decoding).
+- **Real world-locked XR UI**: the 3D panel is placed once using the viewer pose and thereafter rendered in a `local-floor` / `local` reference space; moving your head no longer moves the panel. The header can be moved using tracked input, and RECENTER brings it back in front of you. World locking is only maintained for a running session: this does NOT create a persistent spatial anchor across sessions.
+- **Visible input**: WebXR controller and hand `targetRaySpace` laser pointers and hover cursors, plus select/trigger and thumb/index pinch fallback for hand tracking. Not a rendered hand mesh, full-body skeletal pose, or Horizon OS system menu replacement. Device/firmware runtime support must be verified on Quest 3.
+- **Focused capture HUD in XR**: SNAPSHOT (local/free), MUSE (one charged recognition), SAM (one charged image segmentation), CHANGE OBJECT noun target, COLLECTION, RECENTER, EXIT. Entering XR never triggers inference. A browser camera stream must be live *before* entering; passthrough pixels are not automatically readable from WebXR.
+- **Practical SAM collection**: save detected image bounding boxes as labeled private JPEG crops in the SQLite inventory; this is NOT decoded alpha-mask segmentation, 3D reconstruction, plane detection, or accurate world-space coordinates. Up to six crops per image request.
+- **Admin provider keys**: Meta, Aholo Labs (Lux3D/world reconstruction), Meshy, Tripo, fal.ai, Replicate, OpenAI, Google Gemini, xAI/Grok Imagine. Per-provider selection uses custom pill buttons, not Quest Browser's oversized native menus.
+- **Credential choices**: per tab in-memory JavaScript `Map` (cleared on refresh/logout) or encrypted server-side SQLite vault with its separate `/etc/free-lab-vault.key`. No localStorage/sessionStorage persistence. Temporary Meta key is transmitted to FREE LAB's server only for a deliberate request, never in HTML or URL.
+- **Free-of-inference account checks**: fixed read-only endpoints for Meta, Aholo, Meshy, OpenAI, Gemini, xAI and Replicate. Aholo uses its documented *raw* Authorization header, not Bearer. Meshy exposes available credits; other providers generally do not expose a reliable account balance here. Tripo and fal.ai checks are disabled when no verified read-only endpoint is known. A provider may apply account-specific API usage policies; no generation calls are made.
+- **Usage clarity**: FREE LAB's SQLite ledger tracks recent Muse/SAM requests and reported token counts; 24 global / 8 per profile per rolling 24 hours are local request quotas, not Meta billing caps. Change in `/etc/free-lab.env`, restart `free-lab.service`.
+- **XR/camera diagnostics and native-free consent**: Test Camera and XR readiness display actual media track labels, video pixel resolution and supported XR session modes. Start-20s-scan confirmation is an in-app dialog.
+- **Landing remains cinematic**: original 3D FREELAB mascot, dark spatial canvas and central XR portal with local fallback. Three.js r181 scene remains pinned to external CDN, so the project is not completely offline/self-contained yet.
+
+**Known hardware/browser limit:** some Quest 3 Browser/OS versions do not grant `getUserMedia({video:{facingMode:'environment'}})` access to headset camera pixels; when permission is absent this release cannot infer objects from passthrough. Use the upload fallback to test recognition and SAM while addressing the camera path. WebXR headset passthrough by itself is display-only, not a video source.
 
 ## Deploy from macOS
 
 ```bash
 cd /Users/smielniczuk/Documents/works/free-lab
-cp ~/Downloads/watch-free-lab-v0.2.0.sh ./watch-free-lab.sh
-cp ~/Downloads/FREE_LAB_RELEASE_v0.2.0.zip ./uploads/
+cp ~/Downloads/watch-free-lab-v0.3.0.sh ./watch-free-lab.sh
+cp ~/Downloads/FREE_LAB_RELEASE_v0.3.0.zip ./uploads/
 chmod +x ./watch-free-lab.sh
 ./watch-free-lab.sh --dry-run
 ./watch-free-lab.sh --once
@@ -31,7 +34,7 @@ The watcher validates source file hashes, archive safety, all required version m
 
 Sign in with your administrator account, open the small round account button at the top right, and select **Admin / model connections**. Choose Meta and paste the API key. Save. The key never appears in responses, console logs or static assets. Saved keys are encrypted before being written to `/var/lib/free-lab/free-lab.sqlite3`; the vault encryption key is `/etc/free-lab-vault.key` (root:free-lab, 0640), created only if absent. **Back up the DB and vault key together, securely and separately from your Git repository. If the vault key is lost, saved API credentials cannot be decrypted.** Environment `MODEL_API_KEY` is supported as a legacy fallback; it is never overwritten.
 
-Other provider credentials can be securely saved and deleted by admin. **3D generation API calls are NOT integrated in v0.2.0**; storing a key does not automatically enable 3D reconstruction.
+Other provider credentials can be securely saved and deleted by admin. **3D generation API calls are NOT integrated in v0.3.0**; storing a key does not automatically enable 3D reconstruction.
 
 ## Camera and costs
 

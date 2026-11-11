@@ -44,7 +44,12 @@ def connect(path):
     return con
 
 def init(path):
-    with connect(path) as db: db.executescript(SCHEMA)
+    with connect(path) as con:
+        con.executescript(SCHEMA)
+        # Non-destructive migration: preserve existing profiles, objects and vault.
+        fields={row['name'] for row in con.execute('PRAGMA table_info(inference_calls)')}
+        if 'usage_json' not in fields:
+            con.execute("ALTER TABLE inference_calls ADD COLUMN usage_json TEXT NOT NULL DEFAULT '{}' ")
 
 def hash_password(password, salt=None):
     salt=salt or secrets.token_bytes(16)
@@ -94,5 +99,12 @@ def begin_inference(con,uid,digest,provider,daily_cap=24,user_cap=8,cooldown=20)
         con.rollback()
         raise
 
-def finish_inference(con,call,status):
-    with con: con.execute('UPDATE inference_calls SET status=? WHERE id=?',(status,call))
+def finish_inference(con, call, status, usage=None):
+    import json
+    values=usage if isinstance(usage,dict) else {}
+    # Store token counters, never image content or provider responses.
+    safe={k:int(values[k]) for k in ('prompt_tokens','completion_tokens','total_tokens','input_tokens','output_tokens')
+          if k in values and isinstance(values[k],int) and 0<=values[k]<1_000_000_000}
+    with con:
+        con.execute('UPDATE inference_calls SET status=?, usage_json=? WHERE id=?',(status,json.dumps(safe),call))
+
