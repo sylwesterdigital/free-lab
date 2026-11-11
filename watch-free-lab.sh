@@ -10,7 +10,7 @@ from pathlib import Path,PurePosixPath
 
 ROOT=Path(sys.argv[1]).resolve();sys.argv=[sys.argv[0]]+sys.argv[2:]
 UPDATES=ROOT/'updates';UPLOADS=ROOT/'uploads';STATE=ROOT/'.free-lab'
-VERSION='0.1.1';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
+VERSION='0.2.0';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
 REPO='git@github.com:sylwesterdigital/free-lab.git'
 HOST=os.getenv('FREE_LAB_SSH_HOST','root@46.62.232.64')
 PORT=os.getenv('FREE_LAB_SSH_PORT','333')
@@ -99,9 +99,11 @@ def validate(archive,stage):
             data=json.loads((stage/marker).read_text())
             if data.get('version')!=v:raise BadArchive('Version mismatch: '+marker)
         if f'<meta name="free-lab-version" content="{v}">' not in (stage/'app/frontend/index.html').read_text():raise BadArchive('HTML version marker mismatch')
-        if 'Enter SR' not in (stage/'app/frontend/index.html').read_text():raise BadArchive('Missing WebXR enter UX')
+        if 'ENTER SPATIAL REALITY' not in (stage/'app/frontend/index.html').read_text() or 'id="enterXR"' not in (stage/'app/frontend/index.html').read_text():raise BadArchive('Missing WebXR portal UX')
+        if not (stage/'app/frontend/assets/scene.mjs').is_file() or not (stage/'app/backend/secrets.py').is_file():raise BadArchive('Spatial scene or encrypted vault missing')
         for p in (stage/'app').rglob('*.py'):run(['python3','-m','py_compile',p],timeout=15)
         for p in (stage/'app/frontend/assets').glob('*.js'):run(['node','--check',p],timeout=15)
+        for p in (stage/'app/frontend/assets').glob('*.mjs'):run(['node','--check',p],timeout=15)
         tested=run(['python3','-m','unittest','discover','-s','tests','-v'],cwd=stage/'app',timeout=75)
         if 'FAILED' in tested.stdout+tested.stderr:raise BadArchive('Local tests failed')
         if 'skipped=' in tested.stderr:say('Flask tests skipped locally; they are mandatory after server pip install','WARN')

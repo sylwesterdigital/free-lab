@@ -1,100 +1,71 @@
-# Free Lab — Spatial Collector v0.1.1
+# FREELAB — Spatial Studio v0.2.0
 
-A standalone Quest 3 + Meta Muse MVP: native WebXR immersive AR, hand/controller selection, opt-in camera snapshots, per-user SQLite inventory, administrator-managed profiles, private-by-default publishing and cost-capped Muse object detection. **No frontend CDN or API key required for manual mode.** No WebRTC multiplayer or continuous camera inference is implemented in this v0.1.1; these are future extension points.
+Self-hosted Quest 3 mixed-reality discovery MVP. Built for macOS M2 Pro development, Ubuntu serving, and browser-based WebXR. Domain: https://free-lab.cam/.
 
-## Requirements
-- macOS M2 Pro (or any machine with Python 3.10+), Quest 3 with a recent Quest Browser, or a desktop browser for the 2D UI.
-- Ubuntu server: Python 3, `python3-venv`, nginx, systemd, existing valid Let's Encrypt certificate for `free-lab.cam`, inbound HTTPS, outbound PyPI/Meta API.
-- Production inference: Meta Model API key from https://dev.meta.ai. Never enter it in browser or ZIP.
+## What's new in 0.2.0
 
-## Local start (no paid token use)
+- Cinematic dark, progressively lit floor scene with a friendly original soft-body FREELAB creature, fluorescent green silhouette, buoyant ears, floating nameplate, and large XR portal.
+- Three.js r181 enhanced renderer for desktop/Quest Browser when the pinned module can be fetched. Pure local CSS 3D-like mascot fallback works without CDN. See *Offline note* below.
+- Small floating navigation; slide-out private collection; release-note overlay shown once per logged-in user per version.
+- Movable WebXR UI: point at header and hold/pinch the bar to reposition; select/trigger on controls; squeeze for snapshot; hand tip pinch fallback; XR input count shown in HUD. Quest palm menu gestures remain managed by Horizon OS.
+- Admin-only API key vault: Meta, Meshy, Tripo, fal.ai, Replicate. `cryptography.Fernet` encrypts key material before storage in SQLite, with the encryption key root-owned outside Git.
+- Meta key saved in admin settings enables Muse image recognition and SAM 3.1 image probe. Models require a valid API key and are never silently called.
+- Opt-in 20-second snapshot scan. Inference is limited by existing global and per-user rolling daily request limits and cooldowns. No guaranteed dollar cap.
+- `/api/segment` returns SAM 3.1 image bounding boxes in pixel coordinates; masks are available from Meta but are NOT decoded in this build. No pretend 3D meshes.
+- Offline/video CLI `tools/sam_video_probe.py` uploads an explicitly chosen short MP4 after checking the number of frames with ffprobe; converts SAM results into frame/box summaries (no mask decoding).
 
-From repository root after watcher has installed `app/`:
-
-```bash
-cd app
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-export FREE_LAB_DB="$PWD/var/free-lab.sqlite3"
-python -m backend.cli create-admin admin
-python -m backend.app
-```
-
-Open `http://127.0.0.1:8765` on the Mac. In desktop mode, try **Upload snapshot**, enter a label, **Save privately**. Localhost works for many browser APIs; Quest must open the deployed **HTTPS** URL. `MODEL_API_KEY` is deliberately empty until configured, so **Recognize** will not call the API.
-
-To enable model recognition locally:
+## Deploy from macOS
 
 ```bash
-export MODEL_API_KEY='your-secret-key'
-export META_MODEL='muse-ember-1.0'
-export FREE_LAB_DAILY_LIMIT=24
-export FREE_LAB_USER_DAILY_LIMIT=8
-python -m backend.app
+cd /Users/smielniczuk/Documents/works/free-lab
+cp ~/Downloads/watch-free-lab-v0.2.0.sh ./watch-free-lab.sh
+cp ~/Downloads/FREE_LAB_RELEASE_v0.2.0.zip ./uploads/
+chmod +x ./watch-free-lab.sh
+./watch-free-lab.sh --dry-run
+./watch-free-lab.sh --once
 ```
 
-## Quest 3: what works and what depends on browser
-1. Browse to `https://free-lab.cam` in Quest Browser and sign in. Press **Enter SR** to request `immersive-ar` passthrough.
-2. Aim at the floating panel and use controller trigger or hand *point-and-pinch* to select. Controller **squeeze** is the capture shortcut. Quest's system palm-pinch is **not** overridden.
-3. For real camera pixels, choose **Enable camera** before entering SR; grant permission if prompted. If Quest Browser denies access, use **Upload snapshot** from a supported source. A WebXR passthrough compositor frame **cannot** be read back from WebGL or used as an image for Muse.
-4. Capture a frame; **Recognize** uses one image and saves at most six labels privately. Manual snapshots and text-only entries do not consume Meta API credits.
+The watcher validates source file hashes, archive safety, all required version markers, Python/JS syntax, and unittest checks before contacting GitHub/Ubuntu. It deploys via SSH `root@46.62.232.64:333` to `free-lab.cam`, then verifies public version/API health and pushes main. The watcher keeps older ZIPs untouched; highest version takes priority. Do not place passwords or keys in the repository/ZIP.
 
-**Important:** Some Quest Browser versions expose only an avatar camera, deny `facingMode: environment`, or don't prompt for headset camera permission. This MVP does not claim that camera access always works. Do not assume enabling camera selected the actual forward-facing camera; verify the preview. The native Quest Passthrough Camera API is a future optional Android bridge if unrestricted RGB access is required.
+## Admin key vault
 
-## Data and security
-- SQLite WAL in `/var/lib/free-lab/free-lab.sqlite3` in production; snapshot JPEGs in `/var/lib/free-lab/images/`. Both persist across releases.
-- Profiles are created by the first administrator through **Profile → Add another profile**. No public registration endpoint.
-- Passwords use salted PBKDF2-HMAC-SHA256, session cookies are HttpOnly, SameSite=Lax and Secure under HTTPS. APIs check origin and a custom header on writes; nginx terminates HTTPS.
-- Photos are private by default, only available to owner. **Public** shares to a community list; **Share link** creates an unguessable token and URL, revocable by switching visibility.
-- No continuous video transmission, no automatic model retries, no model call when key is missing. Do not upload images of people, bystanders, sensitive documents or private material without permission. Provider calls transmit chosen JPEG snapshots to Meta.
-- Server limits default to **24 inference requests / rolling day in total**, **8 / user / rolling day**, **20 seconds between user requests**; ≤450 KB JPEG, ≤6 objects per response, one explicit user action per image. Tokens/cost are billed by provider; quotas here are request ceilings, **not a guaranteed dollar cap**.
-- Per-day limits include failed provider calls to avoid request storms. There is no autonomous scan loop.
-- For the publicly reachable POC, protect admin password, rotate shared links when needed, and consider additional perimeter access controls before broad exposure.
+Sign in with your administrator account, open the small round account button at the top right, and select **Admin / model connections**. Choose Meta and paste the API key. Save. The key never appears in responses, console logs or static assets. Saved keys are encrypted before being written to `/var/lib/free-lab/free-lab.sqlite3`; the vault encryption key is `/etc/free-lab-vault.key` (root:free-lab, 0640), created only if absent. **Back up the DB and vault key together, securely and separately from your Git repository. If the vault key is lost, saved API credentials cannot be decrypted.** Environment `MODEL_API_KEY` is supported as a legacy fallback; it is never overwritten.
 
-## Ubuntu production configuration
+Other provider credentials can be securely saved and deleted by admin. **3D generation API calls are NOT integrated in v0.2.0**; storing a key does not automatically enable 3D reconstruction.
 
-Watcher deploys verified releases using `root@46.62.232.64` on SSH port `333`, switching an atomic `current` symlink at `/var/www/free-lab.cam`. It installs a Python virtualenv in `/opt/free-lab/venv`, a `free-lab.service`, and a new nginx vhost retaining your existing Let's Encrypt certificate locations. Old app releases are kept; the persistent database is never deleted. Existing vhost and unit files are backed up before replacement.
+## Camera and costs
 
-Set `MODEL_API_KEY` on the **server only**, then restart:
+Quest WebXR `immersive-ar` passthrough is compositor output, not directly accessible camera pixels. `navigator.mediaDevices.getUserMedia()` may provide an environment camera when Horizon OS and Quest Browser permissions allow, but some firmware/browser combinations deny it. Explicitly start **Camera** or **Upload image**, then **Recognize** or **Find with SAM 3.1**. No model call is issued just from entering XR.
+
+- Muse Ember is the low-cost default; Spark 1.3 is optional.
+- SAM 3.1 accepts an image and a *single short noun phrase* such as `chair`, returns boxes and masks; this UI draws boxes only.
+- Current limits: 24 total model requests per rolling day, 8 per profile, 20 seconds cooldown. All Muse/SAM requests share those caps. This is a request cap, NOT a hard spending cap.
+- SAM 3.1 published image price: $2.50 / 1,000 images. Video: $0.20 / 1,000 frames with a minimum charge of 50 frames per video call. Verify pricing before larger tests.
+- Opt-in 20-second scan only uses a camera stream exposed by the browser and visible to the page. If no stream is granted, it refuses to start.
+- All saved images/inventory are private unless shared or explicitly published by their owner.
+
+## Optional SAM video proof
+
+Install `ffprobe` via FFmpeg on your development machine or server, create an MP4 at 5–10 fps containing no more than 100 total frames and at most 6 MB, and run this command in an environment with the Meta API key available:
 
 ```bash
-ssh -p 333 root@46.62.232.64
-nano /etc/free-lab.env    # set MODEL_API_KEY=... without quoting special shell metacharacters
-chmod 600 /etc/free-lab.env
-systemctl restart free-lab
-systemctl status free-lab --no-pager
-journalctl -u free-lab -n 70 --no-pager
+python3 -m tools.sam_video_probe --file /path/to/short-clip.mp4 --prompt chair --dry-run
+python3 -m tools.sam_video_probe --file /path/to/short-clip.mp4 --prompt chair --send
 ```
 
-If an API key contains special characters, use systemd `EnvironmentFile` valid quoting (e.g. `MODEL_API_KEY="..."`). Keep secrets off GitHub and out of release archives. Configure provider model via `META_MODEL=muse-ember-1.0` or `muse-spark-1.3` in the environment file. First deployment prompts for an admin password **only in an interactive `--once` watcher run**; it is transmitted over SSH and not saved in logs or the repo.
+The CLI prints expected base SAM segmentation cost before any request. `--send` is explicit consent for paid upload/segmentation. On the server the script can read the encrypted Meta key via the service account's DB/key file permissions. SAM returns tracked objects by frame; the CLI currently exports bounding boxes only. Source clips are sent to Meta for inference, not hosted publicly. You can use `ffmpeg -i source.mp4 -t 4 -vf fps=10 -an -movflags +faststart short-clip.mp4` to reduce clip size.
 
-## Release process
+## Roadmap / limitations
 
-0. On the Mac, confirm SSH host identity once with `ssh -p 333 root@46.62.232.64` and install Python 3.10+, Git and Node.js. The watcher deliberately refuses unknown SSH host keys. Confirm the VPS already has `python3-venv` and that the site certificate exists.
-1. Copy `watch-free-lab.sh` to repo root and `FREE_LAB_RELEASE_v0.1.1.zip` to `uploads/` (or `updates/`). `chmod +x watch-free-lab.sh`.
-2. `./watch-free-lab.sh --dry-run` performs manifest SHA256 + version + JS/Python syntax + test checks without SSH/changes.
-3. `./watch-free-lab.sh --once` verifies Git origin/main/clean worktree, SSH, server preconditions; prompts for first admin password; deploys to Ubuntu and verifies public HTTPS before committing and pushing to GitHub `main`.
-4. `./watch-free-lab.sh` continuously watches **both** `uploads/` and `updates/` for correctly named release ZIPs. Successful archives are moved into `updates/processed/`; rejected archives go to `updates/rejected/`. Failed network/remote operations retain ZIP for retry.
-5. `./watch-free-lab.sh --status`, `--tail`, and `--rollback` provide health, logs, rollback to previous server release (no DB rollback).
+- **Not done yet:** continuous raw video stream into SAM, WebRTC multiplayer, world-anchored recognized object labels, true scene meshing, full decoded SAM masks, provider-specific 3D generation workflows, gesture vocabularies beyond point/select and pinch, or reliable shared spatial anchors.
+- WebXR support for hand input and tracking varies with Quest Browser version. Plane detection/anchors are requested as optional browser features but are not yet consumed by the UI.
+- Three.js enhanced landing scene currently imports the pinned Three.js r181 module over a public CDN on first visit. The WebXR HUD, API, SQLite, auth, and CSS mascot **do not require a CDN**. To run fully offline, vendor a verified copy of Three.js r181 `build/three.module.js` and `build/three.core.js` under `frontend/assets/vendor/`. Both files are required; the module imports its core sibling. Until then, the app is functional but the Three.js enhancement is not self-contained.
+- No model inference has been executed in a paid Meta account or tested on a physical Quest by this packaging process. Verify the hosted app, permissions and prices in your environment.
 
-Future release names must be `FREE_LAB_RELEASE_vX.Y.Z.zip`, with matching `manifest.json`, `app/version.json`, HTML meta version, `app/changelog.json` and all file hashes. The changelog overlay appears once **per version, per browser profile** on login, with a manual Release notes action.
+## Relevant official documentation
 
-## Future architecture, not shipped in v0.1.1
-- Authenticated WebSocket event stream for low-latency collection sync.
-- Explicit-consent WebRTC peer connections for multiplayer; TURN/STUN and permissions are not configured.
-- Server-side SAM 3.1 segmentation of selected snapshots, location anchors and room mapping; no automatic physical object anchoring yet.
-- Optional Unity/Android camera bridge for reliable Quest RGB passthrough capture.
-
-## References
-- https://developers.meta.com/vr/documentation/web/webxr-mixed-reality/
-- https://developers.meta.com/vr/documentation/web/webxr-hands/
-- https://developers.meta.com/vr/support/investigations/1557993751977106/
-- https://dev.meta.ai/docs/media-understanding
-- https://dev.meta.ai/docs/models
+- https://dev.meta.ai/docs/sam/overview
+- https://dev.meta.ai/docs/sam/segmenting
 - https://dev.meta.ai/docs/pricing-rate-limits
-
-## v0.1.1 deployment readiness repair
-
-The API uses **127.0.0.1:18765**, rather than 8765 (which may be used by another app on a shared Ubuntu host). The installer validates that the port is either unused or already serving the previously deployed FREE LAB release before changing systemd or nginx. Health checks bypass HTTP proxies and include observed JSON and systemd/journal diagnostics when they fail. The SQLite DB in `/var/lib/free-lab` and `/etc/free-lab.env` persist across upgrades.
-
-To inspect the server without modifying it: `./watch-free-lab.sh --diagnose`. Do **not** delete the database to recover from a readiness failure.
+- https://developers.meta.com/vr/documentation/web/webxr-mixed-reality/
+- https://developers.meta.com/vr/support/investigations/1557993751977106/

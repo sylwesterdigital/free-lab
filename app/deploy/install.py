@@ -7,6 +7,7 @@ DOMAIN='free-lab.cam'
 # Dedicated loopback port: v0.1.0 used 8765 without a collision check.
 # All service, nginx, and health endpoints use this single value.
 API_PORT=18765
+VAULT_KEY=Path('/etc/free-lab-vault.key')
 BASE=Path('/var/www/free-lab.cam')
 RELEASES=BASE/'releases'
 CURRENT=BASE/'current'
@@ -47,6 +48,10 @@ server {
        proxy_connect_timeout 8s;
        proxy_read_timeout 50s;
        client_max_body_size 650k;
+    }
+    location = /assets/scene.mjs {
+       default_type application/javascript;
+       try_files $uri =404;
     }
     location / {
        try_files $uri $uri/ /index.html;
@@ -172,6 +177,16 @@ def ensure_environment():
     fd=os.open(ENV,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
     with os.fdopen(fd,'w') as f:f.write(text)
 
+def ensure_secret_vault():
+    """Persistent key outside releases/Git; root owned, readable by service group."""
+    if not VAULT_KEY.exists():
+        from cryptography.fernet import Fernet
+        key=Fernet.generate_key()+b'\n'
+        fd=os.open(VAULT_KEY,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o640)
+        with os.fdopen(fd,'wb') as f:f.write(key)
+    run('chown','root:free-lab',str(VAULT_KEY))
+    os.chmod(VAULT_KEY,0o640)
+
 def env_values():
     # Use a minimal, explicitly defined environment for CLI; no need to parse systemd env file.
     return {**os.environ,'FREE_LAB_DB':str(DATA/'free-lab.sqlite3'),
@@ -221,6 +236,7 @@ def install(stage,version):
     if not (VENV/'bin/python').exists():run('python3','-m','venv',str(VENV),timeout=80)
     run(str(VENV/'bin/python'),'-m','pip','install','--disable-pip-version-check','-r',str(dest/'requirements.txt'),timeout=250)
     ensure_environment()
+    ensure_secret_vault()
     check_port_available_for_free_lab()
     # Do not alter a preconfigured API key or persistent credentials.
     ensure_admin(dest)

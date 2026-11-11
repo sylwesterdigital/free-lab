@@ -26,6 +26,9 @@ CREATE TABLE IF NOT EXISTS inference_calls (
  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS inference_recent ON inference_calls(created_at);
+CREATE TABLE IF NOT EXISTS provider_secrets (
+ provider TEXT PRIMARY KEY, ciphertext BLOB NOT NULL, updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS auth_attempts (fingerprint TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')));
 CREATE INDEX IF NOT EXISTS auth_attempts_recent ON auth_attempts(fingerprint,created_at);
 '''

@@ -1,12 +1,13 @@
 {
-  "version": "0.1.1",
-  "title": "Spatial Collector — deployment compatibility fix",
-  "datetime": "11 Nov 2026 · 19:20 UTC",
+  "version": "0.2.0",
+  "title": "Spatial Studio \u00b7 The arrival",
+  "datetime": "2026-11-11 20:12 GMT",
   "changes": [
-    "Dedicated API port 18765 prevents collision with services using 8765",
-    "Early port-ownership validation protects other Ubuntu applications",
-    "Detailed startup diagnostics now expose health mismatches and systemd errors",
-    "Regression tests verify nginx, Gunicorn and readiness port consistency",
-    "Existing private collections, accounts and release rollback preserved"
+    "A cinematic open-canvas landing with animated 3D FREELAB mascot and central XR portal.",
+    "Smaller floating controls, a collapsible collection drawer, and movable XR header.",
+    "Administrator-only encrypted provider key vault: Meta, Meshy, Tripo, fal.ai, Replicate.",
+    "Opt-in interval scanning; every frame uses the shared daily request budget.",
+    "SAM 3.1 single-image segmentation probe with bounding-box overlay and cost controls.",
+    "XR controller/hand diagnostics and pinch/trigger interaction improvements."
   ]
 }

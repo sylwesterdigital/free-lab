@@ -5,7 +5,7 @@ from pathlib import Path
 from functools import wraps
 from flask import Flask,abort,g,jsonify,request,send_file,session
 from werkzeug.middleware.proxy_fix import ProxyFix
-from . import db,providers
+from . import db,providers,secrets as keyvault,sam
 
 APP_ROOT=Path(__file__).resolve().parents[1]
 DATA_DIR=Path(os.getenv('FREE_LAB_DATA_DIR',APP_ROOT/'var')).resolve()
@@ -69,12 +69,12 @@ def health():
     try:g.con.execute('SELECT 1').fetchone();ok=True
     except sqlite3.Error:ok=False
     return jsonify(ok=ok,version=VERSION,storage='sqlite',model=os.getenv('META_MODEL','muse-ember-1.0'),
-      inference_enabled=bool(os.getenv('MODEL_API_KEY')))
+      inference_enabled=bool(keyvault.get_meta_key(g.con)))
 
 @app.get('/api/config')
 def config():
     return jsonify(version=VERSION,model=os.getenv('META_MODEL','muse-ember-1.0'),
-      inference_enabled=bool(os.getenv('MODEL_API_KEY')),max_snapshots_per_day=int(os.getenv('FREE_LAB_DAILY_LIMIT','24')))
+      inference_enabled=bool(keyvault.get_meta_key(g.con)),max_snapshots_per_day=int(os.getenv('FREE_LAB_DAILY_LIMIT','24')))
 
 @app.get('/api/me')
 def me():
@@ -110,6 +110,52 @@ def create_profile():
                             str(v.get('display_name','')),role='member')
     except (ValueError,sqlite3.IntegrityError) as e:return jsonify(error=str(e)),400
     return jsonify(id=uid),201
+
+@app.get('/api/admin/providers')
+@require_admin
+def get_providers():
+    return jsonify(providers=keyvault.status(g.con))
+
+@app.put('/api/admin/providers/<provider>')
+@require_admin
+def save_provider(provider):
+    if provider not in keyvault.PROVIDERS:abort(404)
+    key=body().get('api_key')
+    try:keyvault.set_key(g.con,provider,key)
+    except ValueError as e:return jsonify(error=str(e)),400
+    except (OSError,RuntimeError):return jsonify(error='Server vault unavailable: ask server administrator'),503
+    return jsonify(ok=True,provider=provider,configured=True)
+
+@app.delete('/api/admin/providers/<provider>')
+@require_admin
+def remove_provider(provider):
+    if provider not in keyvault.PROVIDERS:abort(404)
+    keyvault.delete_key(g.con,provider)
+    return jsonify(ok=True,provider=provider)
+
+@app.post('/api/segment')
+@require_user
+def segment_image():
+    v=body()
+    try:raw=decode_jpeg(v)
+    except ValueError as e:return jsonify(error=str(e)),400
+    prompt=str(v.get('prompt','')).strip().lower()
+    if not re.fullmatch(r'[a-z0-9][a-z0-9 -]{0,58}[a-z0-9]',prompt):
+        return jsonify(error='Use one object noun phrase (2–60 characters)'),400
+    api_key=keyvault.get_meta_key(g.con)
+    if not api_key:return jsonify(error='Meta key not configured'),503
+    digest=hashlib.sha256(raw+prompt.encode()).hexdigest()
+    try:call=db.begin_inference(g.con,g.user['id'],digest,'sam-3.1',
+       daily_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','24')),
+       user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','8')))
+    except ValueError as e:return jsonify(error=str(e)),429
+    try:
+        result=sam.segment_jpeg(raw,prompt,api_key)
+        db.finish_inference(g.con,call,'ok')
+        return jsonify(result)
+    except (RuntimeError,ValueError) as e:
+        db.finish_inference(g.con,call,'error')
+        return jsonify(error=str(e)),502
 
 @app.get('/api/objects')
 @require_user
@@ -201,7 +247,7 @@ def capture():
     except ValueError as e:return jsonify(error=str(e)),400
     digest=hashlib.sha256(raw).hexdigest()
     use_model=v.get('recognize') is True
-    if use_model and not os.getenv('MODEL_API_KEY'):
+    if use_model and not keyvault.get_meta_key(g.con):
         return jsonify(error='Meta API key not configured. Save a manual snapshot instead.'),503
     # For a manual snapshot, use a user-supplied label. Never pretend a mock prediction is AI.
     if not use_model and not str(v.get('label','')).strip():
@@ -215,7 +261,7 @@ def capture():
                   user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','8')))
         except ValueError as e:return jsonify(error=str(e)),429
         try:
-            detections,usage=providers.identify(raw,model)
+            detections,usage=providers.identify(raw,model,api_key=keyvault.get_meta_key(g.con))
             db.finish_inference(g.con,call,'ok')
         except Exception as e:
             db.finish_inference(g.con,call,'error')
@@ -249,4 +295,4 @@ def forbidden(e):return jsonify(error='Forbidden'),403
 def not_found(e):return jsonify(error='Not found'),404
 
 if __name__=='__main__':
-    app.run(host='127.0.0.1',port=int(os.getenv('PORT','8765')),debug=False)
+    app.run(host='127.0.0.1',port=int(os.getenv('PORT','18765')),debug=False)
