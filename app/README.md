@@ -1,98 +1,39 @@
-# FREELAB — Spatial Cloud v0.4.0
+# FREELAB — Spatial Collector v0.7.0
 
-Self-hosted Quest 3 mixed-reality discovery MVP. Built for macOS M2 Pro development, Ubuntu serving, and browser-based WebXR. Domain: https://free-lab.cam/.
+Self-hosted Quest 3 WebXR experiment served at https://free-lab.cam/. Deploy the only ZIP `FREE_LAB_RELEASE_v0.7.0.zip` by dropping it into the existing watcher’s `updates/` directory; the macOS watcher v0.4.1 remains unchanged and is bundled inside the release only because its checksum is part of the release contract.
 
-## What's new in 0.4.0 — spatial dandelion collector
+## First use
 
-In the browser on Quest 3, press the **XR** portal. There is no head-locked dashboard: the scene contains a world-locked photo and a minimal, borderless grey control pill floating near it. Input rays are visible when controllers or hands are detected. The world root is placed only once on session start or when you deliberately recenter.
+1. Sign in, test the Quest environment camera and look at the live feed. Passthrough visible through the headset does **not** imply camera pixels are available to web pages; an uploaded JPEG remains a fallback.
+2. For voice prompting, use **Enable mic** near the mascot **before Enter XR**. Grant the microphone permission; no sound is recorded or uploaded at that time. The stream is kept alive for the immersive session.
+3. Enter XR. Use the compact toolbar, controller trigger/grip, or hand pinch. The central eye is now half size. Camera capture plays a short procedural shutter sound.
+4. Tap **Extract** on the source to run one user-triggered Meta recognition request. Image crops expand around the real capture. The original stays in place. Model results can be empty; open **LOG** to inspect the status and HTTP error. Source object crops are rectangular rather than decoded SAM transparent masks.
+5. Select a photo, choose **Restore** to prefill an image-restoration prompt, or choose **Prompt** for an arbitrary instruction. The source remains saved and every generated result becomes a child. **Apply** is the only trigger for the paid image-edit request.
+6. Speak an instruction through **SPEAK** (one paid speech-transcription request), or use **TYPE** to focus Quest Browser's native system keyboard *without ending XR*. Quest Browser 26.1+ is required for system keyboard integration; if not supported, the session stays active and displays an explanation. Keep the headset software updated.
+7. Saying “Find my backpack”, “Where is my backpack?”, or “Highlight the backpack” searches labeled images in your private local collection and sparkles matching cards. Searches don't re-infer photo contents or know where an unrecognized object is in the physical room.
+8. Select any two images (even source photos), press **MIX** after each or drop on the MIX target while dragging, then provide a composition instruction. This uses the same Meta Muse Image model; only **APPLY** sends a chargeable request. Mixer references are checked for profile ownership on the server.
+9. Tap the X on a card to close it spatially without deleting it. Bin an object to privatize it, or Bin a source capture to hide the whole capture; the Bin gallery can restore both. Binning uses a generated paper-crumple sound.
+10. **Settings** has browser-local toggles for the small pointer mascot, optional spoken status feedback and playful commentary. Speech output is provided by the browser and is not guaranteed on every headset build.
 
-**Spatial workflow:**
+## Model routing, privacy and cost
 
-1. Before XR, choose **Test camera** and verify readable room pixels, or **Upload image** (when Quest Browser cannot obtain environment pixels). The XR passthrough display alone cannot be captured by JavaScript.
-2. Enter XR and point to **+ CAPTURE**, pinch or pull the trigger. The image is saved as a private `captures` row and becomes a large spatial thumbnail; zero paid model calls. A cloud can also be revisited from **▣ LIB**.
-3. Press **✦ MUSE** deliberately. A single paid Muse image request produces up to six labeled approximate boxes; actual cropped JPEGs bloom from the source on curved paths. This is **not** a pixel-accurate segmentation mask.
-4. Select a recognized object thumbnail. Press **⌗ SAM** to make **one** charged SAM 3.1 request for that label; SAM's rectangular image regions appear as additional cards. Wait for the 20-second request cooldown enforced by the server. SAM's RLE masks are **not decoded** by this release.
-5. Point and hold a controller trigger or hand pinch to **drag** a spatial card. Selecting an existing card again flips it to descriptive text. A miniature edit pill enables flip / smaller / larger. Its transform is saved to SQLite relative to its capture. **▤ FOLDER** cycles among Unsorted, Keep, Room and Objects; **⌫ BIN** moves a selected item to a private virtual Bin. During an active drag, temporary floating FOLDER/BIN drop targets appear for direct drop gestures. Without a selection, Bin opens a room-space restoration gallery.
-6. **◌ HIDE** collapses the cloud with a short curved animation and luminous particles, then removes it from the active scene without deleting data. **▣ LIB** reopens saved captures; **+** begins another. **× EXIT** ends XR. Squeeze with no selection explicitly recenters the workspace.
+The interface uses action names; model routing stays internal: Meta Muse Ember/Spark for understanding, SAM for region segmentation, Muse Image for image restoration/mixing, and Muse Voice Transcribe for speech recognition. Request budgets and cooldowns are configured by `/etc/free-lab.env` on Ubuntu. A zero limit means unlimited requests in the current code but **not** unlimited spending at Meta. No call is made until explicit user action. Camera and mic permissions remain controlled by the browser and OS.
 
-### Data and privacy
+Admin-only `/api/admin/diagnostics` reports a rolling window of HTTP paths/status codes/durations in **the current Flask worker process**. Request payloads, prompt text, camera images, bearer keys and provider responses are not logged there. The immersive LOG view also shows client-side errors. It is diagnostic metadata, not a full centralized server journal. Usage and billing data are separate from logs.
 
-- Existing SQLite DB, profiles, object images, encrypted provider vault and usage limits are preserved. New `captures` table and `objects.capture_id`, `folder`, `shelf`, `spatial_json` fields are added idempotently.
-- Captures and their images require owner authentication. Up to 50 captures per user (each compressed JPEG under 450 KB). No spatial positions are transferred to the public model providers; only manually requested images are transmitted.
-- Moving an object to Bin forces its visibility to private and revokes existing link shares. Gallery access remains profile-scoped; binning does not delete the associated image.
-- The cards represent **2D images in a 3D room-space collection**, not a metric reconstruction of the real objects and not physical occlusion-accurate placement. World locking lasts for the current XR session, not across device reboots.
-- The application-wide quota remains 24 total / 8 per profile per rolling 24 hours, 20-second cooldown, configurable in `/etc/free-lab.env`; not a hard dollar cap or Meta API spend cap.
+Credentials saved to the server remain encrypted with the existing `/etc/free-lab-vault.key` and persisted in SQLite. Back up the vault key and DB securely. The database migration is additive; this release does not reset captures or user profiles.
 
-**WebXR camera limitation:** some Quest Browser firmware only exposes avatar camera or refuses environment camera. Use the upload workflow; full optical passthrough access may require a separate native Quest capture companion. Never assume the headset compositor supplies image pixels for inference.
+## Important limits
 
-## Deploy from macOS (single ZIP; no separate watcher upgrade)
+- A system keyboard in immersive XR requires the Quest Browser's `XRSession.isSystemKeyboardSupported`; older browsers will show a warning without exiting XR. If microphone permission has not been pre-granted, use the preflight control outside XR. An in-XR microphone dialog may be blocked or interrupt the session on specific firmware builds.
+- Current XR image cards are 2D photos in world-space, not real occlusion-accurate meshes or persistent world anchors. The optional floating mascot is an original 2D sprite matching the landing character, not an imported Three.js rig.
+- Voice "find" matches text labels/descriptions already in the private collection. It is not live object localization and may require an Extract request first.
+- Image restoration is generative enhancement, **not a guaranteed pixel-perfect super-resolution algorithm**. Mix produces one generated child image and uses paid inference when Apply is pressed.
+- Live Quest mic, system keyboard, haptics, camera permissions and provider returns must be validated on the physical headset; automated smoke testing cannot prove browser permissions or real-world camera access.
+- The landing still loads pinned Three.js from a CDN with a CSS mascot fallback; full offline vendoring remains a separate task.
 
-Keep your existing running watcher. Save only `FREE_LAB_RELEASE_v0.6.0.zip` into `updates/`. The watcher validates it and deploys automatically. Do not replace the watcher manually; the unchanged v0.4.1 watcher is bundled only because the release manifest requires an exact watcher hash. Check status with `./watch-free-lab.sh --status` if necessary. Older downloaded ZIPs do not require re-installation.
+## Diagnostics and release validation
 
-## Admin key vault
+`./watch-free-lab.sh --dry-run` from the repo root validates manifests and runs Python/JS checks before deployment. The existing watcher runs continuously and processes `updates/FREE_LAB_RELEASE_v0.7.0.zip`; do not replace it.
 
-Sign in with your administrator account, open the small round account button at the top right, and select **Admin / model connections**. Choose Meta and paste the API key. Save. The key never appears in responses, console logs or static assets. Saved keys are encrypted before being written to `/var/lib/free-lab/free-lab.sqlite3`; the vault encryption key is `/etc/free-lab-vault.key` (root:free-lab, 0640), created only if absent. **Back up the DB and vault key together, securely and separately from your Git repository. If the vault key is lost, saved API credentials cannot be decrypted.** Environment `MODEL_API_KEY` is supported as a legacy fallback; it is never overwritten.
-
-Other provider credentials can be securely saved and deleted by admin. **3D generation and video API calls are NOT integrated in v0.6.0**; storing a key does not automatically enable 3D reconstruction.
-
-## Camera and costs
-
-Quest WebXR `immersive-ar` passthrough is compositor output, not directly accessible camera pixels. `navigator.mediaDevices.getUserMedia()` may provide an environment camera when Horizon OS and Quest Browser permissions allow, but some firmware/browser combinations deny it. Explicitly start **Camera** or **Upload image**, then **Recognize** or **Find with SAM 3.1**. No model call is issued just from entering XR.
-
-- Muse Ember is the low-cost default; Spark 1.3 is optional.
-- SAM 3.1 accepts an image and a *single short noun phrase* such as `chair`, returns boxes and masks; this UI draws boxes only.
-- Request limits: defaults are now unlimited (0), and can optionally be configured with `FREE_LAB_DAILY_LIMIT` and `FREE_LAB_USER_DAILY_LIMIT` in `/etc/free-lab.env` (0 = unlimited); a cooldown remains unless adjusted with `FREE_LAB_COOLDOWN_SECONDS` for image edits. Existing server environment variables take precedence. All Muse/SAM requests share those caps. This is a request cap, NOT a hard spending cap.
-- SAM 3.1 published image price: $2.50 / 1,000 images. Video: $0.20 / 1,000 frames with a minimum charge of 50 frames per video call. Verify pricing before larger tests.
-- Opt-in 20-second scan only uses a camera stream exposed by the browser and visible to the page. If no stream is granted, it refuses to start.
-- All saved images/inventory are private unless shared or explicitly published by their owner.
-
-## Optional SAM video proof
-
-Install `ffprobe` via FFmpeg on your development machine or server, create an MP4 at 5–10 fps containing no more than 100 total frames and at most 6 MB, and run this command in an environment with the Meta API key available:
-
-```bash
-python3 -m tools.sam_video_probe --file /path/to/short-clip.mp4 --prompt chair --dry-run
-python3 -m tools.sam_video_probe --file /path/to/short-clip.mp4 --prompt chair --send
-```
-
-The CLI prints expected base SAM segmentation cost before any request. `--send` is explicit consent for paid upload/segmentation. On the server the script can read the encrypted Meta key via the service account's DB/key file permissions. SAM returns tracked objects by frame; the CLI currently exports bounding boxes only. Source clips are sent to Meta for inference, not hosted publicly. You can use `ffmpeg -i source.mp4 -t 4 -vf fps=10 -an -movflags +faststart short-clip.mp4` to reduce clip size.
-
-## Roadmap / limitations
-
-- **Not done yet:** decoded SAM pixel masks and true occlusion, multi-object SAM batching, continuous raw video stream into SAM, WebRTC multiplayer, world-anchored recognized object labels, true scene meshing, full decoded SAM masks, provider-specific 3D generation workflows, gesture vocabularies beyond point/select and pinch, or reliable shared spatial anchors.
-- WebXR support for hand input and tracking varies with Quest Browser version. Plane detection/anchors are requested as optional browser features but are not yet consumed by the UI.
-- Three.js enhanced landing scene currently imports the pinned Three.js r181 module over a public CDN on first visit. The WebXR HUD, API, SQLite, auth, and CSS mascot **do not require a CDN**. To run fully offline, vendor a verified copy of Three.js r181 `build/three.module.js` and `build/three.core.js` under `frontend/assets/vendor/`. Both files are required; the module imports its core sibling. Until then, the app is functional but the Three.js enhancement is not self-contained.
-- No model inference has been executed in a paid Meta account or tested on a physical Quest by this packaging process. Verify the hosted app, permissions and prices in your environment.
-
-## Relevant official documentation
-
-- https://dev.meta.ai/docs/sam/overview
-- https://dev.meta.ai/docs/sam/segmenting
-- https://dev.meta.ai/docs/pricing-rate-limits
-- https://developers.meta.com/vr/documentation/web/webxr-mixed-reality/
-- https://developers.meta.com/vr/support/investigations/1557993751977106/
-
-
-### v0.4.1 Quest renderer fix
-Fixed WebGL texture parameter arity; disabled multisample XR layer; removed an absent local Three.js import; nginx now returns 404 for nonexistent assets. The landing mascot uses pinned CDN Three.js with an offline CSS fallback. No account data or credentials are reset.
-
-
-### v0.6.0 Spatial Follow, Extract and Prompt
-
-- Follow toolbar stays upright: derived from head **yaw** instead of head pitch/roll, 0.85 m in front and approximately 0.21 m below the eyes. Press Follow/Pin and drag the pill to reposition it in either mode. Source/photo cards stay in the room.
-- Capture a photo, then press EXTRACT on the picture. AI recognition crops bloom directly from the source and do **not** clear the original. The source card and cloud position are saved to SQLite.
-- Select an object or the source and choose PROMPT. SPEAK records about six seconds of microphone audio and optionally submits it to Meta Voice Transcribe. APPLY sends one paid request to Muse Image 1.0. TYPE opens the keyboard editor; Quest Browser DOM Overlay is requested and if not supported it exits XR to open the editor. Reenter XR and open LIB to view the saved result.
-- Edit creates a new **private** JPEG image object with `parent_object_id`, not a replacement of the original. META is the only wired image edit backend; xAI, Gemini, OpenAI, Aholo and 3D/video services remain credential-only until tested adapters are implemented.
-- Pinch/trigger drag supports position and wrist/grip orientation; two simultaneous grips on one card change its scale. These paths are programmed but must still be tested on a physical Quest 3.
-- EXTRACTION is Muse bounding-box cropping. REFINE uses SAM bounding boxes. No decoded transparent SAM masks or physical room mesh is claimed.
-- Source capture requires readable **environment-camera pixels**, which is independent of immersive passthrough. If inaccessible on Quest, upload a photo in 2D before entering XR.
-- No deployment watcher code was modified in this release; the existing v0.4.1 watcher remains the correct version.
-
-## v0.6.0 spatial controls
-
-- Landing: after the mascot arrives, Camera / Check XR / New item / Upload bloom around it. They are the existing actions, not duplicates of the footer.
-- Audio: procedural WebAudio only. Browsers restrict auto-play; the arrival jingle plays only after an audio-unlocking user gesture, while XR entry and interactive actions can play normally.
-- In XR: central animated eye requests camera access on its first press when no live video stream is present; visually verify a small live preview in space, then press it again to take a private snapshot. An uploaded image is also supported. This depends on the Quest Browser exposing environment-camera pixels.
-- Drag the top header of the sole XR toolbar. Follow keeps a body-relative offset below eye level; Pin holds the toolbar in the room. Grip and trigger may initiate grabs; available controller haptics signal interaction.
-- Extract expands cards from the persistent source. Photo cards preserve full image aspect ratio, including portrait and panoramic captures. Selected images expose Prompt and Improve (a prefilled image-edit prompt); applying an image edit is a paid API request.
-- No server database, model-credit or watcher changes; only a new release ZIP is needed.
+Official references: https://developers.meta.com/vr/documentation/web/webxr-keyboard/ and https://dev.meta.ai/docs/image-generation

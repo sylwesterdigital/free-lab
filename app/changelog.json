@@ -1,15 +1,16 @@
 {
-  "version": "0.6.0",
-  "title": "Spatial Eye + Dandelion Controls · v0.6.0",
-  "datetime": "2026-11-12 04:00 GMT",
+  "version": "0.7.0",
+  "title": "In-XR Voice, Image Mix & Native Keyboard · v0.7.0",
+  "datetime": "2026-11-12 05:00 GMT",
   "changes": [
-    "Camera test, XR readiness, new item and upload now bloom around the landing mascot after a one-second pause; no separate footer action strip.",
-    "Original procedural WebAudio chimes respond to arrival (when browser audio is unlocked), XR entry, capture, extraction, grabs, selection and success. No third-party audio assets.",
-    "The central animated iris is the immersive capture control. If no camera stream is live, the first press requests Quest camera permission; a small live-preview card shows the actual feed and a second press saves real pixels. Unavailable camera access is reported clearly without generating fake frames.",
-    "A single borderless XR navigation pill sits below eye level. Drag its upper header to reposition while following, or pin it at its current world position. Selected-card actions replace, rather than duplicate, the main tools.",
-    "Image cards are sized from actual source aspect ratios and draw the whole image without cropping. A saving photo remains in the world during the transition to a persisted capture.",
-    "IMPROVE routes to an image-edit prompt and adds a generated child card; the source image is not replaced. Applying the prompt is an explicit paid action.",
-    "Quest controllers receive subtle haptic pulses on hover and grab when available. Pinch and controller trigger/grip manipulation remain supported.",
-    "No new provider accounts, billing caps or external sound files. Database schema and deployment watcher remain unchanged."
+    "Half-size central XR camera eye, with an ENTER / XR two-line landing portal and clear microphone preflight control.",
+    "Native Quest Browser XR system keyboard integration through a focused DOM input; unsupported builds show an in-place warning and never intentionally end the XR session.",
+    "Six-second Meta voice transcription uses an already-granted microphone stream. Voice commands such as “where is my backpack?” search saved recognized objects and highlight matching image cards without additional visual inference.",
+    "Each source/object card has an X to close it in XR without deleting the saved photograph. Binning a source hides it privately; it can be restored from the Bin.",
+    "Optional small mascot pointer, spoken status updates and playful comments; original procedural camera shutter and paper-crumple audio effects.",
+    "Private Mix bucket accepts two selected images, including source photographs, and generates a child image with Muse Image only after an explicit Apply action.",
+    "An optional in-XR LOG panel shows client API errors and an admin-only bounded server request diagnostic feed (status, path and elapsed time; no request bodies or credentials).",
+    "“Improve” is renamed to a restoration instruction: “Restore this image with more detail and a higher resolution,” while preserving the source photograph.",
+    "No change to the macOS watcher, cloud/database schema, provider credentials or server billing limits."
   ]
 }

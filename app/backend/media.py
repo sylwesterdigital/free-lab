@@ -37,22 +37,24 @@ def extract_image(result):
             except (ValueError,base64.binascii.Error):pass
     raise RuntimeError('Meta returned no image generation result; no object was saved')
 
-def edit_meta_image(jpeg:bytes,prompt:str,key:str):
-    if not jpeg.startswith(b'\xff\xd8'):raise ValueError('Expected a JPEG source image')
-    uri='data:image/jpeg;base64,'+base64.b64encode(jpeg).decode('ascii')
-    payload={
-        'model':'muse-image-1.0','store':False,
-        'input':[{'role':'user','content':[{'type':'input_text','text':prompt},
-                    {'type':'input_image','image_url':uri}]}],
-        'tools':[{'type':'image_generation','enable_web_search':False,
-                  'enable_image_search':False,'enable_shell':False,'reasoning_strength':'low',
-                  'output_format':'jpeg'}]
-    }
+def edit_meta_images(jpegs:list[bytes],prompt:str,key:str):
+    """Compose up to two owned JPEGs with Meta Muse Image. Paid only on explicit Apply."""
+    if not 1<=len(jpegs)<=2 or any(not x.startswith(b'\xff\xd8') or len(x)>2_000_000 for x in jpegs):
+        raise ValueError('Expected one or two small JPEG source images')
+    content=[{'type':'input_text','text':prompt}]
+    content.extend({'type':'input_image','image_url':'data:image/jpeg;base64,'+base64.b64encode(image).decode('ascii')} for image in jpegs)
+    payload={'model':'muse-image-1.0','store':False,'input':[{'role':'user','content':content}],
+             'tools':[{'type':'image_generation','enable_web_search':False,
+                      'enable_image_search':False,'enable_shell':False,
+                      'reasoning_strength':'low','output_format':'jpeg'}]}
     response=_request(META+'/responses',json.dumps(payload).encode(),key,'application/json',timeout=115)
     try:result=json.loads(response)
     except (ValueError,TypeError) as e:raise RuntimeError('Meta returned a non-JSON image response') from e
     if result.get('status') not in ('completed',None):raise RuntimeError('Meta image generation did not complete')
     return _valid_jpeg(extract_image(result)),result.get('usage',{})
+
+def edit_meta_image(jpeg:bytes,prompt:str,key:str):
+    return edit_meta_images([jpeg],prompt,key)
 
 def _multipart_request(wav):
     boundary='freelab_'+uuid.uuid4().hex

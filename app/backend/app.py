@@ -464,6 +464,37 @@ def capture():
 
 # Image operations use a capability router. Only image-edit is live in this release;
 # unsupported media types return an explicit error before reserving billable usage.
+# Bounded process-local server request diagnostics. Per-worker, never a full systemd journal.
+from collections import deque
+import time as _diagnostic_time
+from threading import Lock as _DiagnosticLock
+_DIAGNOSTICS=deque(maxlen=90)
+_DIAGNOSTICS_LOCK=_DiagnosticLock()
+@app.before_request
+def diagnostic_clock():
+    if request.path.startswith('/api/'):
+        g._api_started=_diagnostic_time.monotonic()
+
+@app.after_request
+def diagnostic_response(response):
+    if hasattr(g,'_api_started') and request.path not in ('/api/health', '/api/admin/diagnostics'):
+        path=request.path
+        # Avoid logging user-provided names, query values or secret identifiers.
+        import re as _re
+        path=_re.sub(r'/\d+(?=/|$)','/:id',path)
+        path=_re.sub(r'/admin/providers/[^/]+','/admin/providers/:provider',path)
+        entry={'time':__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(timespec='seconds'),
+               'method':request.method,'path':path[:100],'status':response.status_code,
+               'duration_ms':round((_diagnostic_time.monotonic()-g._api_started)*1000)}
+        with _DIAGNOSTICS_LOCK:_DIAGNOSTICS.append(entry)
+    return response
+
+@app.get('/api/admin/diagnostics')
+@require_admin
+def admin_diagnostics():
+    with _DIAGNOSTICS_LOCK:recent=list(_DIAGNOSTICS)[-35:]
+    return jsonify(entries=recent,scope='current Python worker only',notice='No payloads, image content, credentials or prompts are collected.')
+
 @app.get('/api/media/capabilities')
 @require_user
 def media_capabilities():
@@ -490,24 +521,52 @@ def media_edit():
         obj=g.con.execute('SELECT * FROM objects WHERE id=? AND owner_id=? AND capture_id=?',(oid,g.user['id'],cid)).fetchone()
         if not obj or not obj['image_name'] or obj['shelf']=='bin':abort(404)
         source_name=obj['image_name'];parent=oid;label=obj['label']
-    raw=(IMAGE_DIR/source_name).read_bytes()
-    if not raw.startswith(b'\xff\xd8') or len(raw)>2_000_000:return jsonify(error='Stored source is not a suitable JPEG'),422
+    mix_sources=v.get('mix_sources',[])
+    if not isinstance(mix_sources,list) or (mix_sources and len(mix_sources)!=2):
+        return jsonify(error='Mix requires exactly two source cards'),400
+    raws=[]
+    if mix_sources:
+        seen=set()
+        for source in mix_sources:
+            if not isinstance(source,dict) or len(source)!=1 or not set(source).issubset({'object_id','capture_id'}):
+                return jsonify(error='Invalid Mix source'),400
+            kind,source_id=next(iter(source.items()))
+            if type(source_id) is not int or source_id<=0 or (kind,source_id) in seen:
+                return jsonify(error='Mix source must be a unique positive ID'),400
+            seen.add((kind,source_id))
+            if kind=='object_id':
+                row=g.con.execute('SELECT image_name,capture_id FROM objects WHERE id=? AND owner_id=? AND shelf!=?',
+                    (source_id,g.user['id'],'bin')).fetchone()
+            else:
+                row=g.con.execute('SELECT image_name,id AS capture_id FROM captures WHERE id=? AND owner_id=?',
+                    (source_id,g.user['id'])).fetchone()
+            if not row or not row['image_name']:return jsonify(error='Mix source not available for this profile'),404
+            raw=(IMAGE_DIR/row['image_name']).read_bytes()
+            if len(raw)>2_000_000 or not raw.startswith(b'\xff\xd8'):return jsonify(error='Mix image must be a small JPEG'),422
+            raws.append(raw)
+            if len(raws)==1:
+                if row['capture_id']:cid=row['capture_id']
+                parent=source_id if kind=='object_id' else None
+        label='Mix of two images'
+    else:
+        raws=[(IMAGE_DIR/source_name).read_bytes()]
+    if any(not raw.startswith(b'\xff\xd8') or len(raw)>2_000_000 for raw in raws):return jsonify(error='Stored source is not a suitable JPEG'),422
     key=request_meta_key(v)
     if not key:return jsonify(error='Configure Meta API key first'),503
-    digest=hashlib.sha256(raw+prompt.strip().encode('utf-8')+secrets.token_bytes(12)+b'|muse-image-1.0').hexdigest()
+    digest=hashlib.sha256(b''.join(raws)+prompt.strip().encode('utf-8')+secrets.token_bytes(12)+b'|muse-image-1.0').hexdigest()
     try:call=db.begin_inference(g.con,g.user['id'],digest,'muse-image-1.0',
          daily_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','0')),
          user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','0')),
          cooldown=int(os.getenv('FREE_LAB_COOLDOWN_SECONDS','20')))
     except ValueError as e:return jsonify(error=str(e)),429
     try:
-        jpeg,usage=media.edit_meta_image(raw,prompt.strip(),key)
+        jpeg,usage=media.edit_meta_images(raws,prompt.strip(),key) if mix_sources else media.edit_meta_image(raws[0],prompt.strip(),key)
         name=secrets.token_hex(16)+'.jpg';file=IMAGE_DIR/name;file.write_bytes(jpeg)
         try:
             with g.con:
                 new_id=g.con.execute('''INSERT INTO objects(owner_id,label,description,provider,image_name,sha256,capture_id,parent_object_id,operation)
                        VALUES(?,?,?,?,?,?,?,?,?)''',(g.user['id'],('Edited '+label)[:80],prompt.strip()[:240],
-                        'muse-image-1.0',name,hashlib.sha256(jpeg).hexdigest(),cid,parent,'image_edit')).lastrowid
+                        'muse-image-1.0',name,hashlib.sha256(jpeg).hexdigest(),cid,parent,'mix' if mix_sources else 'image_edit')).lastrowid
         except Exception:
             file.unlink(missing_ok=True);raise
         db.finish_inference(g.con,call,'ok',usage)

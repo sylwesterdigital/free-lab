@@ -46,3 +46,13 @@
 /* Final landing layout adjustments: keep feature seeds clear of the hero headline. */
 @media(min-width:1051px){.feature-seed:nth-child(3){--dx:-205px!important;--dy:90px!important}}
 @media(max-width:680px){.stage-copy>p:last-child{display:none!important}}
+
+/* v0.7.0 — visually self-explanatory portal and preferences. */
+.xr-portal .xr-letter{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;margin-top:0;letter-spacing:0}
+.xr-portal .xr-letter small{font-size:clamp(15px,1.5vw,19px);font-weight:750;letter-spacing:.13em;line-height:1.12}
+.xr-portal .xr-letter strong{font-size:clamp(46px,4.1vw,64px);line-height:1;letter-spacing:-.08em;font-weight:740}
+.experience-preferences{display:flex;flex-direction:column;gap:12px;margin:18px 0;padding:16px;border-radius:16px;background:#ffffff09}
+.experience-preferences label{display:flex;align-items:center;gap:12px;font-size:13px;color:#e1ece5;cursor:pointer}
+.experience-preferences input{accent-color:#a3eab6;width:17px;height:17px;flex-shrink:0}
+.experience-preferences button{align-self:flex-start}
+@media(max-width:740px){.xr-portal .xr-letter small{font-size:13px}.xr-portal .xr-letter strong{font-size:43px}}

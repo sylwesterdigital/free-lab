@@ -47,12 +47,12 @@ class SpatialInteractionTests(unittest.TestCase):
         self.assertNotIn("session.addEventListener('squeeze',",XR)
     def test_web_audio_and_haptic(self):
         self.assertIn("createOscillator",SOUND)
-        self.assertIn("sequences={arrival:",SOUND)
+        self.assertIn("arrival:[[392",SOUND)
         self.assertIn('hapticActuators',XR)
         self.assertIn("window.FreeLabSound?.play('enter')",APP)
-        self.assertIn('sound.js?v=0.6.0',HTML)
+        self.assertIn('sound.js?v=0.7.0',HTML)
     def test_prompt_improve_preserves_source(self):
-        self.assertIn("case 'refine':return openPrompt('Improve image quality",XR)
+        self.assertIn("case 'refine':return openPrompt('Restore this image with more detail",XR)
         self.assertIn('bloomChildren([o],context.card)',XR)
         self.assertIn('original image stays in the room',XR)
     def test_dynamic_aspect_calculation(self):

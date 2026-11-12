@@ -1,14 +1,27 @@
-/* FREELAB Spatial Cloud 0.5.0 — camera and model calls explicitly opt-in. */
+/* FREELAB Spatial Cloud 0.7.0 — camera and model calls explicitly opt-in. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
-const state={user:null,config:null,objects:[],tab:'mine',stream:null,snapshot:null,snapshotOrigin:null,xr:null,sessionKeys:new Map()};
+const state={user:null,config:null,objects:[],tab:'mine',stream:null,micStream:null,snapshot:null,snapshotOrigin:null,xr:null,sessionKeys:new Map()};
+const trace=[];const TRACE_MAX=80;
+function traceEvent(message,kind='info'){const entry={at:new Date().toLocaleTimeString(),kind,message:String(message).slice(0,270)};trace.push(entry);if(trace.length>TRACE_MAX)trace.shift();window.dispatchEvent(new CustomEvent('freelab-trace',{detail:entry}));}
+function getTrace(){return trace.slice(-25);}
+async function serverDiagnostics(){return api('/admin/diagnostics');}
+function pref(name){try{return localStorage.getItem('freelab-pref-'+name)==='true';}catch{return false;}}
+function setPref(name,value){try{localStorage.setItem('freelab-pref-'+name,String(Boolean(value)));}catch{}traceEvent(name+' = '+Boolean(value),'setting');}
 const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e;};
 let toastTimer, scanTimer=null, scanBusy=false;
 function sessionMeta(){return state.user?.role==='admin' ? state.sessionKeys.get('meta') : null;}
 function cameraReport(){if(!state.stream)return 'NO CAMERA · preflight required';const tracks=state.stream.getVideoTracks();const t=tracks[0];const video=$('cameraVideo');if(!t||t.readyState!=='live'||t.muted||!video?.videoWidth)return 'CAMERA MUTED / NO PIXELS · check Quest permission';const set=t.getSettings();return `LIVE ${video.videoWidth}×${video.videoHeight} · ${set.facingMode||'unknown facing'} · ${String(t.label||'unknown source').slice(0,40)}`;}
-function notify(msg){const t=$('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.add('hidden'),4400);}
-async function api(path,opts={}){const init={credentials:'same-origin',...opts,headers:{'X-Free-Lab':'1',...(opts.body?{'Content-Type':'application/json'}:{}),...(opts.headers||{})}};
- const response=await fetch('/api'+path,init);let result={};try{result=await response.json()}catch{}if(!response.ok)throw Error(result.error||'HTTP '+response.status);return result;}
+function notify(msg){traceEvent(msg,'status');const t=$('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.add('hidden'),4400);}
+async function api(path,opts={}){
+ const init={credentials:'same-origin',...opts,headers:{'X-Free-Lab':'1',...(opts.body?{'Content-Type':'application/json'}:{}),...(opts.headers||{})}};
+ const began=performance.now();let response;
+ try{response=await fetch('/api'+path,init);let result={};try{result=await response.json()}catch{}
+  const duration=Math.round(performance.now()-began);
+  traceEvent(`${opts.method||'GET'} ${path.replace(/\/\d+(?=\/|$)/g,'/:id')} → HTTP ${response.status} (${duration} ms)${result.error?' · '+String(result.error).slice(0,135):''}`,response.ok?'api':'error');
+  if(!response.ok)throw Error(result.error||'HTTP '+response.status);return result;
+ }catch(e){if(!response)traceEvent(`${path.split('?')[0]} · NETWORK ERROR · ${e.message}`,'error');throw e;}
+}
 async function refresh(){try{const h=await api('/health');$('healthStatus').textContent=h.ok?'System online':'Offline';$('connectionDot').classList.toggle('good',h.ok);state.config=await api('/config');const enabled=state.config.inference_enabled||Boolean(sessionMeta());$('modelStatus').textContent=(enabled?'AI ready · on demand':'AI offline · manual mode');$('modelStatus').previousElementSibling.classList.toggle('good',enabled);}
  catch(e){$('healthStatus').textContent='Disconnected';}}
 async function loadObjects(){const path=state.tab==='mine'?'/objects':'/public';const data=await api(path);state.objects=state.tab==='public'?data.objects:data.objects.filter(x=>state.tab==='bin'?x.shelf==='bin':x.shelf!=='bin');renderObjects();}
@@ -43,7 +56,7 @@ async function enableXRCamera(){
 async function openCamera(){ $('cameraPanel').classList.remove('hidden');try{await enableXRCamera();}catch(e){$('cameraStatus').textContent='Camera unavailable';$('captureStatus').textContent=`Camera error: ${e.name||'Unknown'} · ${e.message||'Permission or device unavailable'}`;$('captureEmpty').classList.remove('hidden');notify('Camera unavailable: '+(e.message||e.name)+'. Upload an image instead.');}}
 function closeCamera(){stopScan();state.stream?.getTracks().forEach(t=>t.stop());state.stream=null;$('cameraVideo').srcObject=null;$('cameraPanel').classList.add('hidden');}
 function compress(source){const canvas=$('snapshotCanvas');const w=source.videoWidth||source.naturalWidth||source.width;const h=source.videoHeight||source.naturalHeight||source.height;if(!w||!h)throw Error('Image has no pixels');const scale=Math.min(1,960/Math.max(w,h));canvas.width=Math.round(w*scale);canvas.height=Math.round(h*scale);canvas.getContext('2d',{alpha:false}).drawImage(source,0,0,canvas.width,canvas.height);let data=canvas.toDataURL('image/jpeg',0.65);if(data.length>610000) data=canvas.toDataURL('image/jpeg',0.42);if(data.length>610000)throw Error('Image too large; choose a smaller one');state.snapshot=data;state.snapshotOrigin='camera';$('previewImage').src=data;$('previewImage').classList.remove('hidden');$('cameraVideo').classList.add('hidden');$('captureEmpty').classList.add('hidden');$('cameraStatus').textContent='Snapshot ready · private';$('samOverlay')?.classList.add('hidden');return data;}
-function snapshot(){if(!state.stream)throw Error('No live camera. Enable camera or upload an image.');$('cameraVideo').classList.remove('hidden');return compress($('cameraVideo'));}
+function snapshot(){if(!state.stream)throw Error('No live camera. Enable camera or upload an image.');$('cameraVideo').classList.remove('hidden');const frame=compress($('cameraVideo'));window.FreeLabSound?.play('shutter');return frame;}
 async function submitCapture(recognize){try{if(!state.snapshot){if(state.stream)snapshot();else throw Error('Take or upload a snapshot first');}const label=$('manualLabel').value.trim();if(!recognize&&!label)throw Error('Enter an object name first');
  $('recognize').disabled=true;$('saveManual').disabled=true;notify(recognize?'Sending one image to Meta Muse…':'Saving privately…');const payload={image:state.snapshot,recognize,label,model:$('modelChoice').value};if(recognize&&sessionMeta())payload.session_api_key=sessionMeta();const result=await api('/capture',{method:'POST',body:JSON.stringify(payload)});const tokens=result.usage?.total_tokens??(result.usage?.prompt_tokens||0)+(result.usage?.completion_tokens||0);notify('Saved '+result.ids.length+' object(s)'+(recognize?` · ${tokens} Meta tokens (reported)`:' · no API billed'));if(state.user?.role==='admin')loadUsage().catch(()=>{});state.tab='mine';selectTab('mine');await loadObjects();return true;}
  catch(e){notify(e.message);if(scanTimer&&/limit|wait|quota|Too many/i.test(e.message))stopScan();return false;}finally{$('recognize').disabled=false;$('saveManual').disabled=false;}}
@@ -108,6 +121,8 @@ async function init(){
  document.querySelectorAll('.provider-option').forEach(btn=>btn.onclick=()=>{$('providerChoice').value=btn.dataset.provider;document.querySelectorAll('.provider-option').forEach(b=>b.classList.toggle('selected',b===btn));$('providerResult').textContent='Provider: '+btn.textContent+'. Test without generation or save a credential.';});
  document.querySelectorAll('.model-option').forEach(btn=>btn.onclick=()=>{$('modelChoice').value=btn.dataset.model;document.querySelectorAll('.model-option').forEach(b=>b.classList.toggle('selected',b===btn));});
  $('providerForm').onsubmit=saveProvider;$('testProvider').onclick=testProvider;$('clearSessionKey').onclick=async()=>{state.sessionKeys.delete(currentProvider());$('providerKey').value='';await loadProviderList();await refresh();notify('Tab-only key cleared');};$('segment').onclick=()=>segmentSnapshot();$('toggleScan').onclick=toggleScan;$('cancelScan').onclick=()=>$('scanConsent').classList.add('hidden');$('confirmScan').onclick=startScanConfirmed;document.addEventListener('visibilitychange',()=>{if(document.hidden)stopScan()});
+ $('armXRMic')?.addEventListener('click',async()=>{try{const result=await armMicrophone();notify(result)}catch(e){notify('Mic permission: '+e.message)}});
+ for(const name of ['mascot','spoken','troll']){const el=$('pref-'+name);if(el){el.checked=pref(name);el.onchange=()=>setPref(name,el.checked);}}
  $('cameraButton').onclick=()=>{window.FreeLabSound?.play('capture');openCamera();};$('cameraDiagnostic').onclick=()=>{window.FreeLabSound?.play('ready');$('xrReadiness').classList.remove('hidden');xrDiagnostics()};$('refreshXRReadiness').onclick=xrDiagnostics;$('closeXRReadiness').onclick=()=>$('xrReadiness').classList.add('hidden');$('addNameButton').onclick=()=>{window.FreeLabSound?.play('bloom');$('cameraPanel').classList.remove('hidden');$('manualLabel').focus();};$('closeCamera').onclick=closeCamera;$('takeSnapshot').onclick=()=>{try{snapshot();notify('Snapshot ready')}catch(e){notify(e.message)}};
  $('fileInput').onchange=async e=>{window.FreeLabSound?.play('bloom');const file=e.target.files?.[0];if(!file)return;try{if(file.size>12*1024*1024)throw Error('Please choose an image under 12 MB');const bmp=await createImageBitmap(file);const canvas=$('snapshotCanvas');const scale=Math.min(1,960/Math.max(bmp.width,bmp.height));canvas.width=Math.round(scale*bmp.width);canvas.height=Math.round(scale*bmp.height);canvas.getContext('2d').drawImage(bmp,0,0,canvas.width,canvas.height);bmp.close();const preview=new Image();preview.src=canvas.toDataURL('image/jpeg',0.65);await preview.decode();$('cameraPanel').classList.remove('hidden');compress(preview);state.snapshotOrigin='upload';notify('Image ready — recognize or save manually');}catch(e){notify(e.message)}e.target.value='';};
  $('recognize').onclick=()=>submitCapture(true);$('saveManual').onclick=()=>{if(state.snapshot)submitCapture(false);else saveNameOnly().catch(e=>notify(e.message))};
@@ -120,7 +135,7 @@ async function init(){
 
 // Spatial cloud interface: no background inference, all writes are profile-scoped.
 async function saveXRFrame(onLocal){
- if(state.stream){snapshot();}
+ if(state.stream&&state.snapshotOrigin!=='upload'){snapshot();}
  if(!state.snapshot)throw Error('No readable frame. Press the central eye to enable the camera, or upload an image in the desktop view.');
  if(typeof onLocal==='function')onLocal(state.snapshot);
  const r=await api('/captures',{method:'POST',body:JSON.stringify({image:state.snapshot})});
@@ -165,8 +180,9 @@ async function updateXRCloud(id,patch){await api('/captures/'+id,{method:'PATCH'
 
 
 // Explicit media actions: a text or voice prompt never spends tokens until Apply.
-async function promptXR(cid,oid,prompt){
+async function promptXR(cid,oid,prompt,mixSources=[]){
  const payload={capture_id:cid,object_id:oid||null,prompt,provider:'meta',kind:'image'};
+ if(mixSources.length)payload.mix_sources=mixSources;
  if(sessionMeta())payload.session_api_key=sessionMeta();
  const r=await api('/media/edit',{method:'POST',body:JSON.stringify(payload)});
  if(state.user?.role==='admin')loadUsage().catch(()=>{});
@@ -176,9 +192,20 @@ async function transcribeXR(wavBase64){
  const payload={wav:wavBase64};if(sessionMeta())payload.session_api_key=sessionMeta();
  return (await api('/media/transcribe',{method:'POST',body:JSON.stringify(payload)})).text;
 }
+async function armMicrophone(){
+ const active=state.micStream?.getAudioTracks()?.[0];if(active?.readyState==='live'&&!active.muted)return 'Microphone ready for XR';
+ if(!navigator.mediaDevices?.getUserMedia)throw Error('Microphone API not available');
+ if(state.micStream){state.micStream.getTracks().forEach(t=>t.stop());state.micStream=null;}
+ const stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true},video:false});
+ if(!stream.getAudioTracks().length){stream.getTracks().forEach(t=>t.stop());throw Error('No audio input track');}
+ state.micStream=stream;traceEvent('Microphone permission ready. No recording underway.');return 'Microphone granted. Dictation will stay inside XR.';
+}
+function micReady(){return Boolean(state.micStream?.getAudioTracks()?.some(t=>t.readyState==='live'&&!t.muted));}
+function speakUpdate(text){if(!pref('spoken'))return;try{if(!('speechSynthesis' in window))return;window.speechSynthesis.cancel();const utter=new SpeechSynthesisUtterance(String(text).slice(0,160));utter.volume=.55;utter.rate=1.09;window.speechSynthesis.speak(utter);}catch(e){traceEvent('Voice status unavailable: '+e.message,'warn');}}
 async function recordWavPrompt(){
  if(!navigator.mediaDevices?.getUserMedia)throw Error('Microphone unavailable on this Quest Browser');
- const stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true},video:false});
+ const stream=micReady()?state.micStream:await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true},video:false});
+ const reused=stream===state.micStream;
  let audio;
  try{
    audio=new (window.AudioContext||window.webkitAudioContext)({sampleRate:16000});
@@ -203,7 +230,7 @@ async function recordWavPrompt(){
    for(let i=0;i<outSamples;i++){const v=Math.max(-1,Math.min(1,merged[Math.floor(i*stride)]));dv.setInt16(44+i*2,v<0?v*32768:v*32767,true);}
    const bytes=new Uint8Array(out);let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
    return btoa(binary);
- }finally{stream.getTracks().forEach(t=>t.stop());await audio?.close().catch(()=>{});}
+ }finally{if(!reused)stream.getTracks().forEach(t=>t.stop());await audio?.close().catch(()=>{});}
 }
 let pendingPrompt=null;
 function closePrompt(){document.getElementById('xrPromptEditor').classList.add('hidden');pendingPrompt=null;}
@@ -236,6 +263,6 @@ function wirePromptEditor(){
  };
 }
 
-window.FreeLab={enableXRCamera,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
+window.FreeLab={enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
 document.addEventListener('DOMContentLoaded',()=>{init().catch(e=>notify('Initialization failed: '+e.message));const bloom=$('featureBloom');if(bloom){setTimeout(()=>window.FreeLabSound?.play('arrival'),3000);bloom.querySelectorAll('.feature-seed').forEach(button=>{button.addEventListener('mouseenter',()=>window.FreeLabSound?.hover());button.addEventListener('focus',()=>window.FreeLabSound?.hover());});}});
 })();
