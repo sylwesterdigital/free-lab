@@ -16,6 +16,7 @@ CHECKS = {
     'gemini': ('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', 'gemini', 'models'),
     'xai': ('https://api.x.ai/v1/models', 'bearer', 'models'),
     'replicate': ('https://api.replicate.com/v1/account', 'bearer', 'account'),
+    'elevenlabs': ('https://api.elevenlabs.io/v1/user', 'elevenlabs', 'account'),
 }
 
 
@@ -30,6 +31,7 @@ def check(provider: str, api_key: str) -> dict:
     if auth == 'bearer': headers['Authorization'] = 'Bearer ' + api_key
     elif auth == 'raw': headers['Authorization'] = api_key  # Aholo explicitly forbids Bearer
     elif auth == 'gemini': headers['x-goog-api-key'] = api_key
+    elif auth == 'elevenlabs': headers['xi-api-key'] = api_key
     request = urllib.request.Request(url, headers=headers, method='GET')
     try:
         # Disable redirect following: never forward a credential to an unknown host.

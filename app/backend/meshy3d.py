@@ -37,7 +37,7 @@ def submit(jpeg:bytes,key:str):
         raise ValueError('Expected an existing private JPEG under 2 MB')
     if not key:raise ValueError('Configure the Meshy key in the server vault')
     result=request('POST',API,key,{'image_url':'data:image/jpeg;base64,'+base64.b64encode(jpeg).decode('ascii'),
-       'ai_model':'meshy-6-lite','should_texture':True,'target_formats':['glb']})
+       'ai_model':'meshy-6-lite','should_remesh':True,'target_polycount':12000,'should_texture':True,'target_formats':['glb']})
     job=result.get('result')
     if not isinstance(job,str) or not TASK_RE.fullmatch(job):raise RuntimeError('Meshy did not return a valid task ID')
     return job

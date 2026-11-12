@@ -71,6 +71,7 @@ def init(path):
             con.execute("ALTER TABLE inference_calls ADD COLUMN usage_json TEXT NOT NULL DEFAULT '{}' ")
         capture_fields={row['name'] for row in con.execute('PRAGMA table_info(captures)')}
         if 'spatial_json' not in capture_fields:con.execute("ALTER TABLE captures ADD COLUMN spatial_json TEXT NOT NULL DEFAULT '{}'")
+        if 'description' not in capture_fields:con.execute("ALTER TABLE captures ADD COLUMN description TEXT NOT NULL DEFAULT ''")
         fields={row['name'] for row in con.execute('PRAGMA table_info(objects)')}
         for name,definition in (
             ('capture_id','INTEGER REFERENCES captures(id) ON DELETE SET NULL'),

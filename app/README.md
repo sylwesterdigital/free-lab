@@ -95,3 +95,12 @@ The three spatial roundels are always present. Extract is dim until an active so
 The immersive camera preview was removed. The eye requests permission when needed and captures on the next press. A capture is selectable for Extract only after `/api/captures` confirms its persistent ID; failure clears temporary `SAVING` state and exposes the error in XR diagnostics. The source card's top-left Extract button is visible for saved frames.
 
 **Inference limits are disabled by default**. The installer no longer imposes 24/8 requests. On an existing server, old `FREE_LAB_DAILY_LIMIT` values are ignored unless `FREE_LAB_ENFORCE_INFERENCE_LIMITS=1` is explicitly configured. Optional `FREE_LAB_DAILY_LIMIT`, `FREE_LAB_USER_DAILY_LIMIT`, `FREE_LAB_COOLDOWN_SECONDS` may be configured by the operator. Provider-level spend and rate limits still apply. No dollar hard cap is claimed.
+
+
+## v0.10.0 · XR workbench
+
+The selected image provides one contextual popover: EXTRACT, DESCRIBE, REFINE, PROMPT, VOICE, 3D. The XR microphone is press-to-record / press-to-stop (up to 90 seconds for the server upload safety limit), with a live frequency ring and user-confirmed transcript. DESCRIBE explicitly calls Meta vision once and caches the private description for subsequent views. Sound preference defaults to browser speech; ElevenLabs TTS is strictly opt-in with an encrypted server-side API key.
+
+The LOG window is moveable and resizable independently of the navigation. 3D generation is an asynchronous, explicitly confirmed Meshy paid job: status is polled and displayed in XR. When ready, a small untextured triangle-only preview is decoded from eligible GLB v2 content (12 MB server download ceiling; max 3,600 preview triangles). Some provider-compressed GLB formats cannot be previewed and remain downloadable from LIB. No free claim about Meshy inference is made. The preview never uploads additional photographs.
+
+For images outside Quest, upload via the camera panel and use **Save photo to Spatial Library**. Open LIB in XR to view the capture and use Extract. No new quotas are introduced.

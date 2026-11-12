@@ -62,3 +62,30 @@ def identify(jpeg, model=None, api_key=None):
         return parse_detections(json.loads(content)),result.get('usage',{})
     except (ValueError,TypeError,KeyError,IndexError) as e:
         raise RuntimeError('Meta API returned an incompatible object response') from e
+
+
+def describe(jpeg: bytes, api_key: str, model: str = 'muse-ember-1.0'):
+    """Describe the actual image only. A paid, user-initiated vision request."""
+    if model not in MODEL_IDS: raise ValueError('Unsupported Meta vision model')
+    if not api_key: raise RuntimeError('Meta API key not configured')
+    if not jpeg.startswith(b'\xff\xd8') or len(jpeg) > 2_000_000:
+        raise ValueError('Description requires an existing JPEG under 2 MB')
+    uri = 'data:image/jpeg;base64,' + base64.b64encode(jpeg).decode('ascii')
+    payload = {'model':model,'messages':[
+       {'role':'system','content':'Describe only what is clearly visible in the supplied image. Do not identify people or invent objects, unseen surfaces, depth data, room layout or locations. Focus on objects, colors, positions within the photograph and useful visual details. Use 2-4 concise sentences in English.'},
+       {'role':'user','content':[{'type':'text','text':'Provide an accessible description of this photograph for a private spatial collection.'},{'type':'image_url','image_url':{'url':uri}}]}],
+       'max_completion_tokens':500,'store':False}
+    req=urllib.request.Request(API_URL,data=json.dumps(payload).encode('utf-8'),method='POST',
+        headers={'Authorization':'Bearer '+api_key,'Content-Type':'application/json','User-Agent':'FREELAB-Describe/0.10'})
+    try:
+        with urllib.request.urlopen(req,timeout=43) as response: result=json.load(response)
+    except urllib.error.HTTPError as e:raise RuntimeError(f'Meta description failed: HTTP {e.code}') from e
+    except (TimeoutError,urllib.error.URLError) as e:raise RuntimeError('Meta description endpoint unavailable') from e
+    try:
+        value=result['choices'][0]['message']['content']
+        if isinstance(value,list):value=' '.join(v.get('text','') for v in value if isinstance(v,dict))
+        value=re.sub(r'[\x00-\x1f]+',' ',value).strip()[:1800]
+        if len(value)<12:raise ValueError('Empty description')
+        return value,result.get('usage',{})
+    except (KeyError,ValueError,IndexError,TypeError) as e:
+        raise RuntimeError('Meta response had no usable description') from e

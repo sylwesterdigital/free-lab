@@ -47,7 +47,7 @@ server {
        proxy_set_header X-Forwarded-Proto $scheme;
        proxy_connect_timeout 8s;
        proxy_read_timeout 50s;
-       client_max_body_size 650k;
+       client_max_body_size 4500k;
     }
     location = /assets/scene.mjs {
        default_type application/javascript;

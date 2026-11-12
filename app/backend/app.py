@@ -1,11 +1,11 @@
 """Flask API: identity-scoped private object collection with optional Meta inference."""
 from __future__ import annotations
-import base64,hashlib,hmac,io,json,os,re,secrets,sqlite3,threading,time
+import base64,hashlib,hmac,io,json,os,re,secrets,sqlite3,threading,time,urllib.request,urllib.error
 from pathlib import Path
 from functools import wraps
 from flask import Flask,abort,g,jsonify,request,send_file,session
 from werkzeug.middleware.proxy_fix import ProxyFix
-from . import db,providers,secrets as keyvault,sam,provider_checks,media,meshy3d
+from . import db,providers,secrets as keyvault,sam,provider_checks,media,meshy3d,glb_preview
 
 APP_ROOT=Path(__file__).resolve().parents[1]
 DATA_DIR=Path(os.getenv('FREE_LAB_DATA_DIR',APP_ROOT/'var')).resolve()
@@ -16,7 +16,7 @@ app=Flask(__name__,static_folder=str(APP_ROOT/'frontend'),static_url_path='')
 app.config.update(SECRET_KEY=os.getenv('FREE_LAB_SESSION_KEY',secrets.token_hex(32)),
                   SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE='Lax',
                   SESSION_COOKIE_SECURE=os.getenv('FREE_LAB_HTTPS','0')=='1',
-                  MAX_CONTENT_LENGTH=650_000,JSON_SORT_KEYS=False)
+                  MAX_CONTENT_LENGTH=4_250_000,JSON_SORT_KEYS=False)
 app.wsgi_app=ProxyFix(app.wsgi_app,x_for=1,x_proto=1,x_host=0)
 db.init(DB)
 IMAGE_DIR.mkdir(parents=True,exist_ok=True)
@@ -250,7 +250,7 @@ def capture_clouds():
         items=g.con.execute('SELECT * FROM objects WHERE owner_id=? AND capture_id=? ORDER BY id LIMIT 80',(g.user['id'],row['id'])).fetchall()
         result.append({'id':row['id'],'image_url':f'/api/captures/{row["id"]}/image',
            'created_at':row['created_at'],'collapsed':bool(row['collapsed']),'hidden':bool(row['hidden']),
-           'spatial':json.loads(row['spatial_json'] or '{}'),'objects':[item_dict(obj) for obj in items]})
+           'spatial':json.loads(row['spatial_json'] or '{}'),'description':row['description'],'objects':[item_dict(obj) for obj in items]})
     return jsonify(captures=result)
 
 @app.post('/api/captures')
@@ -605,6 +605,27 @@ def media_3d_status(jid):
         row=g.con.execute('SELECT * FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
     return jsonify(job_3d_dict(row))
 
+
+@app.get('/api/media/3d/<int:jid>/preview')
+@require_user
+def media_3d_preview(jid):
+    """Return small bounded geometry, not a 20-100MB textured model to Quest."""
+    row=g.con.execute('SELECT status,glb_url FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
+    if not row:abort(404)
+    if row['status']!='SUCCEEDED' or not meshy3d.safe_file_url(row['glb_url']):
+        return jsonify(error='3D model not ready for preview'),409
+    req=urllib.request.Request(row['glb_url'],headers={'User-Agent':'FREELAB-GeometryPreview/0.10'})
+    opener=urllib.request.build_opener(meshy3d.NoRedirect)
+    try:
+        with opener.open(req,timeout=18) as response:
+            if response.headers.get('Content-Length') and int(response.headers['Content-Length'])>glb_preview.MAX_FILE:
+                return jsonify(error='3D model larger than the safe XR preview limit; use Library download'),413
+            raw=response.read(glb_preview.MAX_FILE+1)
+        geometry=glb_preview.decode(raw)
+        return jsonify(**geometry)
+    except urllib.error.HTTPError as e:return jsonify(error=f'Meshy model download HTTP {e.code}; renew the link in Library'),502
+    except (ValueError,OSError,KeyError,IndexError,TypeError) as e:return jsonify(error=str(e)),422
+
 @app.post('/api/media/edit')
 @require_user
 def media_edit():
@@ -678,15 +699,88 @@ def media_edit():
     except (RuntimeError,ValueError,OSError) as e:
         db.finish_inference(g.con,call,'error');return jsonify(error=str(e)),502
 
+
+@app.post('/api/media/describe')
+@require_user
+def media_describe():
+    v=body();cid=v.get('capture_id');oid=v.get('object_id')
+    if type(cid) is not int or cid<=0:return jsonify(error='Select a capture first'),400
+    cap=g.con.execute('SELECT id,image_name,description FROM captures WHERE id=? AND owner_id=? AND hidden=0',
+                      (cid,g.user['id'])).fetchone()
+    if not cap:abort(404)
+    obj=None
+    if oid is not None:
+        if type(oid) is not int or oid<=0:return jsonify(error='Invalid object ID'),400
+        obj=g.con.execute('SELECT id,image_name,description FROM objects WHERE id=? AND owner_id=? AND capture_id=? AND shelf!=?',
+             (oid,g.user['id'],cid,'bin')).fetchone()
+        if not obj or not obj['image_name']:abort(404)
+    row=obj or cap
+    if row['description'] and not v.get('refresh'):
+        return jsonify(description=row['description'],cached=True,object_id=oid,capture_id=cid)
+    key=request_meta_key(v)
+    if not key:return jsonify(error='Meta API key not configured; no description requested'),503
+    raw=(IMAGE_DIR/row['image_name']).read_bytes()
+    digest=hashlib.sha256(raw+b'|describe-v1|'+secrets.token_bytes(8)).hexdigest()
+    limits=application_inference_limits()
+    try:call=db.begin_inference(g.con,g.user['id'],digest,'muse-describe',
+         daily_cap=limits['daily_cap'],user_cap=limits['user_cap'],cooldown=limits['cooldown'])
+    except ValueError as e:return jsonify(error=str(e)),429
+    try:
+        description,usage=providers.describe(raw,key)
+        with g.con:
+            if obj:g.con.execute('UPDATE objects SET description=? WHERE id=? AND owner_id=?',(description,oid,g.user['id']))
+            else:g.con.execute('UPDATE captures SET description=? WHERE id=? AND owner_id=?',(description,cid,g.user['id']))
+        db.finish_inference(g.con,call,'ok',usage)
+        return jsonify(description=description,cached=False,usage=usage,object_id=oid,capture_id=cid)
+    except (OSError,ValueError,RuntimeError) as e:
+        db.finish_inference(g.con,call,'error');return jsonify(error=str(e)),502
+
+@app.get('/api/media/voices')
+@require_user
+def media_voices():
+    """Optional read-only ElevenLabs voice listing; never triggers generation."""
+    key=keyvault.get_key(g.con,'elevenlabs')
+    if not key:return jsonify(voices=[],notice='ElevenLabs API key not configured')
+    req=urllib.request.Request('https://api.elevenlabs.io/v2/voices?page_size=30',
+         headers={'xi-api-key':key,'Accept':'application/json','User-Agent':'FREELAB/0.10'})
+    try:
+        with urllib.request.urlopen(req,timeout=12) as response:data=json.load(response)
+        voices=[{'id':v['voice_id'],'name':str(v.get('name','Voice'))[:70]} for v in data.get('voices',[])
+                if isinstance(v,dict) and isinstance(v.get('voice_id'),str)]
+        return jsonify(voices=voices[:30])
+    except (OSError,ValueError,KeyError) as e:return jsonify(error='Voice catalog unavailable; use browser speech'),502
+
+@app.post('/api/media/speak')
+@require_user
+def media_speak():
+    """An explicitly opted-in paid TTS request; key never enters the browser."""
+    v=body();phrase=v.get('text','');voice=v.get('voice_id','')
+    if not isinstance(phrase,str) or not 1<=len(phrase.strip())<=500:
+        return jsonify(error='Speech text must be 1-500 characters'),400
+    if not isinstance(voice,str) or not re.fullmatch(r'[A-Za-z0-9_-]{12,64}',voice):
+        return jsonify(error='Choose a valid ElevenLabs voice from Settings'),400
+    key=keyvault.get_key(g.con,'elevenlabs')
+    if not key:return jsonify(error='ElevenLabs key not configured'),503
+    url='https://api.elevenlabs.io/v1/text-to-speech/'+voice+'?output_format=mp3_44100_128'
+    data=json.dumps({'text':phrase.strip(),'model_id':'eleven_flash_v2_5'}).encode()
+    req=urllib.request.Request(url,data=data,method='POST',headers={'xi-api-key':key,
+           'Content-Type':'application/json','Accept':'audio/mpeg','User-Agent':'FREELAB/0.10'})
+    try:
+        with urllib.request.urlopen(req,timeout=35) as response:audio=response.read(950_001)
+        if not 100<=len(audio)<=950_000:raise RuntimeError('Speech response was empty or too large')
+        response=app.response_class(audio,mimetype='audio/mpeg');response.headers['Cache-Control']='private, no-store';return response
+    except urllib.error.HTTPError as e:return jsonify(error=f'ElevenLabs speech HTTP {e.code}; fallback to browser voice'),502
+    except (OSError,RuntimeError) as e:return jsonify(error='ElevenLabs unavailable; fallback to browser voice'),502
+
 @app.post('/api/media/transcribe')
 @require_user
 def media_transcribe():
     v=body();b64=v.get('wav','')
-    if not isinstance(b64,str) or len(b64)>600_000:return jsonify(error='Speech clip too large'),400
+    if not isinstance(b64,str) or len(b64)>4_000_000:return jsonify(error='Speech clip too large (90 seconds maximum)'),400
     try:wav=base64.b64decode(b64,validate=True)
     except (ValueError,base64.binascii.Error):return jsonify(error='Invalid speech encoding'),400
-    if len(wav)<80 or len(wav)>420_000 or wav[:4]!=b'RIFF' or wav[8:12]!=b'WAVE':
-        return jsonify(error='Expected a short 16 kHz WAV clip (max 13 seconds)'),400
+    if len(wav)<80 or len(wav)>2_900_000 or wav[:4]!=b'RIFF' or wav[8:12]!=b'WAVE':
+        return jsonify(error='Expected a 16 kHz WAV recording (up to 90 seconds)'),400
     key=request_meta_key(v)
     if not key:return jsonify(error='Meta key not configured'),503
     digest=hashlib.sha256(wav+b'|transcription').hexdigest()

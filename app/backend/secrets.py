@@ -14,6 +14,7 @@ PROVIDERS={
  'tripo': 'Tripo 3D generation',
  'fal': 'fal.ai model gateway',
  'replicate': 'Replicate model gateway',
+ 'elevenlabs': 'ElevenLabs text-to-speech',
 }
 
 def cipher():

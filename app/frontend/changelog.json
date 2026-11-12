@@ -1,13 +1,16 @@
 {
-  "version": "0.9.9",
-  "title": "Camera Readiness & Spatial Extraction · v0.9.9",
-  "datetime": "2026-11-12 21:26 UTC",
+  "version": "0.10.0",
+  "title": "Spatial Workbench, Descriptions & Voice · v0.10.0",
+  "datetime": "2026-11-12 22:18 UTC",
   "changes": [
-    "Camera has explicit off, enabling, ready, saving and error states; closed grey eye switches to pink glowing eye with world-space instruction when camera is ready.",
-    "Only one source-image bloom, triggered after server confirms save; no second provisional card or interrupted animation.",
-    "Nested SAM segmentation operates on each privately owned extracted object image, with parent-child relationships and object-menu Segment action.",
-    "Recognition cards expand into a forward, upward-facing fan, not behind the capture or out of view.",
-    "Cards stay upright facing the wearer; moving a card preserves the initial controller-ray contact point instead of mixing grip and ray rotations.",
-    "Retains optional quota settings, existing user images, database, vault, controller experiments and watcher behavior."
+    "Reduced the single image-action popover to 90%, set it further behind the card plane; actions are EXTRACT, DESCRIBE, REFINE, PROMPT, VOICE and 3D.",
+    "Lowered the microphone/capture/extract trio; temporary statuses now appear as transparent readable text rather than large fixed cards.",
+    "Voice recording is now toggled by pressing the microphone again; a live 36-band volume/frequency ring displays levels, then transcript OK/Cancel without keyboard.",
+    "Descriptions of privately owned captures or extracted objects are requested explicitly from Meta, saved in SQLite, displayed in closable white cards and optionally spoken.",
+    "ElevenLabs added to server-side encrypted provider vault, with read-only voice catalog and explicitly opted-in synthetic mascot speech; system speech remains default.",
+    "3D Meshy status polling reports failure/progress, with successful models simplified into an untextured, bounded XR geometry preview. Full GLB remains downloadable.",
+    "LOG panel now moves independently in room space, can be resized or closed; non-admins no longer generate repeated Forbidden diagnostics calls.",
+    "Collapsing a cloud animates its stored cards toward the LIB icon; uploaded non-XR photographs can be saved to the same private spatial library.",
+    "Existing watcher unchanged; accounts, images, secrets, quotas, and experimental hand labs preserved."
   ]
 }

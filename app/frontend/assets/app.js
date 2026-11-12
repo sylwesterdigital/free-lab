@@ -5,14 +5,16 @@ const state={user:null,config:null,objects:[],tab:'mine',stream:null,micStream:n
 const trace=[];const TRACE_MAX=80;
 function traceEvent(message,kind='info'){const entry={at:new Date().toLocaleTimeString(),kind,message:String(message).slice(0,270)};trace.push(entry);if(trace.length>TRACE_MAX)trace.shift();window.dispatchEvent(new CustomEvent('freelab-trace',{detail:entry}));}
 function getTrace(){return trace.slice(-25);}
-async function serverDiagnostics(){return api('/admin/diagnostics');}
+async function serverDiagnostics(){if(state.user?.role!=='admin')return {entries:[],notice:'Server diagnostics require admin. Local request log remains available.'};return api('/admin/diagnostics');}
 function pref(name){try{
  const v=localStorage.getItem('freelab-pref-'+name);
  if(name==='mascotMode')return ['2d','3d','none'].includes(v)?v:'3d';
  if(name==='frameHoldSeconds')return [1.5,3,5].includes(Number(v))?Number(v):3;
  if(name==='spoken'&&v===null)return true;
+ if(name==='speechVoiceId')return v||'';
+ if(name==='speechEngine')return v==='elevenlabs'?'elevenlabs':'browser';
  return v==='true';}catch{return name==='frameHoldSeconds'?3:name==='mascotMode'?'3d':name==='spoken';}}
-function setPref(name,value){try{localStorage.setItem('freelab-pref-'+name,['mascotMode','frameHoldSeconds'].includes(name)?String(value):String(Boolean(value)));}catch{}traceEvent(name+' = '+String(value),'setting');}
+function setPref(name,value){try{localStorage.setItem('freelab-pref-'+name,['mascotMode','frameHoldSeconds','speechVoiceId','speechEngine'].includes(name)?String(value):String(Boolean(value)));}catch{}traceEvent(name+' = '+String(value),'setting');}
 const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e;};
 let toastTimer, scanTimer=null, scanBusy=false;
 function sessionMeta(){return state.user?.role==='admin' ? state.sessionKeys.get('meta') : null;}
@@ -126,9 +128,16 @@ async function init(){
  $('closeLibrary').onclick=()=>setLibrary(false);
  document.querySelectorAll('.provider-option').forEach(btn=>btn.onclick=()=>{$('providerChoice').value=btn.dataset.provider;document.querySelectorAll('.provider-option').forEach(b=>b.classList.toggle('selected',b===btn));$('providerResult').textContent='Provider: '+btn.textContent+'. Test without generation or save a credential.';});
  document.querySelectorAll('.model-option').forEach(btn=>btn.onclick=()=>{$('modelChoice').value=btn.dataset.model;document.querySelectorAll('.model-option').forEach(b=>b.classList.toggle('selected',b===btn));});
+ $('saveUploadCloud')?.addEventListener('click',async()=>{const button=$('saveUploadCloud');button.disabled=true;
+  try{if(!state.snapshot)throw Error('Upload an image first');const result=await api('/captures',{method:'POST',body:JSON.stringify({image:state.snapshot})});
+   notify('Image saved to Spatial Library · open LIB in XR to explore it');state.snapshotOrigin='upload';}
+  catch(e){notify('Cannot save imported image · '+e.message);}finally{button.disabled=false;}});
  $('providerForm').onsubmit=saveProvider;$('testProvider').onclick=testProvider;$('clearSessionKey').onclick=async()=>{state.sessionKeys.delete(currentProvider());$('providerKey').value='';await loadProviderList();await refresh();notify('Tab-only key cleared');};$('segment').onclick=()=>segmentSnapshot();$('toggleScan').onclick=toggleScan;$('cancelScan').onclick=()=>$('scanConsent').classList.add('hidden');$('confirmScan').onclick=startScanConfirmed;document.addEventListener('visibilitychange',()=>{if(document.hidden)stopScan()});
  $('armXRMic')?.addEventListener('click',async()=>{try{const result=await armMicrophone();notify(result)}catch(e){notify('Mic permission: '+e.message)}});
  for(const name of ['spoken','troll']){const el=$('pref-'+name);if(el){el.checked=pref(name);el.onchange=()=>setPref(name,el.checked);}}
+ const engine=$('pref-speechEngine');if(engine){engine.value=pref('speechEngine');engine.onchange=()=>setPref('speechEngine',engine.value);}
+ const voice=$('pref-speechVoiceId');if(voice){voice.value=pref('speechVoiceId');voice.onchange=()=>setPref('speechVoiceId',voice.value.trim());}
+ $('loadElevenVoices')?.addEventListener('click',async()=>{const result=$('voiceLookupResult');result.textContent='Checking saved ElevenLabs credential…';try{const data=await loadElevenVoices();const choices=$('pref-speechVoiceId');choices.replaceChildren();choices.append(new Option('Select voice',''));for(const v of data.voices||[])choices.append(new Option(v.name,v.id));choices.value=pref('speechVoiceId');result.textContent=data.voices?.length?'Choose your voice above. Requests are billable when ElevenLabs is enabled.':data.notice||'No voices available';}catch(e){result.textContent=e.message;}});
  const mode=$('pref-mascotMode');if(mode){mode.value=pref('mascotMode');mode.onchange=()=>setPref('mascotMode',mode.value);}
  const hold=$('pref-frameHoldSeconds');if(hold){hold.value=String(pref('frameHoldSeconds'));hold.onchange=()=>setPref('frameHoldSeconds',Number(hold.value));}
  $('cameraButton').onclick=()=>{window.FreeLabSound?.play('capture');openCamera();};$('cameraDiagnostic').onclick=()=>{window.FreeLabSound?.play('ready');$('xrReadiness').classList.remove('hidden');xrDiagnostics()};$('refreshXRReadiness').onclick=xrDiagnostics;$('closeXRReadiness').onclick=()=>$('xrReadiness').classList.add('hidden');$('addNameButton').onclick=()=>{window.FreeLabSound?.play('bloom');$('cameraPanel').classList.remove('hidden');$('manualLabel').focus();};$('closeCamera').onclick=closeCamera;$('takeSnapshot').onclick=()=>{try{snapshot();notify('Snapshot ready')}catch(e){notify(e.message)}};
@@ -234,37 +243,69 @@ async function armMicrophone(){
  state.micStream=stream;traceEvent('Microphone permission ready. No recording underway.');return 'Microphone granted. Dictation will stay inside XR.';
 }
 function micReady(){return Boolean(state.micStream?.getAudioTracks()?.some(t=>t.readyState==='live'&&!t.muted));}
-function speakUpdate(text){if(!pref('spoken'))return;try{if(!('speechSynthesis' in window))return;window.speechSynthesis.cancel();const utter=new SpeechSynthesisUtterance(String(text).slice(0,160));utter.volume=.55;utter.rate=1.09;window.speechSynthesis.speak(utter);}catch(e){traceEvent('Voice status unavailable: '+e.message,'warn');}}
-async function recordWavPrompt(durationMs=12000){
- if(!navigator.mediaDevices?.getUserMedia)throw Error('Microphone unavailable on this Quest Browser');
- const stream=micReady()?state.micStream:await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true},video:false});
- const reused=stream===state.micStream;
- let audio;
- try{
-   audio=new (window.AudioContext||window.webkitAudioContext)({sampleRate:16000});
-   await audio.resume();const source=audio.createMediaStreamSource(stream);
-   const proc=audio.createScriptProcessor(4096,1,1);const chunks=[];
-   source.connect(proc);proc.connect(audio.destination);
-   proc.onaudioprocess=evt=>{const chunk=new Float32Array(evt.inputBuffer.getChannelData(0));chunks.push(chunk);};
-   await new Promise(resolve=>setTimeout(resolve,Math.max(1000,Math.min(12000,durationMs))));
-   proc.disconnect();source.disconnect();
-   const total=chunks.reduce((n,x)=>n+x.length,0);
-   if(total<1600)throw Error('No microphone samples recorded');
-   const sampleRate=audio.sampleRate;const frames=Math.min(total,sampleRate*13);
-   const merged=new Float32Array(frames);let off=0;
-   for(const c of chunks){if(off>=frames)break;const take=Math.min(c.length,frames-off);merged.set(c.subarray(0,take),off);off+=take;}
-   const stride=sampleRate/16000;const outSamples=Math.floor(frames/stride);
-   const out=new ArrayBuffer(44+outSamples*2);const dv=new DataView(out);
-   const ss=(n,where)=>{for(let i=0;i<n.length;i++)dv.setUint8(where+i,n.charCodeAt(i));};
-   ss('RIFF',0);dv.setUint32(4,36+outSamples*2,true);ss('WAVE',8);ss('fmt ',12);
-   dv.setUint32(16,16,true);dv.setUint16(20,1,true);dv.setUint16(22,1,true);
-   dv.setUint32(24,16000,true);dv.setUint32(28,32000,true);
-   dv.setUint16(32,2,true);dv.setUint16(34,16,true);ss('data',36);dv.setUint32(40,outSamples*2,true);
-   for(let i=0;i<outSamples;i++){const v=Math.max(-1,Math.min(1,merged[Math.floor(i*stride)]));dv.setInt16(44+i*2,v<0?v*32768:v*32767,true);}
-   const bytes=new Uint8Array(out);let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
-   return btoa(binary);
- }finally{if(!reused)stream.getTracks().forEach(t=>t.stop());await audio?.close().catch(()=>{});}
+let recorder=null;
+function speakBrowser(value){try{if(!('speechSynthesis' in window))return;window.speechSynthesis.cancel();const utter=new SpeechSynthesisUtterance(value.slice(0,500));utter.volume=.55;utter.rate=1.09;window.speechSynthesis.speak(utter);}catch(e){traceEvent('System voice: '+e.message,'warn');}}
+function speakUpdate(value){
+ if(!pref('spoken'))return;const phrase=String(value).slice(0,500);
+ if(pref('speechEngine')!=='elevenlabs'||!pref('speechVoiceId'))return speakBrowser(phrase);
+ // ElevenLabs generates billed speech ONLY after it was explicitly enabled in Settings.
+ fetch('/api/media/speak',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Free-Lab':'1'},
+   body:JSON.stringify({text:phrase,voice_id:pref('speechVoiceId')})}).then(async response=>{
+   if(!response.ok)throw Error('ElevenLabs speech HTTP '+response.status);
+   const blob=await response.blob();const url=URL.createObjectURL(blob);const audio=new Audio(url);
+   audio.onended=()=>URL.revokeObjectURL(url);audio.onerror=()=>URL.revokeObjectURL(url);await audio.play();
+ }).catch(e=>{traceEvent(e.message+'; falling back to system speech','warn');speakBrowser(phrase);});
 }
+function startWavPrompt(){
+ if(recorder)throw Error('Microphone already recording');
+ let cancelled=false,stopped=false,resolveResult,rejectResult,audio,source,proc,zero,analyser,stream,reused,chunks=[],sampleRate=16000;
+ const result=new Promise((resolve,reject)=>{resolveResult=resolve;rejectResult=reject;});
+ const stateRecord={elapsed:()=>Date.now()-(stateRecord.started||Date.now()),level:()=>stateRecord.volume||0,
+    bands:()=>stateRecord.freq||[0,0,0,0,0,0,0,0,0,0,0,0],
+    stop:()=>finish(false),cancel:()=>finish(true),result,started:Date.now(),volume:0,freq:[]};
+ recorder=stateRecord;
+ async function finish(aborted){
+   if(stopped)return result;stopped=true;cancelled=aborted;
+   try{proc?.disconnect();source?.disconnect();zero?.disconnect();analyser?.disconnect();if(!reused)stream?.getTracks().forEach(t=>t.stop());await audio?.close().catch(()=>{});
+    if(aborted)throw Error('Recording cancelled');
+    const total=chunks.reduce((n,x)=>n+x.length,0);if(total<1600)throw Error('No microphone samples recorded');
+    const frames=Math.min(total,sampleRate*90),merged=new Float32Array(frames);let off=0;
+    for(const c of chunks){if(off>=frames)break;const take=Math.min(c.length,frames-off);merged.set(c.subarray(0,take),off);off+=take;}
+    const stride=sampleRate/16000,outSamples=Math.floor(frames/stride),out=new ArrayBuffer(44+outSamples*2),dv=new DataView(out);
+    const ss=(n,where)=>{for(let i=0;i<n.length;i++)dv.setUint8(where+i,n.charCodeAt(i));};
+    ss('RIFF',0);dv.setUint32(4,36+outSamples*2,true);ss('WAVE',8);ss('fmt ',12);
+    dv.setUint32(16,16,true);dv.setUint16(20,1,true);dv.setUint16(22,1,true);dv.setUint32(24,16000,true);
+    dv.setUint32(28,32000,true);dv.setUint16(32,2,true);dv.setUint16(34,16,true);ss('data',36);dv.setUint32(40,outSamples*2,true);
+    for(let i=0;i<outSamples;i++){const v=Math.max(-1,Math.min(1,merged[Math.floor(i*stride)]));dv.setInt16(44+i*2,v<0?v*32768:v*32767,true);}
+    const bytes=new Uint8Array(out);let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
+    resolveResult(btoa(binary));
+   }catch(e){rejectResult(e)}finally{if(recorder===stateRecord)recorder=null;}
+   return result;
+ }
+ (async()=>{try{
+   if(!navigator.mediaDevices?.getUserMedia)throw Error('Microphone unavailable in Quest Browser');
+   stream=micReady()?state.micStream:await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true},video:false});
+   reused=stream===state.micStream;if(stopped){if(!reused)stream.getTracks().forEach(t=>t.stop());return;}
+   audio=new (window.AudioContext||window.webkitAudioContext)({sampleRate:16000});await audio.resume();
+   sampleRate=audio.sampleRate;source=audio.createMediaStreamSource(stream);proc=audio.createScriptProcessor(2048,1,1);
+   zero=audio.createGain();zero.gain.value=0;source.connect(proc);proc.connect(zero);zero.connect(audio.destination);analyser=audio.createAnalyser();analyser.fftSize=256;analyser.smoothingTimeConstant=.7;source.connect(analyser);
+   proc.onaudioprocess=e=>{if(stopped)return;const input=e.inputBuffer.getChannelData(0);chunks.push(new Float32Array(input));
+     let sq=0;for(let i=0;i<input.length;i++)sq+=input[i]*input[i];const volume=Math.sqrt(sq/input.length);
+     stateRecord.volume=stateRecord.volume*.7+volume*.3;const spectral=new Uint8Array(analyser.frequencyBinCount);analyser.getByteFrequencyData(spectral);
+     const sections=12;stateRecord.freq=Array.from({length:sections},(_,j)=>{
+       const start=Math.floor(j*spectral.length/sections),end=Math.floor((j+1)*spectral.length/sections);let total=0;
+       for(let k=start;k<end;k++)total+=spectral[k];return Math.min(1,(total/(end-start))/205);});
+     if(Date.now()-stateRecord.started>89500)finish(false);
+   };
+ }catch(e){if(!stopped){stopped=true;recorder=null;rejectResult(e);}}})();
+ return stateRecord;
+}
+async function recordWavPrompt(durationMs=12000){const rec=startWavPrompt();await new Promise(resolve=>setTimeout(resolve,Math.max(1000,Math.min(durationMs,90000))));return rec.stop();}
+function currentRecording(){return recorder;}
+async function describeXR(cid,oid=null){const payload={capture_id:cid,object_id:oid};if(sessionMeta())payload.session_api_key=sessionMeta();return api('/media/describe',{method:'POST',body:JSON.stringify(payload)});}
+async function modelXRPreview(id){return api('/media/3d/'+id+'/preview');}
+async function loadElevenVoices(){return api('/media/voices');}
+
 let pendingPrompt=null;
 function closePrompt(){document.getElementById('xrPromptEditor').classList.add('hidden');pendingPrompt=null;}
 function openPromptEditor(context,initialText='',onApply=null){
@@ -276,11 +317,13 @@ function openPromptEditor(context,initialText='',onApply=null){
 }
 function wirePromptEditor(){
  document.getElementById('xrPromptClose').onclick=closePrompt;
+ let promptRecording=null;
  document.getElementById('xrPromptVoice').onclick=async()=>{
-  const status=document.getElementById('xrPromptResult');status.textContent='Recording microphone for 6.5 seconds…';
-  try{const wav=await recordWavPrompt();status.textContent='Transcribing with Meta (paid)…';
-      const transcript=await transcribeXR(wav);document.getElementById('xrPromptText').value=transcript;
-      status.textContent='Transcript ready. Check the words, then press Apply.';}
+  const status=document.getElementById('xrPromptResult'),btn=document.getElementById('xrPromptVoice');
+  if(!promptRecording){try{if(!micReady())await armMicrophone();promptRecording=startWavPrompt();btn.textContent='STOP RECORDING';status.textContent='Recording voice… press STOP when finished';}
+   catch(e){status.textContent='Microphone: '+e.message;}return;}
+  const recording=promptRecording;promptRecording=null;btn.textContent='VOICE';status.textContent='Transcribing with Meta (paid)…';
+  try{const wav=await recording.stop();const transcript=await transcribeXR(wav);document.getElementById('xrPromptText').value=transcript;status.textContent='Transcript ready. Press Apply to edit.';}
   catch(e){status.textContent=e.message;}
  };
  document.getElementById('xrPromptApply').onclick=async()=>{
@@ -296,6 +339,6 @@ function wirePromptEditor(){
  };
 }
 
-window.FreeLab={createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
+window.FreeLab={startWavPrompt,currentRecording,describeXR,modelXRPreview,loadElevenVoices,createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
 document.addEventListener('DOMContentLoaded',()=>{init().catch(e=>notify('Initialization failed: '+e.message));const bloom=$('featureBloom');if(bloom){setTimeout(()=>window.FreeLabSound?.play('arrival'),3000);bloom.querySelectorAll('.feature-seed').forEach(button=>{button.addEventListener('mouseenter',()=>window.FreeLabSound?.hover());button.addEventListener('focus',()=>window.FreeLabSound?.hover());});}});
 })();

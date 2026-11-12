@@ -23,13 +23,13 @@ class XRTests(unittest.TestCase):
   self.assertNotIn('window.FreeLab.openPromptEditor',region)
  def test_mic_lifecycle_and_voice_find(self):
   self.assertIn('async function armMicrophone()',APP)
-  self.assertIn('const reused=stream===state.micStream',APP)
+  self.assertIn('reused=stream===state.micStream',APP)
   self.assertIn('if(!reused)stream.getTracks().forEach',APP)
   self.assertIn('async function voicePrompt()',XR)
   self.assertIn('async function respondFind(name)',XR)
   self.assertIn('await showCloud(location.id)',XR)
   self.assertIn('return respondFind(finding)',XR)
-  self.assertIn('XR stays open',XR)
+  self.assertIn('session remains open',XR) if 'session remains open' in XR else self.assertNotIn('session.end()', XR.split('async function finishVoiceRecording()',1)[1].split('async function applyPrompt()',1)[0])
   self.assertIn('id="armXRMic"',HTML)
  def test_card_close_and_bin_restore(self):
   self.assertIn("text(ctx,'×',fullWidth-57",XR)

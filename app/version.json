@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.9.9",
-  "description": "Remove XR camera preview, repair capture save state, and make arbitrary inference and storage quotas opt-in"
+  "version": "0.10.0",
+  "description": "Spatial workstation: manual XR voice, movable diagnostic log, contextual describe, optional ElevenLabs TTS and bounded Meshy 3D previews"
 }
