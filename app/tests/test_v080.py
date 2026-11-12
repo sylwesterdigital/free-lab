@@ -49,10 +49,10 @@ class MeshyAdapterTests(unittest.TestCase):
 class XRContractTests(unittest.TestCase):
     def test_headset_ui_decoupled_from_photo_world(self):
         xr=(APP/'frontend/assets/xr.js').read_text()
-        self.assertIn("['toolbar','status','captureeye','capturepreview','diagnostics']",xr)
+        self.assertIn("'voiceroundel','extractroundel','voiceok','voicecancel','diagnostics'",xr)
         self.assertIn('syncTrackedUI(pose,t)',xr)
         self.assertIn('followOffset',xr)
-        self.assertIn('if(toolbar)toolbar.q=quatY(yaw)',xr)
+        self.assertIn('if(toolbar&&followMode)',xr)
         self.assertIn('root=viewerAnchor(latestPose,-.03,1.42)',xr)
         self.assertIn("if(c.kind==='contextbar'",xr) if False else self.assertIn("if(c.kind==='contextbar'",xr)
         self.assertIn('drawHands(frame,vp)',xr)

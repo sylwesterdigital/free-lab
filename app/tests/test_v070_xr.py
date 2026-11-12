@@ -12,7 +12,7 @@ SERVER=(ROOT/'backend/app.py').read_text()
 
 class XRTests(unittest.TestCase):
  def test_eye_half_size_and_portal(self):
-  self.assertIn('size:[.087,.087]',XR)
+  self.assertIn('size:[.099,.099]',XR)
   self.assertIn('<small>ENTER</small><strong>XR</strong>',HTML)
  def test_xr_keyboard_never_ends_session(self):
   region=XR.split('async function keyboardPrompt(){',1)[1].split('async function changeObject',1)[0]
@@ -28,8 +28,8 @@ class XRTests(unittest.TestCase):
   self.assertIn('async function voicePrompt()',XR)
   self.assertIn('async function respondFind(name)',XR)
   self.assertIn('await showCloud(location.id)',XR)
-  self.assertIn('await respondFind(finding)',XR)
-  self.assertIn('XR remains active',XR)
+  self.assertIn('return respondFind(finding)',XR)
+  self.assertIn('XR stays open',XR)
   self.assertIn('id="armXRMic"',HTML)
  def test_card_close_and_bin_restore(self):
   self.assertIn("text(ctx,'×',fullWidth-57",XR)

@@ -40,7 +40,8 @@ class SpatialInteractionTests(unittest.TestCase):
         self.assertIn('if(pending){',XR)
         self.assertNotIn('await showCloud(data.id);',XR[XR.index('async function makeCapture()'):XR.index('function bloomChildren(')])
     def test_pinned_orientation_and_safe_grab(self):
-        self.assertIn('if(toolbar)toolbar.q=quatY(yaw)',XR)
+        self.assertIn('if(toolbar&&followMode)',XR)
+        self.assertIn('toolbar.q=quatY(menuYaw)',XR)
         self.assertIn('followOffset=point(rotateY(-yaw),d,0)',XR)
         self.assertIn("session.addEventListener('squeezestart'",XR)
         self.assertIn("session.addEventListener('squeezeend'",XR)
@@ -50,7 +51,7 @@ class SpatialInteractionTests(unittest.TestCase):
         self.assertIn("arrival:[[392",SOUND)
         self.assertIn('hapticActuators',XR)
         self.assertIn("window.FreeLabSound?.play('enter')",APP)
-        self.assertIn('sound.js?v=0.9.1',HTML)
+        self.assertIn('sound.js?v=0.9.2',HTML)
     def test_prompt_improve_preserves_source(self):
         self.assertIn("case 'refine':return restoreSelected()",XR)
         self.assertIn('return applyPrompt()',XR)

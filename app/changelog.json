@@ -1,12 +1,14 @@
 {
-  "version": "0.9.1",
-  "title": "XR Image Controls & Quiet Gestures \u00b7 v0.9.1",
-  "datetime": "2026-11-12 07:00 UTC",
+  "version": "0.9.2",
+  "title": "Voice Roundels & Spatial Grab \u00b7 v0.9.2",
+  "datetime": "2026-11-12 08:00 UTC",
   "changes": [
-    "Fixed source image EXTRACT, \u00b7\u00b7\u00b7 and \u00d7 controls by giving button actions precedence over incidental controller rotation during press/release.",
-    "Precise XR button hit regions use the actual image card canvas dimensions, including portrait and landscape captures.",
-    "Removed flashing head-locked gesture notifications; gestures now produce short, rate-limited speech and a small label beside the mascot.",
-    "No change to the real microphone listening indicator, data store, model limits, or release watcher.",
-    "Regression tests exercise XR hit-region mapping, latched button actions and rotated hand/controller input without paid calls."
+    "Replaced clipped HEARD notification with yellow speech text outlined in black, with transparent adaptive canvas and no fixed background.",
+    "Added left microphone, centre camera eye and conditional right Extract roundels within the XR space.",
+    "Dictation records up to 12 seconds; text waits for visible OK/Cancel controls, with no automatic keyboard launch.",
+    "Pinned bottom toolbar now retains its world orientation rather than rotating with the viewer.",
+    "Images remain attached to the original target-ray grab transform, including full 3D rotation and initial hand-to-card offset.",
+    "Image generation and Restore show animated orbiting particles around the selected source/object card.",
+    "Disabled duplicate paid actions while inference is in progress and preserved existing profiles, quota and encrypted keys."
   ]
 }

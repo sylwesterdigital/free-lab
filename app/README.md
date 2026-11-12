@@ -56,6 +56,10 @@ Official references: https://developers.meta.com/vr/documentation/web/webxr-keyb
 - No environment-depth occlusion. Current Quest WebXR support must be feature-detected; hand tracking does not imply depth sensing.
 - The watcher is included as v0.9.0 and self-installs after a successful release. Restart the currently running watcher once to see its new colored and silent-idle terminal behavior.
 
-## v0.9.1 — reliable XR image controls and mascot gesture feedback
+## v0.9.2 — reliable XR image controls and mascot gesture feedback
 
 Press/release gestures on image-card Extract / … / × are latched at press time and cannot turn into a move/rotate action. Hitboxes follow the 600-pixel texture layout and the actual height of each image. Gesture classification now causes only a brief speech label at the mascot and optional speech synthesis, with cooldowns; dictation status continues to work normally. The watcher is unchanged from 0.9.0.
+
+### v0.9.2 voice and spatial controls
+
+The XR voice microphone records up to 12 seconds, transcribes once, then shows the full recognized text and separate OK/Cancel roundels. Accepting a Find command searches locally; accepting image instruction sends a billed edit with the selected card. The body of the audio is not stored by the application. Camera permission remains dependent on Quest Browser. Pinned navigation remains fixed in position and orientation. No watcher change.

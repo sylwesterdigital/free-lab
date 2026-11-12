@@ -645,11 +645,11 @@ def media_edit():
 @require_user
 def media_transcribe():
     v=body();b64=v.get('wav','')
-    if not isinstance(b64,str) or len(b64)>500_000:return jsonify(error='Speech clip too large'),400
+    if not isinstance(b64,str) or len(b64)>600_000:return jsonify(error='Speech clip too large'),400
     try:wav=base64.b64decode(b64,validate=True)
     except (ValueError,base64.binascii.Error):return jsonify(error='Invalid speech encoding'),400
-    if len(wav)<80 or len(wav)>360_000 or wav[:4]!=b'RIFF' or wav[8:12]!=b'WAVE':
-        return jsonify(error='Expected a short 16 kHz WAV clip (max 10 seconds)'),400
+    if len(wav)<80 or len(wav)>420_000 or wav[:4]!=b'RIFF' or wav[8:12]!=b'WAVE':
+        return jsonify(error='Expected a short 16 kHz WAV clip (max 13 seconds)'),400
     key=request_meta_key(v)
     if not key:return jsonify(error='Meta key not configured'),503
     digest=hashlib.sha256(wav+b'|transcription').hexdigest()

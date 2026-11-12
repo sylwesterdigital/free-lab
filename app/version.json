@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.9.1",
-  "description": "XR image action tap fix and mascot-only gesture feedback"
+  "version": "0.9.2",
+  "description": "XR voice confirmation roundels, stable pinned navigation and attached card manipulation"
 }

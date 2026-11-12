@@ -18,7 +18,7 @@ class XRMenuTests(unittest.TestCase):
         self.assertIn("if(card.kind==='source'&&px>=27&&px<=225)return 'extract'",XR)
         self.assertIn("if(px>=442&&px<=512)return 'imagemenu'",XR)
         self.assertIn("if(px>=510&&px<=582)return 'imageclose'",XR)
-        self.assertIn('const draggable=!held.id',XR)
+        self.assertIn('if(!held||held.id)return',XR)
         self.assertIn('c.canvasHeight=h',XR)
     def test_restore_is_direct_and_image_edit_preserves_parent(self):
         self.assertIn("case 'refine':return restoreSelected()",XR)
@@ -38,11 +38,11 @@ class XRMenuTests(unittest.TestCase):
         self.assertIn('function pollGestures(',XR)
         self.assertIn('mascotMode()',XR)
         self.assertIn('id="pref-mascotMode"',HTML)
-        self.assertIn('gestures.js?v=0.9.1',HTML)
+        self.assertIn('gestures.js?v=0.9.2',HTML)
     def test_watchers_are_colored_and_silent(self):
         if not WATCH:
             # Ubuntu ships application files, not the macOS release watcher.
-            self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.9.1')
+            self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.9.2')
             return
         self.assertIn("VERSION='0.9.0'",WATCH)
         self.assertIn("'PASS':'\\033[1;32m'",WATCH)

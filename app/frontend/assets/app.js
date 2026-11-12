@@ -230,7 +230,7 @@ async function armMicrophone(){
 }
 function micReady(){return Boolean(state.micStream?.getAudioTracks()?.some(t=>t.readyState==='live'&&!t.muted));}
 function speakUpdate(text){if(!pref('spoken'))return;try{if(!('speechSynthesis' in window))return;window.speechSynthesis.cancel();const utter=new SpeechSynthesisUtterance(String(text).slice(0,160));utter.volume=.55;utter.rate=1.09;window.speechSynthesis.speak(utter);}catch(e){traceEvent('Voice status unavailable: '+e.message,'warn');}}
-async function recordWavPrompt(){
+async function recordWavPrompt(durationMs=12000){
  if(!navigator.mediaDevices?.getUserMedia)throw Error('Microphone unavailable on this Quest Browser');
  const stream=micReady()?state.micStream:await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true},video:false});
  const reused=stream===state.micStream;
@@ -241,11 +241,11 @@ async function recordWavPrompt(){
    const proc=audio.createScriptProcessor(4096,1,1);const chunks=[];
    source.connect(proc);proc.connect(audio.destination);
    proc.onaudioprocess=evt=>{const chunk=new Float32Array(evt.inputBuffer.getChannelData(0));chunks.push(chunk);};
-   await new Promise(resolve=>setTimeout(resolve,6500));
+   await new Promise(resolve=>setTimeout(resolve,Math.max(1000,Math.min(12000,durationMs))));
    proc.disconnect();source.disconnect();
    const total=chunks.reduce((n,x)=>n+x.length,0);
    if(total<1600)throw Error('No microphone samples recorded');
-   const sampleRate=audio.sampleRate;const frames=Math.min(total,sampleRate*9);
+   const sampleRate=audio.sampleRate;const frames=Math.min(total,sampleRate*13);
    const merged=new Float32Array(frames);let off=0;
    for(const c of chunks){if(off>=frames)break;const take=Math.min(c.length,frames-off);merged.set(c.subarray(0,take),off);off+=take;}
    const stride=sampleRate/16000;const outSamples=Math.floor(frames/stride);

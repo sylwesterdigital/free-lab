@@ -75,7 +75,7 @@ class UIContractTests(unittest.TestCase):
     def test_prompt_requires_explicit_apply(self):
         s=(APP/'frontend/assets/app.js').read_text()
         self.assertIn("document.getElementById('xrPromptApply').onclick",s)
-        self.assertIn('async function recordWavPrompt()',s)
+        self.assertIn('async function recordWavPrompt(durationMs=12000)',s)
         self.assertIn('async function promptXR(',s)
         self.assertIn('async function keyboardPrompt()', (APP/'frontend/assets/xr.js').read_text())
 
