@@ -1,4 +1,4 @@
-/* FREELAB 0.9.2 — Voice roundels, direct grabs and stable pinned controls.
+/* FREELAB 0.9.3 — experimental tracked-thumb elastic string lab.
    Minimal WebGL WebXR renderer: real camera input only, no fake passthrough pixels.
    World-positioned photos, yaw-upright follow toolbar, image derivatives, spatial grab.
    Flat grey floating controls, double-sided, draggable spatial cards.
@@ -81,7 +81,7 @@ function inverse(m){const a=m[0],b=m[4],c=m[8],d=m[1],e=m[5],f=m[9],g=m[2],h=m[6
  const x=m[12],y=m[13],z=m[14];return new Float32Array([A,E,I,0,B,G,J,0,C,H,K,0,-A*x-B*y-C*z,-E*x-G*y-H*z,-I*x-J*y-K*z,1]);}
 function compile(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
 function shader(v,f){const p=gl.createProgram();gl.attachShader(p,compile(gl.VERTEX_SHADER,v));gl.attachShader(p,compile(gl.FRAGMENT_SHADER,f));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));return p;}
-function setup(){canvas=document.createElement('canvas');canvas.width=16;canvas.height=16;gl=canvas.getContext('webgl',{alpha:true,antialias:false,xrCompatible:true});if(!gl)throw Error('WebGL is unavailable');program=shader(V,F);lineProgram=shader(LV,LF);mascotProgram=shader(MV,MF);initializeMascotSphere();
+function setup(){canvas=document.createElement('canvas');canvas.width=16;canvas.height=16;gl=canvas.getContext('webgl',{alpha:true,antialias:false,xrCompatible:true});if(!gl)throw Error('WebGL is unavailable');program=shader(V,F);lineProgram=shader(LV,LF);mascotProgram=shader(MV,MF);strandProgram=shader(STRAND_V,STRAND_F);strandBuffer=gl.createBuffer();initializeMascotSphere();
  const a=[-.5,-.5,0,0,1,.5,-.5,0,1,1,-.5,.5,0,0,0,-.5,.5,0,0,0,.5,-.5,0,1,1,.5,.5,0,1,0];
  quad=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,quad);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(a),gl.STATIC_DRAW);rayBuffer=gl.createBuffer();
  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.disable(gl.CULL_FACE);
@@ -293,6 +293,90 @@ function addCard(id,kind,data,loc,size){let c;
  const front=cardTexture(data.image||null,data.label||'',data.subtitle||'',false,(w,h)=>{if(c){c.size=cardDimensions(w,h,kind);c.canvasHeight=h;c.buttonBand=.5-86/h;}});
  const back=cardTexture(null,data.label||'',`FOLDER: ${data.folder||'Unsorted'}. ${data.description||'Object from your personal space'}`,true);
  c={id,kind,data,front:front.tex,back:back.tex,resources:[front.tex,back.tex],pos:[...loc],from:[...loc],to:[...loc],start:0,duration:0,scale:1,rot:0,q:[0,0,0,1],visible:true,size,canvasHeight:420,buttonBand:.28,original:[...loc]};cards.push(c);return c;}
+
+// Isolated thumb-string experiment. The active Quest input modality determines when
+// the right controller (toggle) and two tracked thumb-tip joints (simulation) exist.
+const STRAND_V=`attribute vec3 aPos;attribute vec4 aColor;uniform mat4 uVP;varying vec4 vColor;void main(){vColor=aColor;gl_Position=uVP*vec4(aPos,1.0);}`;
+const STRAND_F=`precision mediump float;varying vec4 vColor;void main(){gl_FragColor=vColor;}`;
+let strandProgram=null,strandBuffer=null,stringLab=null,stringLabState=null,rightStickDown=false,lastStringWarning=0;
+function stringColor(t){const stops=[[0,[.18,1,.38]],[.36,[.66,1,.30]],[.58,[1,.93,.18]],[.78,[1,.49,.10]],[1,[1,.12,.10]]];
+ for(let i=1;i<stops.length;i++)if(t<=stops[i][0]){const a=stops[i-1],b=stops[i],u=(t-a[0])/(b[0]-a[0]);return a[1].map((c,j)=>c+(b[1][j]-c)*u);}
+ return stops[stops.length-1][1];}
+function strandCross(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+// A camera-facing triangle ribbon, not gl.LINES (which is often locked to 1 pixel on Quest).
+function strandRibbon(vp,path,width,rgb,alpha,eye){if(!strandProgram||path.length<2||alpha<=.001)return;
+ const vertices=[],addVertex=p=>vertices.push(...p,...rgb,alpha);
+ for(let i=0;i<path.length-1;i++){
+  const a=path[i],b=path[i+1],direction=norm(vsub(b,a)),mid=vmul(vadd(a,b),.5),view=norm(vsub(eye,mid));
+  let normal=norm(strandCross(direction,view));if(length(normal)<.01)normal=[1,0,0];
+  const taper=.92+.08*Math.sin(Math.PI*(i+.5)/(path.length-1)),edge=vmul(normal,width*taper*.5);
+  const al=vadd(a,edge),ar=vsub(a,edge),bl=vadd(b,edge),br=vsub(b,edge);
+  for(const p of [al,ar,bl,bl,ar,br])addVertex(p);
+ }
+ gl.useProgram(strandProgram);gl.bindBuffer(gl.ARRAY_BUFFER,strandBuffer);
+ const stride=7*4,position=gl.getAttribLocation(strandProgram,'aPos'),color=gl.getAttribLocation(strandProgram,'aColor');
+ gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,3,gl.FLOAT,false,stride,0);
+ gl.enableVertexAttribArray(color);gl.vertexAttribPointer(color,4,gl.FLOAT,false,stride,3*4);
+ gl.uniformMatrix4fv(gl.getUniformLocation(strandProgram,'uVP'),false,vp);
+ gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices),gl.DYNAMIC_DRAW);
+ gl.drawArrays(gl.TRIANGLES,0,vertices.length/7);
+}
+function stringLine(a,b,sag=.0){const n=28,path=[];for(let i=0;i<=n;i++){
+ const u=i/n,p=blend(a,b,u);p[1]-=sag*Math.sin(Math.PI*u);path.push(p);
+ }return path;}
+function snappedHalf(anchor,last,side,age){const phase=Math.max(0,(age-320)/1000),fall=.5*9.8*phase*phase,progress=clamp(age/1700,0,1),path=[];
+ const tip=anchor||last;
+ for(let i=0;i<=16;i++){
+  const u=i/16,tail=.25*u;
+  // Initially one end remains fixed to its thumb. After a brief hang both
+  // fragments detach and fall; with local-floor available, stop at floor height.
+  const x=tip[0]+side*(.015*u+.09*u*u)+Math.sin(progress*7+u*4)*.012*u;
+  const y=Math.max(.028,tip[1]-.22*u-.14*u*u-fall*(.45+.55*u));
+  const z=tip[2]+.04*u+Math.sin(progress*5+u*6)*.018*u;
+  path.push([x,y,z]);
+ }return path;}
+function pollStringLab(frame,t){if(!stringLab)return;
+ const pressed=window.FreeLabStringLab?.isRightThumbstickPressed(session.inputSources)||false;
+ if(pressed&&!rightStickDown){
+  const on=stringLab.toggle();window.FreeLabSound?.unlock?.();window.FreeLabSound?.stringStop?.();
+  setStatus(on?'STRING LAB ON · touch thumb tips · stretch to 1 metre':'STRING LAB OFF',7500);
+  if(on)cue('ready');else cue('pin');
+ }
+ rightStickDown=pressed;
+ const tips={};for(const src of session.inputSources){if(!src.hand||!['left','right'].includes(src.handedness))continue;
+  try{const joint=src.hand.get('thumb-tip'),p=joint&&frame.getJointPose?.(joint,refSpace)?.transform?.position;
+   if(p)tips[src.handedness]=[p.x,p.y,p.z];}catch{}
+ }
+ stringLabState=stringLab.update({left:tips.left||null,right:tips.right||null,time:t});
+ if(!stringLab.enabled){window.FreeLabSound?.stringStop?.();return;}
+ if(stringLabState.event==='attach'){window.FreeLabSound?.stringAttach?.();cue('bloom');}
+ else if(stringLabState.event==='snap'){window.FreeLabSound?.stringSnap?.();setStatus('SNAP · separate thumbs, then touch again',4200);}
+ else if(stringLabState.event==='lost'){window.FreeLabSound?.stringStop?.();}
+ if(stringLabState.mode==='linked')window.FreeLabSound?.stringUpdate?.(stringLabState.span);
+ else if(stringLabState.mode!=='snapped')window.FreeLabSound?.stringStop?.();
+ if(!tips.left||!tips.right){if(t-lastStringWarning>15000){
+  lastStringWarning=t;setStatus('STRING LAB · tracked thumbs needed; put controllers down if necessary',7500);
+ }}
+}
+function drawStringLab(vp,t,pose){const state=stringLabState;if(!state||!stringLab?.enabled)return;
+ const h=pose.transform.matrix,eye=[h[12],h[13],h[14]];
+ if(state.mode==='linked'&&state.left&&state.right){
+  const tension=clamp(state.span,0,1),color=stringColor(tension),width=.021-.013*tension;
+  const path=stringLine(state.left,state.right,.065*(1-tension));
+  strandRibbon(vp,path,width*2.25,color,.12,eye);
+  strandRibbon(vp,path,width,color,.92,eye);
+  line(vp,[state.left,state.right],[...color,.24],true,20);
+  line(vp,[state.left,state.right],[...color,1],true,10);
+ }else if(state.mode==='snapped'&&state.broken){
+  const b=state.broken,age=t-b.start,fade=clamp(1-(age-540)/1040,0,1);
+  const l=snappedHalf(age<450&&state.left?state.left:b.left,b.left,-1,age),r=snappedHalf(age<450&&state.right?state.right:b.right,b.right,1,age);
+  for(const path of [l,r]){
+   strandRibbon(vp,path,.022,stringColor(.94),.19*fade,eye);
+   strandRibbon(vp,path,.010,stringColor(.90),.88*fade,eye);
+  }
+  if(age<410){line(vp,[l[0],r[0]],[1,.31,.15,fade],true,13);}
+ }
+}
 
 function setStatus(value,ms=6000){statusText=String(value);statusUntil=performance.now()+ms;
  window.FreeLab?.notify?.(statusText);refreshToolbar();}
@@ -577,10 +661,10 @@ function updateMascot(frame,t){const mode=mascotMode();if(mode==='none'){if(masc
 }
 
 function renderView(t,frame){const pose=frame.getViewerPose(refSpace);if(!pose){session.requestAnimationFrame(updateView);return;}latestPose=pose;if(!poseReady)place(pose);syncTrackedUI(pose,t);
- poll3d(t);advanceGrab(frame);for(const src of session.inputSources)pinchPoll(frame,src);pollGestures(frame,t);tween(t);updateMascot(frame,t);tickMascotSpeech(t);tickVoiceIndicator(t,pose);updateMicVisual(t);updateDebugCard(t);if(captureEye&&t-lastEyeUpdate>67){if(eyeState!=='idle'&&t>eyeUntil)eyeState='idle';paintEye(t);lastEyeUpdate=t;}updateLivePreview(t);if(t-lastUi>150){updateHover(frame);lastUi=t;}
+ poll3d(t);pollStringLab(frame,t);advanceGrab(frame);for(const src of session.inputSources)pinchPoll(frame,src);pollGestures(frame,t);tween(t);updateMascot(frame,t);tickMascotSpeech(t);tickVoiceIndicator(t,pose);updateMicVisual(t);updateDebugCard(t);if(captureEye&&t-lastEyeUpdate>67){if(eyeState!=='idle'&&t>eyeUntil)eyeState='idle';paintEye(t);lastEyeUpdate=t;}updateLivePreview(t);if(t-lastUi>150){updateHover(frame);lastUi=t;}
  gl.bindFramebuffer(gl.FRAMEBUFFER,session.renderState.baseLayer.framebuffer);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
  for(const view of pose.views){const vp0=session.renderState.baseLayer.getViewport(view);gl.viewport(vp0.x,vp0.y,vp0.width,vp0.height);const vp=matmul(view.projectionMatrix,view.transform.inverse.matrix);
- decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(editbar)drawCard(editbar,vp);if(captureEye)drawCard(captureEye,vp);if(voiceButton)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(cameraPreview?.visible)drawCard(cameraPreview,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);depthCapability(frame,view);
+ decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(editbar)drawCard(editbar,vp);if(captureEye)drawCard(captureEye,vp);if(voiceButton)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(cameraPreview?.visible)drawCard(cameraPreview,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);drawStringLab(vp,t,pose);depthCapability(frame,view);
  for(const src of session.inputSources){const r=ray(frame,src);if(!r)continue;const h=pick(r),end=vadd(r.o,vmul(r.d,h?.dist||1.2));const colour=src.hand?[.72,1,.75,.7]:[.77,.88,1,.72];line(vp,[r.o,end],colour);line(vp,[end],colour,true,h?16:9);}
  if(mascotPointer?.visible){if(mascotMode()==='2d'){if(!mascotPointer.front){mascotTex=mascotTexture();mascotPointer.front=mascotTex;mascotPointer.back=mascotTex;}drawCard(mascotPointer,vp);}else drawMascot3D(vp,t);}
  if(mascotSpeech)drawCard(mascotSpeech,vp);
@@ -815,13 +899,13 @@ async function action(id){const t=performance.now();if(t-lastAction<200)return;l
  case 'exit':return session?.end();}}
 
 async function start(){if(session)return;if(!navigator.xr||!await navigator.xr.isSessionSupported('immersive-ar'))throw Error('Use Meta Quest Browser with immersive-ar support');
- setup();await gl.makeXRCompatible();session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['local'],optionalFeatures:['local-floor','hand-tracking','plane-detection','anchors','dom-overlay','depth-sensing'],depthSensing:{usagePreference:['gpu-optimized','cpu-optimized'],dataFormatPreference:['luminance-alpha','float32']},domOverlay:{root:document.getElementById('xrPromptEditor')}});xrDomOverlay=Boolean(session.domOverlayState);session.updateRenderState({baseLayer:new XRWebGLLayer(session,gl,{alpha:true,antialias:false})});
+ setup();stringLab=new window.FreeLabStringLab.Experiment();stringLabState=null;rightStickDown=false;await gl.makeXRCompatible();session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['local'],optionalFeatures:['local-floor','hand-tracking','plane-detection','anchors','dom-overlay','depth-sensing'],depthSensing:{usagePreference:['gpu-optimized','cpu-optimized'],dataFormatPreference:['luminance-alpha','float32']},domOverlay:{root:document.getElementById('xrPromptEditor')}});xrDomOverlay=Boolean(session.domOverlayState);session.updateRenderState({baseLayer:new XRWebGLLayer(session,gl,{alpha:true,antialias:false})});
  try{refSpace=await session.requestReferenceSpace('local-floor');}catch{refSpace=await session.requestReferenceSpace('local');}poseReady=false;depthChecked=false;depthState='not requested';
  session.addEventListener('selectstart',e=>{lastNative.set(e.inputSource,performance.now());grabStart(e.frame,e.inputSource);});
  session.addEventListener('selectend',e=>{lastNative.set(e.inputSource,performance.now());grabEnd(e.inputSource,e.frame);});
  session.addEventListener('squeezestart',e=>{lastNative.set(e.inputSource,performance.now());grabStart(e.frame,e.inputSource);});
  session.addEventListener('squeezeend',e=>{lastNative.set(e.inputSource,performance.now());grabEnd(e.inputSource,e.frame);});
- session.addEventListener('end',()=>{cue('release');session=null;poseReady=false;held=null;clearCards();if(voiceBadge?.front)gl.deleteTexture(voiceBadge.front);voiceBadge=null;dismissVoice();gestureDebounce.clear();gestureSpeechTimes.clear();lastGestureAnnouncement=-100000;if(mascotSpeech?.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(captureEye?.front)gl.deleteTexture(captureEye.front);if(voiceButton?.front)gl.deleteTexture(voiceButton.front);if(extractButton?.front)gl.deleteTexture(extractButton.front);voiceButton=null;extractButton=null;inferenceCard=null;if(cameraPreview?.front)gl.deleteTexture(cameraPreview.front);cameraPreview=null;previewResource=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;document.getElementById('xrPromptEditor')?.classList.add('hidden');document.getElementById('xrPromptEditor')?.classList.remove('xr-native-open');if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
+ session.addEventListener('end',()=>{window.FreeLabSound?.stringStop?.();stringLab?.setEnabled(false);stringLab=null;stringLabState=null;rightStickDown=false;cue('release');session=null;poseReady=false;held=null;clearCards();if(voiceBadge?.front)gl.deleteTexture(voiceBadge.front);voiceBadge=null;dismissVoice();gestureDebounce.clear();gestureSpeechTimes.clear();lastGestureAnnouncement=-100000;if(mascotSpeech?.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(captureEye?.front)gl.deleteTexture(captureEye.front);if(voiceButton?.front)gl.deleteTexture(voiceButton.front);if(extractButton?.front)gl.deleteTexture(extractButton.front);voiceButton=null;extractButton=null;inferenceCard=null;if(cameraPreview?.front)gl.deleteTexture(cameraPreview.front);cameraPreview=null;previewResource=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;document.getElementById('xrPromptEditor')?.classList.add('hidden');document.getElementById('xrPromptEditor')?.classList.remove('xr-native-open');if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
  const saved=await window.FreeLab.listXRClouds().catch(()=>[]);clouds=saved;setStatus('CAPTURE → EXTRACT → PROMPT · camera pixels required',8500);session.requestAnimationFrame(updateView);
 }
 window.FreeLabXR={start,isRunning:()=>!!session};

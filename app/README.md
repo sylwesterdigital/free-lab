@@ -63,3 +63,9 @@ Press/release gestures on image-card Extract / … / × are latched at press tim
 ### v0.9.2 voice and spatial controls
 
 The XR voice microphone records up to 12 seconds, transcribes once, then shows the full recognized text and separate OK/Cancel roundels. Accepting a Find command searches locally; accepting image instruction sends a billed edit with the selected card. The body of the audio is not stored by the application. Camera permission remains dependent on Quest Browser. Pinned navigation remains fixed in position and orientation. No watcher change.
+
+## v0.9.3 — String Lab (experimental)
+
+In immersive XR, click the **right controller thumbstick** to toggle the lab. If the headset stops exposing that controller after switching to bare hands, the lab stays enabled. Bring both tracked thumb tips within approximately 5 cm for 160 ms; pulling apart creates a coloured musical string. Its tone increases from roughly 95 Hz to 635 Hz across 0–1 metre. At 1 metre it breaks with a procedural sound and falling fragments. The hands must separate at least 10.5 cm before they can start a new string. To turn the mode off, click the right thumbstick again while it is tracked (or exit the XR session).
+
+This uses tracked thumb-tip joints and runs locally. It does not require camera pixel access, inference credentials or network requests. Because Quest may prefer either controllers or bare hands, verify that both hand `XRInputSource` objects are available after enabling the mode. The 3D break and floor motion are stylised rather than a physics engine; real-world occlusion is not implemented. Browser audio may require the first gesture to unlock the AudioContext.

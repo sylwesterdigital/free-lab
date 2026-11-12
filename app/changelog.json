@@ -1,14 +1,13 @@
 {
-  "version": "0.9.2",
-  "title": "Voice Roundels & Spatial Grab \u00b7 v0.9.2",
-  "datetime": "2026-11-12 08:00 UTC",
+  "version": "0.9.3",
+  "title": "Thumb String Lab · v0.9.3",
+  "datetime": "2026-11-12 09:05 UTC",
   "changes": [
-    "Replaced clipped HEARD notification with yellow speech text outlined in black, with transparent adaptive canvas and no fixed background.",
-    "Added left microphone, centre camera eye and conditional right Extract roundels within the XR space.",
-    "Dictation records up to 12 seconds; text waits for visible OK/Cancel controls, with no automatic keyboard launch.",
-    "Pinned bottom toolbar now retains its world orientation rather than rotating with the viewer.",
-    "Images remain attached to the original target-ray grab transform, including full 3D rotation and initial hand-to-card offset.",
-    "Image generation and Restore show animated orbiting particles around the selected source/object card.",
-    "Disabled duplicate paid actions while inference is in progress and preserved existing profiles, quota and encrypted keys."
+    "Added optional right-thumbstick String Lab using tracked left/right thumb-tip joints (no model inference).",
+    "Touch thumb tips for 160 ms to link green endpoints; stretch toward 1 m to shift the thick ribbon from green through yellow/orange to red.",
+    "Original WebAudio elastic-string tone increases in pitch with distance and ends in a synthesized pop when the strand snaps.",
+    "Snapped fragments hang briefly from thumb joints, fall with simulated gravity, fade, then require the hands to separate before reattachment.",
+    "Runs only in immersive WebXR; automatically silences the oscillator on tracking loss, lab disable, or XR exit.",
+    "All existing captures, API keys, model routes, database and watcher remain unchanged."
   ]
 }

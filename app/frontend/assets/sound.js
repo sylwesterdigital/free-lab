@@ -1,5 +1,5 @@
 /* FREELAB 0.7 — original procedural audio, no assets or external calls. */
-(()=>{'use strict';let ctx=null,lastHover=0,enabled=true,arrivalQueued=false;
+(()=>{'use strict';let ctx=null,lastHover=0,enabled=true,arrivalQueued=false;let stringVoice=null;
 function unlock(){if(!enabled)return false;try{if(!ctx)ctx=new (window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume().then(()=>{if(arrivalQueued){arrivalQueued=false;play('arrival');}}).catch(()=>{});return true;}catch{return false;}}
 function note(hz,when,seconds=0.16,volume=.06,type='sine',slide=1){if(!ctx||ctx.state!=='running')return;
  const o=ctx.createOscillator(),g=ctx.createGain(),f=ctx.createBiquadFilter();o.type=type;o.frequency.setValueAtTime(hz,when);if(slide!==1)o.frequency.exponentialRampToValueAtTime(Math.max(45,hz*slide),when+seconds);f.type='lowpass';f.frequency.value=2500;o.connect(f);f.connect(g);g.connect(ctx.destination);
@@ -16,7 +16,34 @@ function noiseBurst(start=0,duration=.22,vol=.07,filter=1600){
 }
 function play(name){if(!enabled)return;if(!ctx){if(name==='arrival')arrivalQueued=true;return;}if(name!=='arrival')arrivalQueued=false;if(ctx.state!=='running'){if(name==='arrival'){arrivalQueued=true;return;}ctx.resume().then(()=>play(name)).catch(()=>{});return;}if(name==='shutter'){noiseBurst(0,.075,.10,3500);noiseBurst(.080,.05,.055,1800);}if(name==='paper'){noiseBurst(0,.18,.065,1100);noiseBurst(.09,.18,.043,900);noiseBurst(.2,.12,.035,1400);}
  const now=ctx.currentTime+.012;for(const [freq,offset,duration,vol] of sequences[name]||[])note(freq,now+offset,duration,vol,'sine',name==='capture'?.82:1);}
+// A synthesised bowed-string tone: shorter is lower, stretching increases pitch.
+// Continuous oscillators are created only while the experimental lab is active.
+function stringStart(){
+ if(!enabled||!unlock()||!ctx||ctx.state!=='running'||stringVoice)return;
+ const fundamental=ctx.createOscillator(),harmonic=ctx.createOscillator(),gain=ctx.createGain(),lowpass=ctx.createBiquadFilter();
+ fundamental.type='triangle';harmonic.type='sine';lowpass.type='lowpass';lowpass.frequency.value=1500;
+ fundamental.frequency.value=105;harmonic.frequency.value=210;
+ const secondary=ctx.createGain();secondary.gain.value=.11;
+ fundamental.connect(lowpass);harmonic.connect(secondary);secondary.connect(lowpass);lowpass.connect(gain);gain.connect(ctx.destination);
+ gain.gain.value=.00001;fundamental.start();harmonic.start();stringVoice={fundamental,harmonic,gain,lowpass};
+}
+function stringUpdate(metres){
+ if(!enabled)return;
+ if(!stringVoice)stringStart();if(!stringVoice||ctx?.state!=='running')return;
+ const m=Math.min(1,Math.max(0,metres)),hz=95+540*Math.pow(m,1.18),at=ctx.currentTime;
+ stringVoice.fundamental.frequency.setTargetAtTime(hz,at,.035);
+ stringVoice.harmonic.frequency.setTargetAtTime(hz*2.008,at,.035);
+ stringVoice.lowpass.frequency.setTargetAtTime(850+1700*m,at,.05);
+ stringVoice.gain.gain.setTargetAtTime(.018+.025*m,at,.06);
+}
+function stringStop(){if(!stringVoice)return;const v=stringVoice;stringVoice=null;
+ try{const at=ctx.currentTime;v.gain.gain.cancelScheduledValues(at);v.gain.gain.setTargetAtTime(.00001,at,.035);v.fundamental.stop(at+.25);v.harmonic.stop(at+.25);}catch{}
+}
+function stringSnap(){stringStop();if(!ctx||ctx.state!=='running')return;
+ noiseBurst(0,.105,.11,1900);note(670,ctx.currentTime+.012,.19,.065,'triangle',.28);
+}
+function stringAttach(){if(!enabled||!unlock())return;play('grab');stringStart();}
 function hover(){const now=performance.now();if(now-lastHover<140)return;lastHover=now;play('hover');}
 document.addEventListener('pointerdown',unlock,{passive:true});document.addEventListener('keydown',unlock,{passive:true});
-window.FreeLabSound={unlock,play,hover,setEnabled:v=>{enabled=Boolean(v);},getEnabled:()=>enabled};
+window.FreeLabSound={unlock,play,hover,stringStart,stringUpdate,stringStop,stringSnap,stringAttach,setEnabled:v=>{enabled=Boolean(v);if(!enabled)stringStop();},getEnabled:()=>enabled};
 })();
