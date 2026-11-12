@@ -276,8 +276,11 @@ def update_capture_cloud(cid):
             fields.append(field+'=?');values.append(int(v[field]))
     if 'spatial' in v:
         c=v['spatial']
-        if not isinstance(c,dict) or set(c)!={'x','y','z'} or any(type(n) not in (int,float) or not -3<=n<=3 for n in c.values()):
-            return jsonify(error='Invalid capture position'),400
+        allowed={'x':(-3,3),'y':(-3,3),'z':(-3,3),'qx':(-1,1),'qy':(-1,1),'qz':(-1,1),'qw':(-1,1)}
+        if (not isinstance(c,dict) or not {'x','y','z'}.issubset(c) or set(c)-set(allowed)
+            or (set(c)&{'qx','qy','qz','qw'} and not {'qx','qy','qz','qw'}.issubset(c))
+            or any(type(n) not in (int,float) or not allowed[k][0]<=n<=allowed[k][1] for k,n in c.items())):
+            return jsonify(error='Invalid capture transform'),400
         fields.append('spatial_json=?');values.append(json.dumps(c))
     if not fields:return jsonify(error='No supported capture update'),400
     with g.con:

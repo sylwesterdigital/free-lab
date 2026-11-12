@@ -27,13 +27,13 @@ In the browser on Quest 3, press the **XR** portal. There is no head-locked dash
 
 ## Deploy from macOS (single ZIP; no separate watcher upgrade)
 
-Keep your existing running watcher. Save only `FREE_LAB_RELEASE_v0.5.0.zip` into `updates/`. The watcher validates it and deploys automatically. Do not replace the watcher manually; the unchanged v0.4.1 watcher is bundled only because the release manifest requires an exact watcher hash. Check status with `./watch-free-lab.sh --status` if necessary. Older downloaded ZIPs do not require re-installation.
+Keep your existing running watcher. Save only `FREE_LAB_RELEASE_v0.6.0.zip` into `updates/`. The watcher validates it and deploys automatically. Do not replace the watcher manually; the unchanged v0.4.1 watcher is bundled only because the release manifest requires an exact watcher hash. Check status with `./watch-free-lab.sh --status` if necessary. Older downloaded ZIPs do not require re-installation.
 
 ## Admin key vault
 
 Sign in with your administrator account, open the small round account button at the top right, and select **Admin / model connections**. Choose Meta and paste the API key. Save. The key never appears in responses, console logs or static assets. Saved keys are encrypted before being written to `/var/lib/free-lab/free-lab.sqlite3`; the vault encryption key is `/etc/free-lab-vault.key` (root:free-lab, 0640), created only if absent. **Back up the DB and vault key together, securely and separately from your Git repository. If the vault key is lost, saved API credentials cannot be decrypted.** Environment `MODEL_API_KEY` is supported as a legacy fallback; it is never overwritten.
 
-Other provider credentials can be securely saved and deleted by admin. **3D generation and video API calls are NOT integrated in v0.5.0**; storing a key does not automatically enable 3D reconstruction.
+Other provider credentials can be securely saved and deleted by admin. **3D generation and video API calls are NOT integrated in v0.6.0**; storing a key does not automatically enable 3D reconstruction.
 
 ## Camera and costs
 
@@ -77,7 +77,7 @@ The CLI prints expected base SAM segmentation cost before any request. `--send` 
 Fixed WebGL texture parameter arity; disabled multisample XR layer; removed an absent local Three.js import; nginx now returns 404 for nonexistent assets. The landing mascot uses pinned CDN Three.js with an offline CSS fallback. No account data or credentials are reset.
 
 
-### v0.5.0 Spatial Follow, Extract and Prompt
+### v0.6.0 Spatial Follow, Extract and Prompt
 
 - Follow toolbar stays upright: derived from head **yaw** instead of head pitch/roll, 0.85 m in front and approximately 0.21 m below the eyes. Press Follow/Pin and drag the pill to reposition it in either mode. Source/photo cards stay in the room.
 - Capture a photo, then press EXTRACT on the picture. AI recognition crops bloom directly from the source and do **not** clear the original. The source card and cloud position are saved to SQLite.
@@ -87,3 +87,12 @@ Fixed WebGL texture parameter arity; disabled multisample XR layer; removed an a
 - EXTRACTION is Muse bounding-box cropping. REFINE uses SAM bounding boxes. No decoded transparent SAM masks or physical room mesh is claimed.
 - Source capture requires readable **environment-camera pixels**, which is independent of immersive passthrough. If inaccessible on Quest, upload a photo in 2D before entering XR.
 - No deployment watcher code was modified in this release; the existing v0.4.1 watcher remains the correct version.
+
+## v0.6.0 spatial controls
+
+- Landing: after the mascot arrives, Camera / Check XR / New item / Upload bloom around it. They are the existing actions, not duplicates of the footer.
+- Audio: procedural WebAudio only. Browsers restrict auto-play; the arrival jingle plays only after an audio-unlocking user gesture, while XR entry and interactive actions can play normally.
+- In XR: central animated eye requests camera access on its first press when no live video stream is present; visually verify a small live preview in space, then press it again to take a private snapshot. An uploaded image is also supported. This depends on the Quest Browser exposing environment-camera pixels.
+- Drag the top header of the sole XR toolbar. Follow keeps a body-relative offset below eye level; Pin holds the toolbar in the room. Grip and trigger may initiate grabs; available controller haptics signal interaction.
+- Extract expands cards from the persistent source. Photo cards preserve full image aspect ratio, including portrait and panoramic captures. Selected images expose Prompt and Improve (a prefilled image-edit prompt); applying an image edit is a paid API request.
+- No server database, model-credit or watcher changes; only a new release ZIP is needed.

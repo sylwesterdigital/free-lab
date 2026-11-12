@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.5.0",
-  "description": "Spatial follow and image prompting"
+  "version": "0.6.0",
+  "description": "Mascot bloom, eye capture, in-XR camera, single XR toolbar and audio+haptics"
 }

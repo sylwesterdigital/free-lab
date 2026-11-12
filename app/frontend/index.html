@@ -1,13 +1,13 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.5.0">
+<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.6.0">
 <title>FREELAB — Step into the spatial world</title>
-<link rel="stylesheet" href="/assets/style.css?v=0.5.0">
+<link rel="stylesheet" href="/assets/style.css?v=0.6.0">
 </head><body>
 <div id="app" class="app-shell">
 <header class="header" aria-label="Site navigation">
-  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span>FREELAB</span><span class="brand-tag">SPATIAL STUDIO / 005</span></a>
+  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span>FREELAB</span><span class="brand-tag">SPATIAL STUDIO / 006</span></a>
   <nav class="header-right" aria-label="Workspace">
     <span class="live-pill"><span class="server-dot" id="connectionDot"></span><span id="healthStatus">Connecting</span></span>
     <button id="toggleLibrary" class="nav-pill" aria-expanded="false" aria-controls="workspace">Collection <span id="objectCount">0</span></button>
@@ -22,13 +22,18 @@
     <div class="stage-copy"><p class="eyebrow"><span class="pulse-dot"></span> YOUR WORLD IS WAITING</p><h1>Make the<br><em>invisible</em><br>discoverable<span class="period">.</span></h1><p>Capture your room. Watch objects bloom into a spatial collection. Keep the things worth remembering.</p></div>
     <div class="mascot-tag"><span class="mascot-tag-dot"></span><span>FREELAB</span><span class="mascot-tag-sub">YOUR LITTLE EXPLORER</span></div>
     <div class="stage-portal"><button class="xr-portal" id="enterXR" aria-label="Enter immersive spatial reality"><span class="xr-ring"></span><span class="xr-letter">XR</span><span class="xr-icon">↗</span></button><div><strong>ENTER SPATIAL REALITY</strong><span>QUEST 3 · WEBXR PASSTHROUGH</span></div></div>
+    <nav class="feature-bloom" id="featureBloom" aria-label="Exploration actions">
+      <button class="feature-seed" id="cameraButton" type="button" style="--dx:-264px;--dy:-153px;--delay:0s" aria-label="Activate camera and test preview"><span class="seed-icon">◎</span><span>Camera</span></button>
+      <button class="feature-seed" id="cameraDiagnostic" type="button" style="--dx:247px;--dy:-148px;--delay:.13s" aria-label="Check camera and headset capabilities"><span class="seed-icon">◇</span><span>Check XR</span></button>
+      <button class="feature-seed" id="addNameButton" type="button" style="--dx:-293px;--dy:64px;--delay:.26s" aria-label="Create a private item"><span class="seed-icon">＋</span><span>New item</span></button>
+      <label class="feature-seed" for="fileInput" style="--dx:284px;--dy:91px;--delay:.39s" tabindex="0" aria-label="Upload a room photograph"><span class="seed-icon">↥</span><span>Upload</span></label>
+      <input type="file" id="fileInput" accept="image/*" hidden>
+      <span class="bloom-thread bloom-thread-a" aria-hidden="true"></span><span class="bloom-thread bloom-thread-b" aria-hidden="true"></span>
+      <span class="bloom-thread bloom-thread-c" aria-hidden="true"></span><span class="bloom-thread bloom-thread-d" aria-hidden="true"></span>
+    </nav>
     <aside class="scene-caption"><span class="caption-index">01 / SPATIAL COLLECTOR</span><p>Capture. Bloom.<br>Collect.</p><span class="caption-muted">Capture → recognize → collect in 3D.</span></aside>
-    <div class="stage-bottom"><span>LIVE EXPERIMENT / 0.5.0</span><span class="stage-line"></span><span>BUILT FOR CURIOSITY</span></div>
-  </section>
-  <section class="action-bar" aria-label="Collection tools">
-    <div class="action-bar-title"><span class="action-orb"></span><div><strong>Explore your surroundings</strong><small>Capture a frame. Grow a cloud of real objects.</small></div></div>
-    <div class="control-row"><button class="secondary-btn" id="cameraButton">◉ &nbsp;Test camera</button><button class="secondary-btn" id="cameraDiagnostic">↗ &nbsp;XR readiness</button><button class="secondary-btn" id="addNameButton">＋ &nbsp;Add object</button><label for="fileInput" class="secondary-btn upload-label">↥ &nbsp;Upload image</label><input type="file" id="fileInput" accept="image/*" hidden></div>
-    <div class="model-pill"><span class="dot"></span><span id="modelStatus">Checking Muse…</span></div>
+    <span id="modelStatus" class="visually-hidden">Models ready on demand</span>
+    <div class="stage-bottom"><span>LIVE EXPERIMENT / 0.6.0</span><span class="stage-line"></span><span>BUILT FOR CURIOSITY</span></div>
   </section>
   <section id="workspace" class="workspace workspace-drawer hidden" aria-label="Private inventory">
     <div class="workspace-head"><div><p class="eyebrow">YOUR PERSONAL ARCHIVE</p><h2>Found in your world <span id="objectCounter" class="muted-count">00</span></h2></div><div class="workspace-actions"><div class="tabs"><button class="tab active" data-list="mine">Private</button><button class="tab" data-list="public">Public</button><button class="tab" data-list="bin">Bin</button></div><button id="closeLibrary" class="round-btn" aria-label="Close collection">×</button></div></div>
@@ -71,6 +76,7 @@
 <div id="scanConsent" class="modal hidden"><div class="modal-card"><p class="eyebrow">COST CONFIRMATION</p><h2>Enable periodic scans?</h2><p class="small-muted">One JPEG every 20 seconds can consume a paid Meta Muse API request. This is disabled by default and stops when the page becomes hidden. It counts against FREE LAB's daily request quotas, which are not dollar limits.</p><div class="provider-actions"><button id="cancelScan" class="secondary-btn">Cancel</button><button id="confirmScan" class="primary-btn">Start paid scan</button></div></div></div>
 <div id="changelog" class="modal hidden"><div class="modal-card changelog-card"><div class="modal-title"><div><p class="eyebrow">WHAT'S NEW / DEVELOPMENT LOG</p><h2 id="logTitle">Release notes</h2><p id="logDate" class="small-muted"></p></div><button class="round-btn" id="dismissChangelog" aria-label="Close development log">×</button></div><ul id="logItems"></ul><button class="primary-btn" id="continueChangelog">Start exploring ↗</button></div></div>
 <div id="toast" class="toast hidden" role="status"></div>
-<script src="/assets/app.js?v=0.5.0" defer></script><script src="/assets/xr.js?v=0.5.0" defer></script>
-<script src="/assets/scene.mjs?v=0.5.0" type="module"></script>
+<script src="/assets/sound.js?v=0.6.0" defer></script>
+<script src="/assets/app.js?v=0.6.0" defer></script><script src="/assets/xr.js?v=0.6.0" defer></script>
+<script src="/assets/scene.mjs?v=0.6.0" type="module"></script>
 </body></html>

@@ -31,3 +31,18 @@
 .xr-prompt-actions #xrPromptApply{background:#d3f8da;color:#102319;font-weight:720}
 #xrPromptResult,.xr-prompt-note{font-size:13px;line-height:1.5;color:#c5d6ca;margin:0}
 .xr-prompt-content .tiny-label{color:#a8f0b4}
+
+/* v0.6: dandelion action seeds anchored to the mascot, not a footer dashboard. */
+.action-bar{display:none!important}
+.feature-bloom{position:absolute;left:58%;top:50%;width:0;height:0;z-index:5;pointer-events:none;perspective:1100px}
+.feature-seed{--dx:0px;--dy:0px;--delay:0s;position:absolute;left:0;top:0;width:104px;min-height:88px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:7px;transform-origin:center;border:0;outline:0;background:rgba(51,61,55,.90);color:#f8fff9;border-radius:28px;font:600 12px/1.2 system-ui;letter-spacing:.015em;cursor:pointer;backdrop-filter:blur(18px);pointer-events:auto;opacity:0;transform:translate(-50%,-50%) translate3d(0,0,-100px) scale(.05) rotateY(75deg);animation:seedBloom .95s cubic-bezier(.18,1.23,.33,1) calc(3s + var(--delay)) forwards;box-shadow:none}
+.feature-seed .seed-icon{font-size:32px;font-weight:350;line-height:1}.feature-seed:hover,.feature-seed:focus-visible{background:#526459;color:#c9ffd4;outline:2px solid #b0ffba77;outline-offset:3px}
+@keyframes seedBloom{0%{opacity:0;transform:translate(-50%,-50%) translate3d(0,0,-110px) scale(.12) rotateY(75deg)}55%{opacity:1;transform:translate(-50%,-50%) translate3d(calc(var(--dx) * 1.11),calc(var(--dy) * 1.13),60px) scale(1.13) rotateY(-12deg)}100%{opacity:1;transform:translate(-50%,-50%) translate3d(var(--dx),var(--dy),0) scale(1) rotateY(0deg)}}
+.bloom-thread{position:absolute;width:1px;height:185px;left:0;top:0;background:linear-gradient(#adffc664,transparent);opacity:0;transform-origin:top center;pointer-events:none;animation:threadBloom 1s ease 3.2s forwards}.bloom-thread-a{transform:rotate(60deg)}.bloom-thread-b{transform:rotate(-60deg)}.bloom-thread-c{transform:rotate(115deg)}.bloom-thread-d{transform:rotate(-115deg)}@keyframes threadBloom{to{opacity:.5}}
+.visually-hidden{position:absolute!important;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+@media(max-width:1050px){.feature-bloom{left:56%;top:54%}.feature-seed{width:91px;min-height:76px;font-size:11px}.feature-seed:nth-child(1){--dx:-195px!important;--dy:-123px!important}.feature-seed:nth-child(2){--dx:190px!important;--dy:-111px!important}.feature-seed:nth-child(3){--dx:-190px!important;--dy:95px!important}.feature-seed:nth-child(4){--dx:190px!important;--dy:97px!important}}
+@media(max-width:680px){.feature-bloom{left:50%;top:65%}.feature-seed{width:76px;min-height:66px;border-radius:22px;font-size:10px;gap:4px}.feature-seed .seed-icon{font-size:26px}.feature-seed:nth-child(1){--dx:-127px!important;--dy:-82px!important}.feature-seed:nth-child(2){--dx:130px!important;--dy:-82px!important}.feature-seed:nth-child(3){--dx:-125px!important;--dy:85px!important}.feature-seed:nth-child(4){--dx:125px!important;--dy:85px!important}.stage-copy{pointer-events:none}.stage-portal{bottom:5%}}
+@media(prefers-reduced-motion:reduce){.feature-seed{animation:none;opacity:1;transform:translate(-50%,-50%) translate3d(var(--dx),var(--dy),0) scale(1)}.bloom-thread{display:none}}
+/* Final landing layout adjustments: keep feature seeds clear of the hero headline. */
+@media(min-width:1051px){.feature-seed:nth-child(3){--dx:-205px!important;--dy:90px!important}}
+@media(max-width:680px){.stage-copy>p:last-child{display:none!important}}

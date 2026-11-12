@@ -1,15 +1,15 @@
 {
-  "version": "0.5.0",
-  "title": "Spatial Follow + Image Prompt · v0.5.0",
-  "datetime": "2026-11-12 02:30 GMT",
+  "version": "0.6.0",
+  "title": "Spatial Eye + Dandelion Controls · v0.6.0",
+  "datetime": "2026-11-12 04:00 GMT",
   "changes": [
-    "Upright small XR toolbar, following the viewer just below eye line by default; Pin mode keeps the toolbar in the room and both modes are draggable.",
-    "Captured source photo remains in place during extraction; object crops bloom from the original on curved trajectories instead of rebuilding the entire scene.",
-    "EXTRACT, PROMPT and REFINE replace exposed model-family terminology in immersive controls; Meta routing stays under the hood.",
-    "Prompt any saved source or object photo; send one explicit paid Muse Image edit and keep the generated child alongside the original, privately saved.",
-    "Speech-to-text for short microphone instructions and a keyboard prompt editor with XR DOM-overlay fallback; microphone compatibility depends on Quest Browser.",
-    "Controller and hand grip orientation supports free card rotation; two-input distance scales a selected object, and capture/card positions are persisted.",
-    "Backend allows unlimited request quota when FREE_LAB_DAILY_LIMIT=0 and FREE_LAB_USER_DAILY_LIMIT=0; provider billing remains separate. No change to encrypted provider keys.",
-    "3D and video adapters are intentionally not activated until provider-specific paid workflows and tests exist."
+    "Camera test, XR readiness, new item and upload now bloom around the landing mascot after a one-second pause; no separate footer action strip.",
+    "Original procedural WebAudio chimes respond to arrival (when browser audio is unlocked), XR entry, capture, extraction, grabs, selection and success. No third-party audio assets.",
+    "The central animated iris is the immersive capture control. If no camera stream is live, the first press requests Quest camera permission; a small live-preview card shows the actual feed and a second press saves real pixels. Unavailable camera access is reported clearly without generating fake frames.",
+    "A single borderless XR navigation pill sits below eye level. Drag its upper header to reposition while following, or pin it at its current world position. Selected-card actions replace, rather than duplicate, the main tools.",
+    "Image cards are sized from actual source aspect ratios and draw the whole image without cropping. A saving photo remains in the world during the transition to a persisted capture.",
+    "IMPROVE routes to an image-edit prompt and adds a generated child card; the source image is not replaced. Applying the prompt is an explicit paid action.",
+    "Quest controllers receive subtle haptic pulses on hover and grab when available. Pinch and controller trigger/grip manipulation remain supported.",
+    "No new provider accounts, billing caps or external sound files. Database schema and deployment watcher remain unchanged."
   ]
 }
