@@ -1,4 +1,4 @@
-/* FREELAB 0.9.5 — continuous non-overlapping string ribbons; melodic lab + tracked-thumb lab.
+/* FREELAB 0.9.6 — world-locked rectangle lab + single left-thumbstick experiment selector.
    Minimal WebGL WebXR renderer: real camera input only, no fake passthrough pixels.
    World-positioned photos, yaw-upright follow toolbar, image derivatives, spatial grab.
    Flat grey floating controls, double-sided, draggable spatial cards.
@@ -300,6 +300,7 @@ const STRAND_V=`attribute vec3 aPos;attribute float aSide;uniform mat4 uVP;varyi
 const STRAND_F=`precision mediump float;varying float vSide;uniform vec3 uColor;uniform float uOpacity;void main(){float d=abs(vSide);float core=1.0-smoothstep(.22,.43,d);float halo=1.0-smoothstep(.30,1.0,d);float a=uOpacity*(.88*core+.16*halo);if(a<.006)discard;vec3 bright=min(vec3(1.0),uColor*1.08+vec3(.09));gl_FragColor=vec4(mix(uColor,bright,core*.7),a);}`;
 let strandProgram=null,strandBuffer=null,stringLab=null,stringLabState=null,rightStickDown=false,lastStringWarning=0;
 let fingerLab=null,fingerLabState=null,leftStickDown=false,lastFingerWarning=0;
+let frameLab=null,frameLabState=null,labSelector=null,labMenu=null,labMenuCanvas=null,labMenuIndex=-1,lastFrameWarning=0;
 function stringColor(t){const stops=[[0,[.18,1,.38]],[.36,[.66,1,.30]],[.58,[1,.93,.18]],[.78,[1,.49,.10]],[1,[1,.12,.10]]];
  for(let i=1;i<stops.length;i++)if(t<=stops[i][0]){const a=stops[i-1],b=stops[i],u=(t-a[0])/(b[0]-a[0]);return a[1].map((c,j)=>c+(b[1][j]-c)*u);}
  return stops[stops.length-1][1];}
@@ -337,13 +338,6 @@ function snappedHalf(anchor,last,side,age){const phase=Math.max(0,(age-320)/1000
   path.push([x,y,z]);
  }return path;}
 function pollStringLab(frame,t){if(!stringLab)return;
- const pressed=window.FreeLabStringLab?.isRightThumbstickPressed(session.inputSources)||false;
- if(pressed&&!rightStickDown){
-  const on=stringLab.toggle();if(on){fingerLab?.setEnabled(false);fingerLabState=null;window.FreeLabSound?.fingersStopAll?.();}window.FreeLabSound?.unlock?.();window.FreeLabSound?.stringStop?.();
-  setStatus(on?'STRING LAB ON · touch thumb tips · stretch to 1 metre':'STRING LAB OFF',7500);
-  if(on)cue('ready');else cue('pin');
- }
- rightStickDown=pressed;
  const tips={};for(const src of session.inputSources){if(!src.hand||!['left','right'].includes(src.handedness))continue;
   try{const joint=src.hand.get('thumb-tip'),p=joint&&frame.getJointPose?.(joint,refSpace)?.transform?.position;
    if(p)tips[src.handedness]=[p.x,p.y,p.z];}catch{}
@@ -380,16 +374,7 @@ function drawStringLab(vp,t,pose){const state=stringLabState;if(!state||!stringL
 
 // Left controller thumbstick: independent five-finger lab. The hand-tracking
 // modality can take over after toggling; never require controller+hand together.
-function pollFingerLab(frame,t){if(!fingerLab)return;
- const pressed=window.FreeLabFingerLab?.isLeftThumbstickPressed(session.inputSources)||false;
- if(pressed&&!leftStickDown){const on=fingerLab.toggle();
-  if(on){stringLab?.setEnabled(false);stringLabState=null;window.FreeLabSound?.stringStop?.();}
-  window.FreeLabSound?.fingersStopAll?.();window.FreeLabSound?.unlock?.();
-  setStatus(on?'FIVE FINGER LAB · join matching fingertips · C D E F G':'FIVE FINGER LAB OFF',6800);
-  cue(on?'ready':'pin');
- }
- leftStickDown=pressed;
- if(!fingerLab.enabled)return;
+function pollFingerLab(frame,t){if(!fingerLab||!fingerLab.enabled)return;
  const fingertips={left:{},right:{}};
  const fingers=window.FreeLabFingerLab.FINGERS;
  for(const src of session.inputSources){if(!src.hand||!fingertips[src.handedness])continue;
@@ -430,6 +415,85 @@ function drawFingerLab(vp,t,pose){if(!fingerLab?.enabled||!fingerLabState?.enabl
   }
  }
 }
+// Unified experimental mode selector. A miniature upright dark pill follows
+// the LEFT controller only while L3 is pressed. Tilt axis[2] left/right,
+// return to neutral between steps, RELEASE to apply. No extra screen toolbar.
+function experimentalMenuTexture(index){
+ const [c,ctx]=canvas2d(512,116);rrect(ctx,0,0,512,116,56,'#29332f');
+ const centers=[69,194,320,445];
+ for(let i=0;i<4;i++){
+  const x=centers[i],active=i===index;
+  if(active)rrect(ctx,x-51,9,102,98,45,'#c5f3d2');
+  const col=active?'#1c3227':'#e6f5e9';ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=6;ctx.lineCap='round';ctx.lineJoin='round';
+  if(i===0){ctx.strokeRect(x-25,37,50,35);ctx.beginPath();ctx.moveTo(x-12,37);ctx.lineTo(x-12,72);ctx.moveTo(x+12,37);ctx.lineTo(x+12,72);ctx.stroke();}
+  else if(i===1){for(let k=-2;k<=2;k++){ctx.beginPath();ctx.moveTo(x-28,54+k*9);ctx.lineTo(x+28,54+k*9);ctx.stroke();}}
+  else if(i===2){ctx.beginPath();ctx.moveTo(x-28,48);ctx.lineTo(x+28,48);ctx.moveTo(x-28,65);ctx.lineTo(x+28,65);ctx.stroke();}
+  else {ctx.beginPath();ctx.moveTo(x-19,38);ctx.lineTo(x+19,75);ctx.moveTo(x+19,38);ctx.lineTo(x-19,75);ctx.stroke();}
+ }
+ return texture(c);
+}
+function experimentalMode(mode){
+ const name={frames:'SPATIAL FRAMES · join index tips and thumbs, then stretch',five:'FIVE-FINGER CHORD LAB · C D E F G',thumbs:'THUMB STRING LAB · stretch and snap',off:'EXPERIMENTS OFF'};
+ // Mode changes stop audio but never delete the previously detached frames.
+ stringLab?.setEnabled(mode==='thumbs');fingerLab?.setEnabled(mode==='five');frameLab?.setEnabled(mode==='frames');
+ window.FreeLabSound?.stringStop?.();window.FreeLabSound?.fingersStopAll?.();
+ if(mode==='frames')frameLab?.setHoldSeconds(window.FreeLab?.pref?.('frameHoldSeconds')||3);
+ if(mode!=='thumbs')stringLabState=null;
+ if(mode!=='five')fingerLabState=null;
+ if(mode!=='frames')frameLabState=null;
+ cue(mode==='off'?'release':'ready');setStatus(name[mode]||name.off,8000);
+}
+function pollLabSelector(frame,t,pose){if(!labSelector)return;
+ const sel=labSelector.update(session.inputSources);
+ if(sel.event==='select'){experimentalMode(sel.mode);if(labMenu?.front){gl.deleteTexture(labMenu.front);labMenu.front=null;}labMenu=null;labMenuIndex=-1;}
+ if(!sel.open)return;
+ if(sel.event==='step'){cue('hover',sel.source);}
+ if(sel.event==='open'){window.FreeLabSound?.unlock?.();cue('pin',sel.source);}
+ if(!labMenu){labMenu={id:'lab-selector',kind:'labmenu',size:[.325,.074],scale:1,visible:true,q:quatY(cameraYaw(pose)),pos:[0,0,0],front:null,back:null};}
+ if(sel.index!==labMenuIndex){if(labMenu.front)gl.deleteTexture(labMenu.front);labMenu.front=experimentalMenuTexture(sel.index);labMenu.back=labMenu.front;labMenuIndex=sel.index;}
+ // The menu is close to the physical controller, not head-locked or card-locked.
+ const device=sel.source,controllerPose=device&&(device.gripSpace?frame.getPose(device.gripSpace,refSpace):null);
+ const p=controllerPose?.transform?.position||inputPose(frame,device)?.transform?.position;
+ if(p){labMenu.visible=true;const h=pose.transform.matrix,eye=[h[12],h[13],h[14]],hand=[p.x,p.y,p.z];
+  const toEye=norm(vsub(eye,hand));
+  labMenu.pos=vadd(hand,vadd(vmul(toEye,.095),[0,.125,0]));
+  // Keep the near-field menu readable when the controller is close to the eyes.
+  const dist=length(vsub(labMenu.pos,eye));if(dist<.34)labMenu.pos=vadd(eye,vmul(norm(vsub(labMenu.pos,eye)),.34));
+  labMenu.q=quatY(cameraYaw(pose));
+ }else labMenu.visible=false;
+}
+function trackedHandCorners(frame){const hands={left:{},right:{}};
+ for(const src of session.inputSources){if(!src.hand||!hands[src.handedness])continue;
+  for(const [id,jointName] of [['thumb','thumb-tip'],['index','index-finger-tip']]){
+   try{const jp=frame.getJointPose?.(src.hand.get(jointName),refSpace),p=jp?.transform?.position;
+    if(p)hands[src.handedness][id]=[p.x,p.y,p.z];}catch{}
+  }
+ }
+ return hands;
+}
+function pollFrameLab(frame,t){if(!frameLab?.enabled)return;
+ const tips=trackedHandCorners(frame);const state=frameLab.update({left:tips.left,right:tips.right,time:t});frameLabState=state;
+ if(state.event==='attach'){cue('grab');setStatus(`FRAME LAB · stretch frame; hold for ${frameLab.holdSeconds} seconds`,6800);}
+ if(state.event==='countdown')cue('pin');
+ if(state.event==='place'){cue('bloom');setStatus(`FRAME PLACED · ${state.frames.length} room frame(s) · join fingertips to draw another`,6500);}
+ if(state.event==='lost')setStatus('FRAME TRACKING LOST · join tips again',5500);
+ if(!tips.left.index&&t-lastFrameWarning>17000){lastFrameWarning=t;setStatus('FRAME LAB · enable both tracked hands (put controllers down)',6800);}
+}
+function drawSpatialFrames(vp,t,pose){if(!frameLab)return;
+ const h=pose.transform.matrix,eye=[h[12],h[13],h[14]];
+ const draw=(corners,color,opacity,width)=>{
+  for(let i=0;i<4;i++)strandRibbon(vp,[corners[i],corners[(i+1)%4]],width,color,opacity,eye);
+  line(vp,corners,[...color,.76*opacity],true,10);
+ };
+ // Detached frames are always fixed in local-floor reference space, even
+ // while other experiments are enabled or the headset walks elsewhere.
+ for(const f of frameLab.frames)draw(f.corners,[.37,.99,.74],.86,.009);
+ if(frameLab.enabled&&frameLabState?.live){
+  const f=frameLabState.live,c=f.corners,p=frameLabState.progress;
+  draw(c,[.64,1,.51],.75+.18*Math.sin(t*.007),.014);
+  if(p>0){const a=c[0],b=c[1],s=vadd(a,vmul(vsub(b,a),p));strandRibbon(vp,[a,s],.022,[1,.91,.35],.96,eye);}
+ }
+}
 function setStatus(value,ms=6000){statusText=String(value);statusUntil=performance.now()+ms;
  window.FreeLab?.notify?.(statusText);refreshToolbar();}
 function refreshToolbar(){if(!toolbar||!gl)return;const newTexture=toolbarTexture('main');if(toolbar.front)gl.deleteTexture(toolbar.front);toolbar.front=newTexture;toolbar.back=newTexture;toolbar.resources=[newTexture];}
@@ -448,8 +512,8 @@ function tween(t){const now=performance.now();for(const c of cards){if(c.duratio
  }}
 function launchParticles(center){for(let i=0;i<45;i++){const a=Math.random()*TAU,s=Math.random()*.85+.14;particles.push({p:vadd(center,[Math.cos(a)*.12,Math.sin(a)*.12,Math.random()*.2]),v:[Math.cos(a)*s,Math.sin(a)*s,(Math.random()-.5)*s],born:performance.now(),ttl:750+Math.random()*650});}}
 function clearCards(){if(!gl)return;closeImageMenu();for(const c of cards)for(const t of c.resources||[])gl.deleteTexture(t);cards=[];selected=null;}
-function rootPos(c){return cloud&&!['toolbar','status','captureeye','capturepreview','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics'].includes(c.kind)?vadd(c.pos,cloud.offset||[0,0,0]):c.pos;}
-function baseFor(c){if(c.kind==='pointer-mascot'||['toolbar','status','captureeye','capturepreview','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics'].includes(c.kind))return translate();return root;}
+function rootPos(c){return cloud&&!['toolbar','status','captureeye','capturepreview','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics','labmenu'].includes(c.kind)?vadd(c.pos,cloud.offset||[0,0,0]):c.pos;}
+function baseFor(c){if(c.kind==='pointer-mascot'||['toolbar','status','captureeye','capturepreview','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics','labmenu'].includes(c.kind))return translate();return root;}
 function cameraYaw(pose){return yawFromMatrix(pose.transform.matrix);}
 function syncTrackedUI(pose,t){
  const yaw=cameraYaw(pose),head=pose.transform.matrix;
@@ -713,10 +777,10 @@ function updateMascot(frame,t){const mode=mascotMode();if(mode==='none'){if(masc
 }
 
 function renderView(t,frame){const pose=frame.getViewerPose(refSpace);if(!pose){session.requestAnimationFrame(updateView);return;}latestPose=pose;if(!poseReady)place(pose);syncTrackedUI(pose,t);
- poll3d(t);pollStringLab(frame,t);pollFingerLab(frame,t);advanceGrab(frame);for(const src of session.inputSources)pinchPoll(frame,src);pollGestures(frame,t);tween(t);updateMascot(frame,t);tickMascotSpeech(t);tickVoiceIndicator(t,pose);updateMicVisual(t);updateDebugCard(t);if(captureEye&&t-lastEyeUpdate>67){if(eyeState!=='idle'&&t>eyeUntil)eyeState='idle';paintEye(t);lastEyeUpdate=t;}updateLivePreview(t);if(t-lastUi>150){updateHover(frame);lastUi=t;}
+ poll3d(t);pollLabSelector(frame,t,pose);pollStringLab(frame,t);pollFingerLab(frame,t);pollFrameLab(frame,t);advanceGrab(frame);for(const src of session.inputSources)pinchPoll(frame,src);pollGestures(frame,t);tween(t);updateMascot(frame,t);tickMascotSpeech(t);tickVoiceIndicator(t,pose);updateMicVisual(t);updateDebugCard(t);if(captureEye&&t-lastEyeUpdate>67){if(eyeState!=='idle'&&t>eyeUntil)eyeState='idle';paintEye(t);lastEyeUpdate=t;}updateLivePreview(t);if(t-lastUi>150){updateHover(frame);lastUi=t;}
  gl.bindFramebuffer(gl.FRAMEBUFFER,session.renderState.baseLayer.framebuffer);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
  for(const view of pose.views){const vp0=session.renderState.baseLayer.getViewport(view);gl.viewport(vp0.x,vp0.y,vp0.width,vp0.height);const vp=matmul(view.projectionMatrix,view.transform.inverse.matrix);
- decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(editbar)drawCard(editbar,vp);if(captureEye)drawCard(captureEye,vp);if(voiceButton)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(cameraPreview?.visible)drawCard(cameraPreview,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);drawStringLab(vp,t,pose);drawFingerLab(vp,t,pose);depthCapability(frame,view);
+ decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(editbar)drawCard(editbar,vp);if(captureEye)drawCard(captureEye,vp);if(voiceButton)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(cameraPreview?.visible)drawCard(cameraPreview,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);drawStringLab(vp,t,pose);drawFingerLab(vp,t,pose);drawSpatialFrames(vp,t,pose);if(labMenu?.visible)drawCard(labMenu,vp);depthCapability(frame,view);
  for(const src of session.inputSources){const r=ray(frame,src);if(!r)continue;const h=pick(r),end=vadd(r.o,vmul(r.d,h?.dist||1.2));const colour=src.hand?[.72,1,.75,.7]:[.77,.88,1,.72];line(vp,[r.o,end],colour);line(vp,[end],colour,true,h?16:9);}
  if(mascotPointer?.visible){if(mascotMode()==='2d'){if(!mascotPointer.front){mascotTex=mascotTexture();mascotPointer.front=mascotTex;mascotPointer.back=mascotTex;}drawCard(mascotPointer,vp);}else drawMascot3D(vp,t);}
  if(mascotSpeech)drawCard(mascotSpeech,vp);
@@ -951,13 +1015,13 @@ async function action(id){const t=performance.now();if(t-lastAction<200)return;l
  case 'exit':return session?.end();}}
 
 async function start(){if(session)return;if(!navigator.xr||!await navigator.xr.isSessionSupported('immersive-ar'))throw Error('Use Meta Quest Browser with immersive-ar support');
- setup();stringLab=new window.FreeLabStringLab.Experiment();stringLabState=null;rightStickDown=false;fingerLab=new window.FreeLabFingerLab.Experiment();fingerLabState=null;leftStickDown=false;await gl.makeXRCompatible();session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['local'],optionalFeatures:['local-floor','hand-tracking','plane-detection','anchors','dom-overlay','depth-sensing'],depthSensing:{usagePreference:['gpu-optimized','cpu-optimized'],dataFormatPreference:['luminance-alpha','float32']},domOverlay:{root:document.getElementById('xrPromptEditor')}});xrDomOverlay=Boolean(session.domOverlayState);session.updateRenderState({baseLayer:new XRWebGLLayer(session,gl,{alpha:true,antialias:false})});
+ setup();stringLab=new window.FreeLabStringLab.Experiment();stringLabState=null;rightStickDown=false;fingerLab=new window.FreeLabFingerLab.Experiment();fingerLabState=null;leftStickDown=false;frameLab=new window.FreeLabFrameLab.Experiment();frameLabState=null;labSelector=new window.FreeLabLabSelector.Selector();labMenu=null;labMenuIndex=-1;await gl.makeXRCompatible();session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['local'],optionalFeatures:['local-floor','hand-tracking','plane-detection','anchors','dom-overlay','depth-sensing'],depthSensing:{usagePreference:['gpu-optimized','cpu-optimized'],dataFormatPreference:['luminance-alpha','float32']},domOverlay:{root:document.getElementById('xrPromptEditor')}});xrDomOverlay=Boolean(session.domOverlayState);session.updateRenderState({baseLayer:new XRWebGLLayer(session,gl,{alpha:true,antialias:false})});
  try{refSpace=await session.requestReferenceSpace('local-floor');}catch{refSpace=await session.requestReferenceSpace('local');}poseReady=false;depthChecked=false;depthState='not requested';
  session.addEventListener('selectstart',e=>{lastNative.set(e.inputSource,performance.now());grabStart(e.frame,e.inputSource);});
  session.addEventListener('selectend',e=>{lastNative.set(e.inputSource,performance.now());grabEnd(e.inputSource,e.frame);});
  session.addEventListener('squeezestart',e=>{lastNative.set(e.inputSource,performance.now());grabStart(e.frame,e.inputSource);});
  session.addEventListener('squeezeend',e=>{lastNative.set(e.inputSource,performance.now());grabEnd(e.inputSource,e.frame);});
- session.addEventListener('end',()=>{window.FreeLabSound?.fingersStopAll?.();fingerLab?.setEnabled(false);fingerLab=null;fingerLabState=null;leftStickDown=false;window.FreeLabSound?.stringStop?.();stringLab?.setEnabled(false);stringLab=null;stringLabState=null;rightStickDown=false;cue('release');session=null;poseReady=false;held=null;clearCards();if(voiceBadge?.front)gl.deleteTexture(voiceBadge.front);voiceBadge=null;dismissVoice();gestureDebounce.clear();gestureSpeechTimes.clear();lastGestureAnnouncement=-100000;if(mascotSpeech?.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(captureEye?.front)gl.deleteTexture(captureEye.front);if(voiceButton?.front)gl.deleteTexture(voiceButton.front);if(extractButton?.front)gl.deleteTexture(extractButton.front);voiceButton=null;extractButton=null;inferenceCard=null;if(cameraPreview?.front)gl.deleteTexture(cameraPreview.front);cameraPreview=null;previewResource=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;document.getElementById('xrPromptEditor')?.classList.add('hidden');document.getElementById('xrPromptEditor')?.classList.remove('xr-native-open');if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
+ session.addEventListener('end',()=>{if(labMenu?.front)gl.deleteTexture(labMenu.front);labMenu=null;labMenuIndex=-1;labSelector?.reset();labSelector=null;frameLab?.clear();frameLab=null;frameLabState=null;window.FreeLabSound?.fingersStopAll?.();fingerLab?.setEnabled(false);fingerLab=null;fingerLabState=null;leftStickDown=false;window.FreeLabSound?.stringStop?.();stringLab?.setEnabled(false);stringLab=null;stringLabState=null;rightStickDown=false;cue('release');session=null;poseReady=false;held=null;clearCards();if(voiceBadge?.front)gl.deleteTexture(voiceBadge.front);voiceBadge=null;dismissVoice();gestureDebounce.clear();gestureSpeechTimes.clear();lastGestureAnnouncement=-100000;if(mascotSpeech?.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(captureEye?.front)gl.deleteTexture(captureEye.front);if(voiceButton?.front)gl.deleteTexture(voiceButton.front);if(extractButton?.front)gl.deleteTexture(extractButton.front);voiceButton=null;extractButton=null;inferenceCard=null;if(cameraPreview?.front)gl.deleteTexture(cameraPreview.front);cameraPreview=null;previewResource=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;document.getElementById('xrPromptEditor')?.classList.add('hidden');document.getElementById('xrPromptEditor')?.classList.remove('xr-native-open');if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
  const saved=await window.FreeLab.listXRClouds().catch(()=>[]);clouds=saved;setStatus('CAPTURE → EXTRACT → PROMPT · camera pixels required',8500);session.requestAnimationFrame(updateView);
 }
 window.FreeLabXR={start,isRunning:()=>!!session};

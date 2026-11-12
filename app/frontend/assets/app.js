@@ -9,9 +9,10 @@ async function serverDiagnostics(){return api('/admin/diagnostics');}
 function pref(name){try{
  const v=localStorage.getItem('freelab-pref-'+name);
  if(name==='mascotMode')return ['2d','3d','none'].includes(v)?v:'3d';
+ if(name==='frameHoldSeconds')return [1.5,3,5].includes(Number(v))?Number(v):3;
  if(name==='spoken'&&v===null)return true;
- return v==='true';}catch{return name==='mascotMode'?'3d':name==='spoken';}}
-function setPref(name,value){try{localStorage.setItem('freelab-pref-'+name,name==='mascotMode'?String(value):String(Boolean(value)));}catch{}traceEvent(name+' = '+String(value),'setting');}
+ return v==='true';}catch{return name==='frameHoldSeconds'?3:name==='mascotMode'?'3d':name==='spoken';}}
+function setPref(name,value){try{localStorage.setItem('freelab-pref-'+name,['mascotMode','frameHoldSeconds'].includes(name)?String(value):String(Boolean(value)));}catch{}traceEvent(name+' = '+String(value),'setting');}
 const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e;};
 let toastTimer, scanTimer=null, scanBusy=false;
 function sessionMeta(){return state.user?.role==='admin' ? state.sessionKeys.get('meta') : null;}
@@ -129,6 +130,7 @@ async function init(){
  $('armXRMic')?.addEventListener('click',async()=>{try{const result=await armMicrophone();notify(result)}catch(e){notify('Mic permission: '+e.message)}});
  for(const name of ['spoken','troll']){const el=$('pref-'+name);if(el){el.checked=pref(name);el.onchange=()=>setPref(name,el.checked);}}
  const mode=$('pref-mascotMode');if(mode){mode.value=pref('mascotMode');mode.onchange=()=>setPref('mascotMode',mode.value);}
+ const hold=$('pref-frameHoldSeconds');if(hold){hold.value=String(pref('frameHoldSeconds'));hold.onchange=()=>setPref('frameHoldSeconds',Number(hold.value));}
  $('cameraButton').onclick=()=>{window.FreeLabSound?.play('capture');openCamera();};$('cameraDiagnostic').onclick=()=>{window.FreeLabSound?.play('ready');$('xrReadiness').classList.remove('hidden');xrDiagnostics()};$('refreshXRReadiness').onclick=xrDiagnostics;$('closeXRReadiness').onclick=()=>$('xrReadiness').classList.add('hidden');$('addNameButton').onclick=()=>{window.FreeLabSound?.play('bloom');$('cameraPanel').classList.remove('hidden');$('manualLabel').focus();};$('closeCamera').onclick=closeCamera;$('takeSnapshot').onclick=()=>{try{snapshot();notify('Snapshot ready')}catch(e){notify(e.message)}};
  $('fileInput').onchange=async e=>{window.FreeLabSound?.play('bloom');const file=e.target.files?.[0];if(!file)return;try{if(file.size>12*1024*1024)throw Error('Please choose an image under 12 MB');const bmp=await createImageBitmap(file);const canvas=$('snapshotCanvas');const scale=Math.min(1,960/Math.max(bmp.width,bmp.height));canvas.width=Math.round(scale*bmp.width);canvas.height=Math.round(scale*bmp.height);canvas.getContext('2d').drawImage(bmp,0,0,canvas.width,canvas.height);bmp.close();const preview=new Image();preview.src=canvas.toDataURL('image/jpeg',0.65);await preview.decode();$('cameraPanel').classList.remove('hidden');compress(preview);state.snapshotOrigin='upload';notify('Image ready — recognize or save manually');}catch(e){notify(e.message)}e.target.value='';};
  $('recognize').onclick=()=>submitCapture(true);$('saveManual').onclick=()=>{if(state.snapshot)submitCapture(false);else saveNameOnly().catch(e=>notify(e.message))};

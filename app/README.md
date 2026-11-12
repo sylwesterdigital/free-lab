@@ -80,3 +80,10 @@ All processing stays on-device, no cloud inference. Quest Browser may temporaril
 ## v0.9.5 — Stable spatial strings (rendering hotfix)
 
 Both the original right-thumbstick String Lab and left-thumbstick Five-Finger Chord Lab now draw **one continuous triangle strip per active string**, instead of separate overlapping quads for each segment plus a co-planar glow overlay. A single fragment shader supplies the luminous centre and fading glow; transparent strings do not write into the depth buffer, avoiding the flickering green rectangles observed on Quest 3. Smooth miter joins share their vertices, with bounded thickness at sharp bends and a stable camera-facing fallback. Music, colours, break thresholds, and gestures are unchanged. No server/data migrations or new inference costs. Validate on Quest hardware after the v0.9.5 upgrade.
+
+
+### Experimental Mode Selector (0.9.6)
+
+In immersive WebXR, hold the **left controller thumbstick (L3)** to show a small controller-following dark mode pill. Tilt left or right (return to centre between steps) to highlight **Frames**, **Five Strings**, **Two Thumbs** or **Off**; release L3 to apply. Switching modes stops the preceding audio voices but does not remove previously placed spatial frames.
+
+**Frames:** With both hands tracked, bring left/right index fingertips together and left/right thumb tips together. Slowly separate your hands while maintaining a frame at least 13 cm wide and 4.5 cm high. Hold for the configured 1.5, 3 or 5 seconds, then the rectangular outline becomes independent of the hands in the current WebXR reference space. Repeat to place more (up to 32 per session). Frames are session-only; exiting XR clears them. Requires environment hand tracking, and some Quest builds require putting down controllers for hand tracking to activate. This lab runs locally without any inference charge.

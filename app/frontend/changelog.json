@@ -1,13 +1,13 @@
 {
-  "version": "0.9.5",
-  "title": "Stable Spatial Strings · v0.9.5",
-  "datetime": "2026-11-12 17:35 UTC",
+  "version": "0.9.6",
+  "title": "Spatial Frame Lab · v0.9.6",
+  "datetime": "2026-11-12 19:16 UTC",
   "changes": [
-    "Rebuilt both String Lab and Five-Finger Chord Lab strings as single continuous triangle strips with shared joins, eliminating the overlapping quad seams seen in Quest.",
-    "Replaced separate coplanar green glow and bright core meshes with one shader-rendered luminous strand to avoid depth fighting.",
-    "Disabled depth writes only while rendering transparent strands; restored them immediately afterwards.",
-    "Added stable camera-facing miter joins with a bounded width, robust edge-on fallback and slight separation from hand-joint points.",
-    "Preserved the thumbstick shortcuts, five-note C–G scale, finger-dependent gradients, pitch response, individual snapping and falling fragments.",
-    "Added executable geometry and renderer regression checks; no API calls, database migrations or watcher changes."
+    "Hold the left thumbstick to open a tiny horizontal experiment selector near the controller; tilt left or right and release to activate the selected mode.",
+    "Select Frames, Five Strings, Two Thumbs or Off from a unified menu; no additional permanent XR toolbar.",
+    "Join the left and right index fingertips and thumb tips, spread the hands into a rectangular outline and hold to leave the frame suspended in space.",
+    "Choose a 1.5, 3 or 5-second frame-detach interval under XR Personalization; completed frames remain while exploring other modes.",
+    "Keep all drawing, tracking, geometry and musical-string effects entirely local, with no external inference or billing.",
+    "Added local tests for left-thumbstick selection, frame geometry, timed release and spatial retention. Existing watcher remains unchanged."
   ]
 }
