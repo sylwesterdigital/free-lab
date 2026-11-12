@@ -10,7 +10,7 @@ from pathlib import Path,PurePosixPath
 
 ROOT=Path(sys.argv[1]).resolve();sys.argv=[sys.argv[0]]+sys.argv[2:]
 UPDATES=ROOT/'updates';UPLOADS=ROOT/'uploads';STATE=ROOT/'.free-lab'
-VERSION='0.4.1';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
+VERSION='0.9.0';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
 REPO='git@github.com:sylwesterdigital/free-lab.git'
 HOST=os.getenv('FREE_LAB_SSH_HOST','root@46.62.232.64')
 PORT=os.getenv('FREE_LAB_SSH_PORT','333')
@@ -20,11 +20,18 @@ class Failure(Exception):pass
 class BadArchive(Failure):pass
 
 def now():return dt.datetime.now().astimezone().strftime('%Y-%m-%d %H:%M:%S %Z')
+COLORS={'PASS':'\033[1;32m','FAIL':'\033[1;31m','WARN':'\033[1;33m','STEP':'\033[1;36m'}
 def say(text,level='INFO'):
     line=f'{now()} [{level:5}] {text}'
-    print(line,flush=True)
+    if sys.stdout.isatty() and not os.getenv('NO_COLOR'):
+        print(COLORS.get(level,'')+line+('\033[0m' if level in COLORS else ''),flush=True)
+    else:print(line,flush=True)
     if LOG:
         with LOG.open('a',encoding='utf8') as f:f.write(line+'\n')
+def spacing():
+    print('',flush=True)
+    if LOG:
+        with LOG.open('a',encoding='utf8') as f:f.write('\n')
 
 def run(cmd,*,cwd=None,input=None,timeout=95,check=True):
     try:p=subprocess.run([str(v) for v in cmd],cwd=cwd,input=input,text=True,capture_output=True,timeout=timeout,env={**os.environ,'GIT_TERMINAL_PROMPT':'0'})
@@ -322,7 +329,7 @@ def main():
     p.add_argument('--interval',type=int,default=3)
     args=p.parse_args()
     if args.interval<1:p.error('--interval must be 1+')
-    for folder in (UPDATES,UPLOADS,STATE,STATE/'logs',UPDATES/'processed',UPDATES/'rejected'):
+    for folder in (UPDATES,UPLOADS,STATE,STATE/'logs',UPDATES/'processed',UPDATES/'rejected',UPDATES/'superseded'):
         folder.mkdir(parents=True,exist_ok=True)
     STATE.chmod(0o700)
     if args.status:
@@ -348,10 +355,20 @@ def main():
     next_try={}
     while True:
         all_zips=sorted([*UPLOADS.glob('*.zip'),*UPDATES.glob('*.zip')],key=lambda x:x.name)
-        known=[(version_tuple(ZIP_RE.fullmatch(f.name).group(1)),f) for f in all_zips if ZIP_RE.fullmatch(f.name)]
-        # A failed v0.1.0 archive may remain in uploads/. Never retry it before v0.1.1.
+        known=[]
+        for f in all_zips:
+            m=ZIP_RE.fullmatch(f.name)
+            if not m:continue  # unrelated ZIPs do not spam the idle terminal
+            version=version_tuple(m.group(1))
+            if version<=version_tuple(last_version()):
+                if not (args.dry_run or args.once):
+                    target=UPDATES/'superseded'/f.name
+                    if target.exists():target=UPDATES/'superseded'/(str(int(time.time()))+'-'+f.name)
+                    f.rename(target)  # once; no repeated warning
+                continue
+            known.append((version,f))
         highest=max((version for version,_ in known),default=None)
-        candidate=[f for version,f in known if version==highest] if highest else all_zips
+        candidate=[f for version,f in known if version==highest] if highest else []
         if (args.once or args.dry_run) and not candidate:
             say('No release ZIP found in uploads/ or updates/','WARN');return 1
         had_error=False
@@ -359,12 +376,11 @@ def main():
             match=ZIP_RE.fullmatch(f.name)
             if not match:
                 say('Ignoring ZIP with unrelated filename: '+f.name,'WARN');continue
-            if version_tuple(match.group(1))<=version_tuple(last_version()):
-                say('Previously deployed version ignored: '+f.name,'WARN');continue
             if not (args.once or args.dry_run) and (time.time()-f.stat().st_mtime<5 or next_try.get(str(f),0)>time.time()):continue
             stamp=dt.datetime.now().strftime('%Y%m%d-%H%M%S-%f')
             LOG=STATE/'logs'/(stamp+'-'+f.stem+'.log')
             try:
+                spacing()
                 say('=== RELEASE START '+f.name+' ===','STEP')
                 release(f,args.dry_run)
                 if not args.dry_run:
@@ -379,7 +395,7 @@ def main():
                 if not args.dry_run:
                     next_try[str(f)]=time.time()+90
                     say('ZIP retained. Network/deploy can be retried; server may be updated before GitHub.','WARN')
-            say('=== RELEASE FINISHED '+f.name+' ===','STEP');LOG=None
+            say('=== RELEASE FINISHED '+f.name+' ===','STEP');spacing();LOG=None
         if args.once or args.dry_run:return 1 if had_error else 0
         time.sleep(args.interval)
 

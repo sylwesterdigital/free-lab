@@ -54,7 +54,7 @@ class XRContractTests(unittest.TestCase):
         self.assertIn('followOffset',xr)
         self.assertIn('if(toolbar)toolbar.q=quatY(yaw)',xr)
         self.assertIn('root=viewerAnchor(latestPose,-.03,1.42)',xr)
-        self.assertIn("if(c.kind==='contextbar'",xr) if False else self.assertIn("['contextbar','3dbar']",xr)
+        self.assertIn("if(c.kind==='contextbar'",xr) if False else self.assertIn("if(c.kind==='contextbar'",xr)
         self.assertIn('drawHands(frame,vp)',xr)
         self.assertIn("'depth-sensing'",xr)
     def test_3d_has_explicit_confirmation_and_private_job_list(self):

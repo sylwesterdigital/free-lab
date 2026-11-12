@@ -33,14 +33,14 @@ class XRTests(unittest.TestCase):
   self.assertIn('id="armXRMic"',HTML)
  def test_card_close_and_bin_restore(self):
   self.assertIn("text(ctx,'×',fullWidth-57",XR)
-  self.assertIn("Image closed in XR · still in your saved collection",XR)
+  self.assertIn('Card hidden in XR · still saved privately',XR)
   self.assertIn('async function binSource()',XR)
   self.assertIn("kind==='bincloud'",XR)
   self.assertIn("cue('paper')",XR)
   self.assertIn("play('shutter')",APP)
   self.assertIn('noiseBurst',SOUND)
  def test_context_tooling_and_mixing(self):
-  self.assertIn("case 'mix':return mixAdd()",XR)
+  self.assertNotIn("case 'mix':return mixAdd()",XR)
   self.assertIn('mixBucket.length===2',XR)
   self.assertIn('mix_sources',APP)
   self.assertIn('mix_sources',SERVER)
@@ -56,8 +56,8 @@ class XRTests(unittest.TestCase):
   self.assertIn("if(t-serverPoll>6000)",XR)
  def test_optional_mascot_and_device_voice(self):
   self.assertIn('function mascotTexture()',XR)
-  self.assertIn("window.FreeLab?.pref?.('mascot')",XR)
-  for setting in ('mascot','spoken','troll'):self.assertIn('id="pref-'+setting+'"',HTML)
+  self.assertIn("mascotMode()!=='3d'",XR)
+  for setting in ('mascotMode','spoken','troll'):self.assertIn('id="pref-'+setting+'"',HTML)
  def test_actual_speech_find_phrase(self):
   part=XR.split('function findLabel(phrase){',1)[1].split('\nasync function respondFind',1)[0]
   js='function findLabel(phrase){'+part+'\nfor(const p of ["where is my backpack?","Find my backpack", "highlight the backpack"]){ if(findLabel(p)!=="backpack")throw Error(p+" => "+findLabel(p));}'

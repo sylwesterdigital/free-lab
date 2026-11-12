@@ -16,7 +16,7 @@ class SpatialInteractionTests(unittest.TestCase):
         self.assertIn('function currentTools()',XR)
         self.assertIn('function updateEditbar(){',XR)
         self.assertIn('if(editbar)drawCard(editbar,vp)',XR)
-        self.assertIn('if(h.card.kind===\'toolbar\'&&h.y>.16)return null',XR)
+        self.assertIn('if(h.card.kind===\'toolbar\'&&h.y>.37)return null',XR)
         self.assertIn('class="feature-bloom"',HTML)
         self.assertNotIn('class="action-bar"',HTML)
         self.assertIn('calc(3s + var(--delay))',CSS)
@@ -50,9 +50,10 @@ class SpatialInteractionTests(unittest.TestCase):
         self.assertIn("arrival:[[392",SOUND)
         self.assertIn('hapticActuators',XR)
         self.assertIn("window.FreeLabSound?.play('enter')",APP)
-        self.assertIn('sound.js?v=0.8.0',HTML)
+        self.assertIn('sound.js?v=0.9.0',HTML)
     def test_prompt_improve_preserves_source(self):
-        self.assertIn("case 'refine':return openPrompt('Restore this image with more detail",XR)
+        self.assertIn("case 'refine':return restoreSelected()",XR)
+        self.assertIn('return applyPrompt()',XR)
         self.assertIn('bloomChildren([o],context.card)',XR)
         self.assertIn('original image stays in the room',XR)
     def test_dynamic_aspect_calculation(self):

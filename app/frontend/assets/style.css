@@ -72,3 +72,9 @@
 @keyframes portal-call{0%,100%{filter:brightness(1);box-shadow:0 0 17px #77ffa4,0 0 42px #6dff9380,0 0 97px #5cff7d55,inset 0 0 24px #ccffdb}50%{filter:brightness(1.13);box-shadow:0 0 35px #baffce,0 0 80px #6dffa9,0 0 155px #4bff81a0,inset 0 0 32px #effff3}}
 .model-jobs{padding:18px 0 22px;border-bottom:1px solid #ffffff19;margin-bottom:24px}.model-jobs-title{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:10px;font-size:11px;letter-spacing:.08em}.model-job{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #ffffff12}.model-job strong{font-size:12px}.model-job a{text-decoration:none;color:#d9f8dd;background:#294538}
 @media(prefers-reduced-motion:reduce){.xr-portal{animation:none}}
+
+/* v0.9: native Quest input without an additional modal panel obscuring XR. */
+.xr-prompt-editor.xr-native-open{inset:0!important;display:block!important;pointer-events:none!important;background:transparent!important;backdrop-filter:none!important;padding:0!important;}
+.xr-prompt-editor.xr-native-open>.xr-prompt-content{display:none!important;}
+.xr-prompt-editor.xr-native-open #freelab-xr-native-input{pointer-events:auto!important;opacity:1!important;box-shadow:none!important;}
+.experience-preferences select{background:#33433c;color:#f5fff7;border:0;border-radius:18px;padding:12px 18px;font:inherit;min-width:180px;}

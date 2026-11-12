@@ -1,4 +1,4 @@
-/* FREELAB Spatial Cloud 0.8.0 — camera and model calls explicitly opt-in. */
+/* FREELAB Spatial Cloud 0.9.0 — camera and model calls explicitly opt-in. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
 const state={user:null,config:null,objects:[],tab:'mine',stream:null,micStream:null,snapshot:null,snapshotOrigin:null,xr:null,sessionKeys:new Map()};
@@ -6,8 +6,12 @@ const trace=[];const TRACE_MAX=80;
 function traceEvent(message,kind='info'){const entry={at:new Date().toLocaleTimeString(),kind,message:String(message).slice(0,270)};trace.push(entry);if(trace.length>TRACE_MAX)trace.shift();window.dispatchEvent(new CustomEvent('freelab-trace',{detail:entry}));}
 function getTrace(){return trace.slice(-25);}
 async function serverDiagnostics(){return api('/admin/diagnostics');}
-function pref(name){try{return localStorage.getItem('freelab-pref-'+name)==='true';}catch{return false;}}
-function setPref(name,value){try{localStorage.setItem('freelab-pref-'+name,String(Boolean(value)));}catch{}traceEvent(name+' = '+Boolean(value),'setting');}
+function pref(name){try{
+ const v=localStorage.getItem('freelab-pref-'+name);
+ if(name==='mascotMode')return ['2d','3d','none'].includes(v)?v:'3d';
+ if(name==='spoken'&&v===null)return true;
+ return v==='true';}catch{return name==='mascotMode'?'3d':name==='spoken';}}
+function setPref(name,value){try{localStorage.setItem('freelab-pref-'+name,name==='mascotMode'?String(value):String(Boolean(value)));}catch{}traceEvent(name+' = '+String(value),'setting');}
 const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e;};
 let toastTimer, scanTimer=null, scanBusy=false;
 function sessionMeta(){return state.user?.role==='admin' ? state.sessionKeys.get('meta') : null;}
@@ -123,7 +127,8 @@ async function init(){
  document.querySelectorAll('.model-option').forEach(btn=>btn.onclick=()=>{$('modelChoice').value=btn.dataset.model;document.querySelectorAll('.model-option').forEach(b=>b.classList.toggle('selected',b===btn));});
  $('providerForm').onsubmit=saveProvider;$('testProvider').onclick=testProvider;$('clearSessionKey').onclick=async()=>{state.sessionKeys.delete(currentProvider());$('providerKey').value='';await loadProviderList();await refresh();notify('Tab-only key cleared');};$('segment').onclick=()=>segmentSnapshot();$('toggleScan').onclick=toggleScan;$('cancelScan').onclick=()=>$('scanConsent').classList.add('hidden');$('confirmScan').onclick=startScanConfirmed;document.addEventListener('visibilitychange',()=>{if(document.hidden)stopScan()});
  $('armXRMic')?.addEventListener('click',async()=>{try{const result=await armMicrophone();notify(result)}catch(e){notify('Mic permission: '+e.message)}});
- for(const name of ['mascot','spoken','troll']){const el=$('pref-'+name);if(el){el.checked=pref(name);el.onchange=()=>setPref(name,el.checked);}}
+ for(const name of ['spoken','troll']){const el=$('pref-'+name);if(el){el.checked=pref(name);el.onchange=()=>setPref(name,el.checked);}}
+ const mode=$('pref-mascotMode');if(mode){mode.value=pref('mascotMode');mode.onchange=()=>setPref('mascotMode',mode.value);}
  $('cameraButton').onclick=()=>{window.FreeLabSound?.play('capture');openCamera();};$('cameraDiagnostic').onclick=()=>{window.FreeLabSound?.play('ready');$('xrReadiness').classList.remove('hidden');xrDiagnostics()};$('refreshXRReadiness').onclick=xrDiagnostics;$('closeXRReadiness').onclick=()=>$('xrReadiness').classList.add('hidden');$('addNameButton').onclick=()=>{window.FreeLabSound?.play('bloom');$('cameraPanel').classList.remove('hidden');$('manualLabel').focus();};$('closeCamera').onclick=closeCamera;$('takeSnapshot').onclick=()=>{try{snapshot();notify('Snapshot ready')}catch(e){notify(e.message)}};
  $('fileInput').onchange=async e=>{window.FreeLabSound?.play('bloom');const file=e.target.files?.[0];if(!file)return;try{if(file.size>12*1024*1024)throw Error('Please choose an image under 12 MB');const bmp=await createImageBitmap(file);const canvas=$('snapshotCanvas');const scale=Math.min(1,960/Math.max(bmp.width,bmp.height));canvas.width=Math.round(scale*bmp.width);canvas.height=Math.round(scale*bmp.height);canvas.getContext('2d').drawImage(bmp,0,0,canvas.width,canvas.height);bmp.close();const preview=new Image();preview.src=canvas.toDataURL('image/jpeg',0.65);await preview.decode();$('cameraPanel').classList.remove('hidden');compress(preview);state.snapshotOrigin='upload';notify('Image ready — recognize or save manually');}catch(e){notify(e.message)}e.target.value='';};
  $('recognize').onclick=()=>submitCapture(true);$('saveManual').onclick=()=>{if(state.snapshot)submitCapture(false);else saveNameOnly().catch(e=>notify(e.message))};

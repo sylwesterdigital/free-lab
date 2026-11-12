@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.8.0",
-  "description": "Upright spatial navigation, image-attached actions, tracked hands, opt-in Meshy 3D jobs"
+  "version": "0.9.0",
+  "description": "Single XR image menu, local gesture feedback, volumetric mascot and safe queued 3D actions"
 }

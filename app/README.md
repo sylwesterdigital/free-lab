@@ -46,3 +46,12 @@ Official references: https://developers.meta.com/vr/documentation/web/webxr-keyb
 - Tracked hands display a real WebXR joint-point skeleton when joints are exposed by Quest Browser; controller and hand rays still work. `depth-sensing` is optional and its availability appears in the XR Log. **Actual environment-depth occlusion and photoreal hand meshes are not implemented in v0.8.0.**
 - To generate a 3D model: add a Meshy API key under Admin → Model Connections; select a saved photo or object in XR → 3D → Generate 3D (paid confirmation). The private image is passed as a data URI, not published. Polling is read-only. Completed GLB downloads and credits are listed in Collection → Your 3D Models. Signed asset links expire and can be refreshed. No GLB rendering inside XR yet.
 - Existing profiles, encrypted keys, SQLite collections, and configured request quotas remain unchanged. The existing ZIP watcher requires no replacement.
+
+## v0.9.0 — one menu, 3D mascot, gestures and watcher colours
+
+- Source images: top-left **EXTRACT** badge triggers Muse for that photo, top-right **···** toggles a single vertical menu attached to the image. No always-visible duplicate image toolbars.
+- Restore is an explicit paid one-click Meta image edit. Prompt opens Quest input; Enter submits the paid request. Voice transcripts appear in a small floating head-proximal status banner.
+- 3D generation is a paid, explicitly confirmed Meshy task; progress and GLB URL live in personal Collection. Submission returns a task ID; the XR renderer remains responsive while the provider works.
+- Configurable **3D / 2D / Off** XR mascot. The 3D version consists of shaded meshes in native WebGL, not the landing Three.js asset. Gesture classification uses tracked WebXR joint geometry and can be wrong; it is not an ML pose model. The idle bounce is in a virtual volume, NOT physical room-wall detection.
+- No environment-depth occlusion. Current Quest WebXR support must be feature-detected; hand tracking does not imply depth sensing.
+- The watcher is included as v0.9.0 and self-installs after a successful release. Restart the currently running watcher once to see its new colored and silent-idle terminal behavior.

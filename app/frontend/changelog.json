@@ -1,14 +1,15 @@
 {
-  "version": "0.8.0",
-  "title": "Spatial Alignment, Hand Tracking & Image-to-3D \u00b7 v0.8.0",
-  "datetime": "2026-11-12 05:16 UTC",
+  "version": "0.9.0",
+  "title": "Single-Menu XR, 3D Mascot & Gesture Feedback \u00b7 v0.9.0",
+  "datetime": "2026-11-12 06:30 UTC",
   "changes": [
-    "Luminous green ENTER / XR portal with guided pulse and reduced-motion support.",
-    "Upright camera-facing world-space navigation; smoothly damped Follow with header-drag offsets; Pin stays in room.",
-    "Capture eye eases separately; every new source capture is placed relative to the current headset, not the toolbar or original XR entry point.",
-    "Selected source and object actions attach directly below the image and inherit its rotation; general navigation is no longer duplicated.",
-    "WebXR tracked hand-joint skeleton, controller/hand rays, and depth-sensing availability diagnostics. Physical-depth occlusion is not yet enabled.",
-    "Meshy image-to-3D tasks require a configured server vault key and explicit paid confirmation; private owner-scoped job records, progress, credits and GLB links.",
-    "No automatic image analysis or 3D generation; prior SQLite data and request limits are retained. Watcher unchanged."
+    "Source-image EXTRACT button now has a correct top-left XR hit target; image X hides, image \u00b7\u00b7\u00b7 opens exactly one vertical context menu.",
+    "Context menu offers Restore (paid single click), Prompt (Quest keyboard / Enter to send), Voice and 3D; redundant Mix, Folder and Bin floating bars removed.",
+    "Optional 3D shaded WebGL mascot, 2D sprite or Off; animated blinking/emotions with pointer-side tracking and bounded simulated idle bounce.",
+    "Local debounced hand-joint classifier for OK, thumbs up/down, pointing, forward, fist, open palm and two-hand heart; spoken feedback opt-in.",
+    "Voice status floats near line of sight, with red listening indicator, transcription dots and recognized text; restores speech results in the XR scene.",
+    "3D jobs use Meshy opt-in confirmation and existing stored job status, then continue polling without holding the XR render loop.",
+    "Watcher v0.9.0 in this ZIP: ANSI green success/red error, blank lines between releases and silent archiving of old ZIPs.",
+    "No physical Quest test or real model charges performed; preserve profiles, private objects, vault and budget configurations."
   ]
 }
