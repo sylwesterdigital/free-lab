@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.9.6",
-  "description": "Spatial Frame Lab: draw, detach and place world-locked rectangles using both hands"
+  "version": "0.9.7",
+  "description": "XR camera preview repositioned above all three controls; Extract always visible and dimmed until a source image exists"
 }

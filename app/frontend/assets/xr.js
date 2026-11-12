@@ -1,4 +1,4 @@
-/* FREELAB 0.9.6 — world-locked rectangle lab + single left-thumbstick experiment selector.
+/* FREELAB 0.9.7 — camera-preview occlusion fix, always present Extract control.
    Minimal WebGL WebXR renderer: real camera input only, no fake passthrough pixels.
    World-positioned photos, yaw-upright follow toolbar, image derivatives, spatial grab.
    Flat grey floating controls, double-sided, draggable spatial cards.
@@ -12,7 +12,7 @@ let mascotProgram=null,mascotBuffer=null,mascotVertexCount=0,mascotMood='curious
 let gestureDebounce=new Map(),lastGesturePoll=0,gestureDisplay='',lastGestureAnnouncement=-100000;
 let mascotSpeech=null,mascotSpeechUntil=0,gestureSpeechTimes=new Map();
 let pointerHover=null,lastFrame=0,lastUi=0,lastAction=0,latestPose=null,nextPaidAt=0,busy=false,mode='capture',statusText='Capture your space',statusUntil=0;
-let followMode=true,followBase=null,eyeBase=null,captureEye=null,voiceButton=null,extractButton=null,eyeResource=null,cameraPreview=null,previewResource=null,lastPreview=0,eyeState='idle',eyeUntil=0,rootYaw=0,menuYaw=0,promptPanel=null,promptContext=null,promptText='',xrDomOverlay=false;
+let followMode=true,followBase=null,eyeBase=null,captureEye=null,voiceButton=null,extractButton=null,extractVisualActive=null,eyeResource=null,cameraPreview=null,previewResource=null,lastPreview=0,eyeState='idle',eyeUntil=0,rootYaw=0,menuYaw=0,promptPanel=null,promptContext=null,promptText='',xrDomOverlay=false;
 let debugPanel=null,debugShowing=false,debugLast=0,serverPoll=0,serverDiagnostic=[],mascotPointer=null,mascotTex=null,lastAvatar=0,mixBucket=[],xrKeyboard=null;
 let followOffset=[0,-.53,-1.16],followWorld=null,eyeWorld=null,depthState='unknown',depthChecked=false,depthFeature=false,depthBinding=null,meshyJob=null,meshyPollAt=0,meshConfirm=null;
 let particles=[],handPinch=new WeakMap(),lastNative=new WeakMap(),clickState=new WeakMap(),lastEyeUpdate=0,lastMicUpdate=0,inferenceCard=null,inferenceStarted=0;
@@ -222,12 +222,14 @@ function paintEye(t){if(!captureEye||!eyeResource||!gl)return;const {canvas:c,ct
  ctx.strokeStyle=isBusy?'#d5ffd8':'#84bb90';ctx.lineWidth=6;ctx.beginPath();ctx.arc(160,160,141,t*.001,t*.001+Math.PI*(isBusy?1.6:1.05));ctx.stroke();
  gl.bindTexture(gl.TEXTURE_2D,tex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,c);
 }
+function extractionAvailable(){return Boolean(cloud&&!cloud.legacy&&!cloud.collapsed&&cards.some(c=>c.kind==='source'&&c.visible));}
 function roundelTexture(kind){
  kind=kind==='voiceroundel'?'mic':kind==='extractroundel'?'extract':kind;
  const [c,ctx]=canvas2d(256,256);
  const disabled=busy&&voicePhase!=='listening';
+ const inactive=kind==='extract'&&!extractionAvailable();
  ctx.beginPath();ctx.arc(128,128,118,0,TAU);
- ctx.fillStyle=disabled?'#303932':'#36433b';ctx.fill();
+ ctx.fillStyle=(disabled||inactive)?'#303932':'#36433b';ctx.fill();
  if(kind==='mic'){
   const live=voicePhase==='listening',processing=voicePhase==='processing';
   ctx.strokeStyle=live?'#ff6265':'#f4fff4';ctx.lineWidth=13;ctx.lineCap='round';
@@ -237,7 +239,7 @@ function roundelTexture(kind){
   if(live){const glow=15+Math.sin(performance.now()*.012)*9;ctx.strokeStyle='#ff6568';ctx.lineWidth=7;ctx.beginPath();ctx.arc(128,128,100+glow*.35,0,TAU);ctx.stroke();}
   if(processing){ctx.fillStyle='#ffe64b';for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(86+i*42,222,6,0,TAU);ctx.fill();}}
  }else if(kind==='extract'){
-  ctx.font='124px system-ui';ctx.fillStyle=disabled?'#819187':'#d9ffe0';ctx.textAlign='center';ctx.fillText('✳',128,173);
+  ctx.font='124px system-ui';ctx.fillStyle=(disabled||inactive)?'#7f9889':'#d9ffe0';ctx.textAlign='center';ctx.fillText('✳',128,173);
  }else{
   ctx.font='bold 94px system-ui';ctx.textAlign='center';ctx.fillStyle='#1d3227';
   ctx.fillText(kind==='ok'?'OK':'×',128,161);
@@ -251,7 +253,11 @@ function syncRoundels(pose){
  const yaw=cameraYaw(pose),frame=rotateY(yaw);
  const offset=(x,y,z)=>point(frame,[x,y,z],0);
  if(voiceButton){voiceButton.pos=vadd(captureEye.pos,offset(-.163,0,0));voiceButton.q=quatY(yaw);}
- if(extractButton){extractButton.visible=!!cloud&&cards.some(c=>c.kind==='source'&&c.visible)&&!cloud.collapsed;
+ if(extractButton){
+  // The right roundel is a permanent part of the three-button spatial group.
+  // When no source is selected it is dimmed, NEVER replaced by camera pixels.
+  extractButton.visible=true;const active=extractionAvailable();
+  if(active!==extractVisualActive){extractVisualActive=active;if(gl)refreshRoundel(extractButton,'extract');}
   extractButton.pos=vadd(captureEye.pos,offset(.163,0,0));extractButton.q=quatY(yaw);}
  if(voicePending){const center=point(poseForwardAnchor(pose,.97,-.045),[0,0,0]);
   if(voiceOk){voiceOk.pos=vadd(center,offset(-.087,0,0));voiceOk.q=quatY(yaw);}
@@ -268,7 +274,7 @@ function updateLivePreview(t){if(!cameraPreview||!previewResource||!cameraPrevie
   text(ctx,'LIVE CAMERA · REAL PIXELS',19,c.height-20,17,'#dcf9df',660);
   gl.bindTexture(gl.TEXTURE_2D,tex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,c);
  }catch(e){cameraPreview.visible=false;setStatus('Camera stream cannot be rendered in XR: '+e.message,9500);}}
-function showLivePreview(){if(!cameraPreview){previewResource=previewTexture();cameraPreview={id:'live-preview',kind:'capturepreview',size:[.33,.24],pos:[.37,.012,-.07],q:[0,0,0,1],scale:1,visible:true,front:previewResource.tex,back:previewResource.tex,resources:[previewResource.tex]};}
+function showLivePreview(){if(!cameraPreview){previewResource=previewTexture();cameraPreview={id:'live-preview',kind:'capturepreview',size:[.29,.19],pos:[0,.245,-.015],q:[0,0,0,1],scale:1,visible:true,front:previewResource.tex,back:previewResource.tex,resources:[previewResource.tex]};}
  cameraPreview.visible=true;lastPreview=0;}
 function setEyeState(value,ms=950){eyeState=value;eyeUntil=performance.now()+ms;}
 
@@ -528,7 +534,13 @@ function syncTrackedUI(pose,t){
  if(captureEye){const target=point(poseForwardAnchor(pose,1.02,-.18),[0,0,0]);
   const a=1-Math.exp(-Math.min(.08,(t-lastFrame||16)/1000)*3.1);
   captureEye.pos=blend(captureEye.pos,target,a);captureEye.q=quatY(yaw);syncRoundels(pose);}
- if(cameraPreview){cameraPreview.pos=vadd(captureEye?.pos||[head[12],head[13],head[14]],point(rotateY(yaw),[.30,0,-.03],0));cameraPreview.q=quatY(yaw);}
+ if(cameraPreview){
+  // Position the camera feed ABOVE all three buttons. Formerly x=.30 caused
+  // the .33 m feed to physically COVER the right Extract/Segmentation roundel.
+  cameraPreview.pos=vadd(captureEye?.pos||[head[12],head[13],head[14]],point(rotateY(yaw),[0,.245,-.015],0));
+  cameraPreview.q=quatY(yaw);
+  if(cloud&&extractionAvailable())cameraPreview.visible=false;
+ }
  if(debugPanel){debugPanel.pos=vadd(toolbar?.pos||[head[12],head[13]-.5,head[14]-1.1],[0,-.38,0]);debugPanel.q=quatY(yaw);}
  lastFrame=t;
 }
@@ -1021,7 +1033,7 @@ async function start(){if(session)return;if(!navigator.xr||!await navigator.xr.i
  session.addEventListener('selectend',e=>{lastNative.set(e.inputSource,performance.now());grabEnd(e.inputSource,e.frame);});
  session.addEventListener('squeezestart',e=>{lastNative.set(e.inputSource,performance.now());grabStart(e.frame,e.inputSource);});
  session.addEventListener('squeezeend',e=>{lastNative.set(e.inputSource,performance.now());grabEnd(e.inputSource,e.frame);});
- session.addEventListener('end',()=>{if(labMenu?.front)gl.deleteTexture(labMenu.front);labMenu=null;labMenuIndex=-1;labSelector?.reset();labSelector=null;frameLab?.clear();frameLab=null;frameLabState=null;window.FreeLabSound?.fingersStopAll?.();fingerLab?.setEnabled(false);fingerLab=null;fingerLabState=null;leftStickDown=false;window.FreeLabSound?.stringStop?.();stringLab?.setEnabled(false);stringLab=null;stringLabState=null;rightStickDown=false;cue('release');session=null;poseReady=false;held=null;clearCards();if(voiceBadge?.front)gl.deleteTexture(voiceBadge.front);voiceBadge=null;dismissVoice();gestureDebounce.clear();gestureSpeechTimes.clear();lastGestureAnnouncement=-100000;if(mascotSpeech?.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(captureEye?.front)gl.deleteTexture(captureEye.front);if(voiceButton?.front)gl.deleteTexture(voiceButton.front);if(extractButton?.front)gl.deleteTexture(extractButton.front);voiceButton=null;extractButton=null;inferenceCard=null;if(cameraPreview?.front)gl.deleteTexture(cameraPreview.front);cameraPreview=null;previewResource=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;document.getElementById('xrPromptEditor')?.classList.add('hidden');document.getElementById('xrPromptEditor')?.classList.remove('xr-native-open');if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
+ session.addEventListener('end',()=>{if(labMenu?.front)gl.deleteTexture(labMenu.front);labMenu=null;labMenuIndex=-1;labSelector?.reset();labSelector=null;frameLab?.clear();frameLab=null;frameLabState=null;window.FreeLabSound?.fingersStopAll?.();fingerLab?.setEnabled(false);fingerLab=null;fingerLabState=null;leftStickDown=false;window.FreeLabSound?.stringStop?.();stringLab?.setEnabled(false);stringLab=null;stringLabState=null;rightStickDown=false;cue('release');session=null;poseReady=false;held=null;clearCards();if(voiceBadge?.front)gl.deleteTexture(voiceBadge.front);voiceBadge=null;dismissVoice();gestureDebounce.clear();gestureSpeechTimes.clear();lastGestureAnnouncement=-100000;if(mascotSpeech?.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(captureEye?.front)gl.deleteTexture(captureEye.front);if(voiceButton?.front)gl.deleteTexture(voiceButton.front);if(extractButton?.front)gl.deleteTexture(extractButton.front);voiceButton=null;extractButton=null;extractVisualActive=null;inferenceCard=null;if(cameraPreview?.front)gl.deleteTexture(cameraPreview.front);cameraPreview=null;previewResource=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;document.getElementById('xrPromptEditor')?.classList.add('hidden');document.getElementById('xrPromptEditor')?.classList.remove('xr-native-open');if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
  const saved=await window.FreeLab.listXRClouds().catch(()=>[]);clouds=saved;setStatus('CAPTURE → EXTRACT → PROMPT · camera pixels required',8500);session.requestAnimationFrame(updateView);
 }
 window.FreeLabXR={start,isRunning:()=>!!session};

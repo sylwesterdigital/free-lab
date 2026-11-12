@@ -1,13 +1,12 @@
 {
-  "version": "0.9.6",
-  "title": "Spatial Frame Lab · v0.9.6",
-  "datetime": "2026-11-12 19:16 UTC",
+  "version": "0.9.7",
+  "title": "Extract Roundel & Camera Preview Hotfix \u00b7 v0.9.7",
+  "datetime": "2026-11-12 20:24 UTC",
   "changes": [
-    "Hold the left thumbstick to open a tiny horizontal experiment selector near the controller; tilt left or right and release to activate the selected mode.",
-    "Select Frames, Five Strings, Two Thumbs or Off from a unified menu; no additional permanent XR toolbar.",
-    "Join the left and right index fingertips and thumb tips, spread the hands into a rectangular outline and hold to leave the frame suspended in space.",
-    "Choose a 1.5, 3 or 5-second frame-detach interval under XR Personalization; completed frames remain while exploring other modes.",
-    "Keep all drawing, tracking, geometry and musical-string effects entirely local, with no external inference or billing.",
-    "Added local tests for left-thumbstick selection, frame geometry, timed release and spatial retention. Existing watcher remains unchanged."
+    "Move the live Quest camera preview above the microphone, capture eye, and Extract roundels, instead of covering the right-hand Extract control.",
+    "Keep all three roundels in a fixed arrangement. Extract is dimmed before a source photograph is available, then turns green and stays clickable.",
+    "Hide the live preview when a photo is captured; the capture image and extraction action remain independent.",
+    "Preserve previously saved images, cloud objects, experimental modes, accounts, API keys, and request quotas.",
+    "Add a geometric regression test to prevent live camera pixels from obstructing the extraction roundel again."
   ]
 }
