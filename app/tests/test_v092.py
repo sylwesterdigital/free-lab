@@ -35,7 +35,7 @@ class XR092(unittest.TestCase):
   script=r'''const vm=require('vm'),fs=require('fs'),src=fs.readFileSync('frontend/assets/xr.js','utf8').replace(
  'window.FreeLabXR={start,isRunning:()=>!!session};',
  `window.FreeLabXR={attachGrab,advanceGrab,buttonFromHit,syncTrackedUI,rootPos,baseFor,
-  setRoot:(m)=>{root=m;rootYaw=0;},setCloud:(m)=>{cloud=m;},setHeld:(m)=>{held=m;},
+  setRoot:(m)=>{root=m;rootYaw=0;},setCloud:(m)=>{cloud=m;},setHeld:(m)=>{held=m;},setLatestPose:(p)=>{latestPose=p;},
   setToolbar:(t,follow)=>{toolbar=t;followMode=follow;}, getToolbar:()=>toolbar};`);
 const w={FreeLab:{notify:()=>{},pref:()=>false}};
 vm.runInNewContext(src,{window:w,performance:{now:()=>1000},Math,console,WeakMap,Map});
@@ -48,11 +48,12 @@ function pose(){const c=Math.cos(angle),s=Math.sin(angle);
  return {transform:{matrix:m,orientation:{x:0,y:Math.sin(angle/2),z:0,w:Math.cos(angle/2)},position:{x:position[0],y:position[1],z:position[2]}}};}
 const frame={getPose:()=>pose()};
 const card={id:'object1',kind:'object',pos:[0,0,-1],q:[0,0,0,1],size:[.3,.3],scale:1,visible:true};
-const attachment=xr.attachGrab(frame,srcInput,card);if(!attachment)throw Error('No attachment');
-xr.setHeld({src:srcInput,id:null,card,attach:attachment,initialQuat:[0,0,0,1],start:0});
+const attachment=xr.attachGrab(frame,srcInput,card,{dist:1});if(!attachment)throw Error('No attachment');
+xr.setHeld({src:srcInput,id:null,card,attach:attachment,rayDist:1,worldStart:[0,0,-1],initialQuat:[0,0,0,1],start:0});
+xr.setLatestPose({transform:{matrix:[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]}});
 position=[.3,0,0];angle=Math.PI/2;xr.advanceGrab(frame);
 function close(a,b){return Math.abs(a-b)<.0001;}
-if(!close(card.pos[0],-.7)||!close(card.pos[2],0))throw Error('Grab point drift: '+card.pos);
+if(!close(card.pos[0],-.7)||!close(card.pos[2],0))throw Error('Ray contact drift: '+card.pos);
 if(!close(card.q[1],Math.SQRT1_2)||!close(card.q[3],Math.SQRT1_2))throw Error('World rotation drift: '+card.q);
 const nav={pos:[0,-.5,-1],q:[0,.38,0,.925],front:true};
 xr.setToolbar(nav,false);const old=nav.q.slice();xr.syncTrackedUI({transform:{matrix:pose().transform.matrix}},1016);

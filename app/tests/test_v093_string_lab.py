@@ -51,7 +51,7 @@ if(f([controller('right',false)]))throw Error('No press');
   self.assertIn("window.FreeLabSound?.stringStop?.();stringLab?.setEnabled(false)",XR)
   self.assertIn('stringSnap',AUDIO)
   self.assertIn('stringUpdate',AUDIO)
-  self.assertIn('string-lab.js?v=0.9.8',INDEX)
+  self.assertIn('string-lab.js?v=0.9.9',INDEX)
   self.assertNotIn('fetch(',STRING)
 
 if __name__=='__main__':unittest.main()

@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "description": "Remove XR camera preview, repair capture save state, and make arbitrary inference and storage quotas opt-in"
 }

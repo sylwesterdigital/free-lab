@@ -1,12 +1,13 @@
 {
-  "version": "0.9.8",
-  "title": "Reliable Capture & Extract \u00b7 v0.9.8",
-  "datetime": "2026-11-12 20:40 UTC",
+  "version": "0.9.9",
+  "title": "Camera Readiness & Spatial Extraction · v0.9.9",
+  "datetime": "2026-11-12 21:26 UTC",
   "changes": [
-    "Remove all live-camera preview surfaces from immersive XR; the Quest passthrough already shows the room.",
-    "On capture save failure, clear temporary SAVING state and report the actual backend error; successful saves activate both Extract controls.",
-    "Keep Extract directly on the source image and in the right-side roundel; no additional menu required.",
-    "Remove default daily-request, per-profile, cooldown, duplicate-image, and 50-capture restrictions from the application. Limits are opt-in by server setting.",
-    "Preserve all saved captures, profiles, API credentials and other XR experiments."
+    "Camera has explicit off, enabling, ready, saving and error states; closed grey eye switches to pink glowing eye with world-space instruction when camera is ready.",
+    "Only one source-image bloom, triggered after server confirms save; no second provisional card or interrupted animation.",
+    "Nested SAM segmentation operates on each privately owned extracted object image, with parent-child relationships and object-menu Segment action.",
+    "Recognition cards expand into a forward, upward-facing fan, not behind the capture or out of view.",
+    "Cards stay upright facing the wearer; moving a card preserves the initial controller-ray contact point instead of mixing grip and ray rotations.",
+    "Retains optional quota settings, existing user images, database, vault, controller experiments and watcher behavior."
   ]
 }

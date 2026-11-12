@@ -15,10 +15,11 @@ class Capture098(unittest.TestCase):
   self.assertIn("function extractionAvailable(){return Boolean(cloud&&Number.isInteger(cloud.id)&&cloud.id>0",XR)
  def test_failed_saving_cleans_pending(self):
   self.assertIn('CAPTURE SAVE FAILED',XR)
-  self.assertIn('cards=cards.filter(c=>c!==pending)',XR)
+  self.assertNotIn('pending=addCard',XR)
+  self.assertIn('const item=await window.FreeLab.saveXRFrame();',XR)
   self.assertIn('if(!Number.isInteger(item?.id)||item.id<=0)',XR)
-  self.assertIn('const card=sourceCard(data);',XR)
-  self.assertIn('Commit the new capture as one transition',XR)
+  self.assertIn('const card=sourceCard({...data,decodedImage:decoded});',XR)
+  self.assertIn('Commit only after server confirmation',XR)
   self.assertIn('SAVE FAILED:',XR)
  def test_no_implicit_limits(self):
   self.assertIn('FREE_LAB_ENFORCE_INFERENCE_LIMITS',BACK)

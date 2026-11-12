@@ -173,12 +173,26 @@ def request_meta_key(v):
 @require_user
 def segment_image():
     v=body()
-    try:raw=decode_jpeg(v)
-    except ValueError as e:return jsonify(error=str(e)),400
     cid=v.get('capture_id')
     if cid is not None:
         if type(cid) is not int or not g.con.execute('SELECT 1 FROM captures WHERE id=? AND owner_id=?',(cid,g.user['id'])).fetchone():
             return jsonify(error='Capture is not owned by this profile'),403
+    parent_id=v.get('object_id')
+    if parent_id is not None:
+        if type(parent_id) is not int or not cid:
+            return jsonify(error='A valid source object and capture are required'),400
+        src=g.con.execute('SELECT image_name FROM objects WHERE id=? AND capture_id=? AND owner_id=? AND shelf!=?',
+                          (parent_id,cid,g.user['id'],'bin')).fetchone()
+        if not src or not src['image_name']:
+            return jsonify(error='Selected object is unavailable for this profile'),404
+        source=IMAGE_DIR/src['image_name']
+        if not source.is_file():return jsonify(error='Selected image missing from server'),404
+        raw=source.read_bytes()
+        if len(raw)>2_000_000 or not raw.startswith(b'\xff\xd8'):
+            return jsonify(error='Selected object must be a valid JPEG'),422
+    else:
+        try:raw=decode_jpeg(v)
+        except ValueError as e:return jsonify(error=str(e)),400
     prompt=str(v.get('prompt','')).strip().lower()
     if not re.fullmatch(r'[a-z0-9][a-z0-9 -]{0,58}[a-z0-9]',prompt):
         return jsonify(error='Use one object noun phrase (2–60 characters)'),400
@@ -213,9 +227,10 @@ def segment_image():
                 crop.save(out,format='JPEG',quality=78,optimize=True)
                 try:
                     with g.con:
-                        oid=g.con.execute('INSERT INTO objects(owner_id,label,description,provider,image_name,sha256,capture_id) VALUES(?,?,?,?,?,?,?)',
+                        oid=g.con.execute('''INSERT INTO objects(owner_id,label,description,provider,image_name,sha256,capture_id,parent_object_id,operation)
+                          VALUES(?,?,?,?,?,?,?,?,?)''',
                         (g.user['id'],prompt,'SAM 3.1 bounding-box crop (not a decoded segmentation mask)',
-                         'sam-3.1-box',name,hashlib.sha256(out.read_bytes()).hexdigest(),cid)).lastrowid
+                         'sam-3.1-box',name,hashlib.sha256(out.read_bytes()).hexdigest(),cid,parent_id,'segmentation')).lastrowid
                     result['saved_ids'].append(oid)
                 except Exception:
                     out.unlink(missing_ok=True)
@@ -404,13 +419,27 @@ def application_inference_limits():
 @require_user
 def capture():
     v=body()
-    try:raw=decode_jpeg(v)
-    except ValueError as e:return jsonify(error=str(e)),400
-    digest=hashlib.sha256(raw).hexdigest()
     cid=v.get('capture_id')
     if cid is not None:
         if type(cid) is not int or not g.con.execute('SELECT 1 FROM captures WHERE id=? AND owner_id=?',(cid,g.user['id'])).fetchone():
             return jsonify(error='Capture is not owned by this profile'),403
+    parent_id=v.get('object_id')
+    if parent_id is not None:
+        if type(parent_id) is not int or not cid:
+            return jsonify(error='A private capture and selected object are required'),400
+        src=g.con.execute('SELECT image_name FROM objects WHERE id=? AND capture_id=? AND owner_id=? AND shelf!=?',
+                          (parent_id,cid,g.user['id'],'bin')).fetchone()
+        if not src or not src['image_name']:
+            return jsonify(error='Selected object is not available for this profile'),404
+        source_path=IMAGE_DIR/src['image_name']
+        if not source_path.is_file():return jsonify(error='Selected object image missing'),404
+        raw=source_path.read_bytes()
+        if not 100<len(raw)<=2_000_000 or not (raw.startswith(b'\xff\xd8') and raw.endswith(b'\xff\xd9')):
+            return jsonify(error='Selected object must be a valid saved JPEG'),422
+    else:
+        try:raw=decode_jpeg(v)
+        except ValueError as e:return jsonify(error=str(e)),400
+    digest=hashlib.sha256(raw).hexdigest()
     use_model=v.get('recognize') is True
     if use_model and not request_meta_key(v):
         return jsonify(error='Meta API key not configured. Save a manual snapshot instead.'),503
@@ -460,8 +489,10 @@ def capture():
                     content=mem.getvalue()
             name=secrets.token_hex(16)+'.jpg';path=IMAGE_DIR/name;path.write_bytes(content)
             try:
-                oid=g.con.execute('INSERT INTO objects(owner_id,label,description,provider,image_name,sha256,capture_id) VALUES(?,?,?,?,?,?,?)',
-                  (g.user['id'],obj['label'],obj['description'],model,name,hashlib.sha256(content).hexdigest(),cid)).lastrowid
+                oid=g.con.execute('''INSERT INTO objects(owner_id,label,description,provider,image_name,sha256,capture_id,parent_object_id,operation)
+                  VALUES(?,?,?,?,?,?,?,?,?)''',
+                  (g.user['id'],obj['label'],obj['description'],model,name,hashlib.sha256(content).hexdigest(),cid,
+                   parent_id,'nested_extraction' if parent_id is not None else 'recognition')).lastrowid
             except Exception:
                 path.unlink(missing_ok=True);raise
             ids.append(oid)

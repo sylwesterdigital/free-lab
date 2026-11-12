@@ -143,7 +143,8 @@ async function init(){
 
 // Spatial cloud interface: no background inference, all writes are profile-scoped.
 async function saveXRFrame(onLocal){
- if(state.stream&&state.snapshotOrigin!=='upload'){snapshot();}
+ // XR capture always samples the current live camera, never an earlier uploaded JPEG.
+ if(state.stream?.getVideoTracks?.().some(t=>t.readyState==='live'&&!t.muted))snapshot();
  if(!state.snapshot)throw Error('No readable frame. Press the central eye to enable the camera, or upload an image in the desktop view.');
  if(typeof onLocal==='function')onLocal(state.snapshot);
  const r=await api('/captures',{method:'POST',body:JSON.stringify({image:state.snapshot})});
@@ -171,18 +172,20 @@ async function refresh3DJobs(){
   }
  }catch(e){panel.append(el('p','small-muted','3D jobs unavailable · '+e.message));}
 }
-async function recognizeXR(cid){
- if(!state.snapshot)throw Error('Capture an image first');
- const payload={image:state.snapshot,recognize:true,capture_id:cid,model:$('modelChoice').value};
+async function recognizeXR(cid,objectId=null){
+ if(!objectId&&!state.snapshot)throw Error('Capture an image first');
+ const payload={recognize:true,capture_id:cid,model:$('modelChoice').value};
+ if(objectId)payload.object_id=objectId;else payload.image=state.snapshot;
  if(sessionMeta())payload.session_api_key=sessionMeta();
  const result=await api('/capture',{method:'POST',body:JSON.stringify(payload)});
  state.tab='mine';selectTab('mine');await loadObjects();
  if(state.user?.role==='admin')loadUsage().catch(()=>{});
  return {items:state.objects.filter(x=>result.ids.includes(x.id)),detections:result.objects,usage:result.usage};
 }
-async function segmentXR(cid,noun){
- if(!state.snapshot)throw Error('Capture an image first');
- const payload={image:state.snapshot,prompt:noun,save:true,capture_id:cid};
+async function segmentXR(cid,noun,objectId=null){
+ if(!objectId&&!state.snapshot)throw Error('Capture an image first');
+ const payload={prompt:noun,save:true,capture_id:cid};
+ if(objectId)payload.object_id=objectId;else payload.image=state.snapshot;
  if(sessionMeta())payload.session_api_key=sessionMeta();
  const result=await api('/segment',{method:'POST',body:JSON.stringify(payload)});
  state.tab='mine';selectTab('mine');await loadObjects();
