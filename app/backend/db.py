@@ -34,6 +34,17 @@ CREATE TABLE IF NOT EXISTS inference_calls (
  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS inference_recent ON inference_calls(created_at);
+CREATE TABLE IF NOT EXISTS jobs_3d (
+ id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ capture_id INTEGER REFERENCES captures(id) ON DELETE SET NULL,
+ object_id INTEGER REFERENCES objects(id) ON DELETE SET NULL,
+ provider TEXT NOT NULL DEFAULT 'meshy', provider_task TEXT NOT NULL,
+ status TEXT NOT NULL DEFAULT 'PENDING', progress INTEGER NOT NULL DEFAULT 0,
+ credits INTEGER, glb_url TEXT, thumbnail_url TEXT, error TEXT NOT NULL DEFAULT '',
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS jobs_3d_owner ON jobs_3d(owner_id,id DESC);
 CREATE TABLE IF NOT EXISTS provider_secrets (
  provider TEXT PRIMARY KEY, ciphertext BLOB NOT NULL, updated_at TEXT NOT NULL
 );

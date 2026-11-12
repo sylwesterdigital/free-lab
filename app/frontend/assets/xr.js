@@ -1,4 +1,4 @@
-/* FREELAB 0.7.0 — Capture → Extract → Prompt.
+/* FREELAB 0.8.0 — Capture → Extract → Prompt.
    Minimal WebGL WebXR renderer: real camera input only, no fake passthrough pixels.
    World-positioned photos, yaw-upright follow toolbar, image derivatives, spatial grab.
    Flat grey floating controls, double-sided, draggable spatial cards.
@@ -9,16 +9,20 @@ let toolbar=null,editbar=null,statusCard=null,cloud=null,clouds=[],cards=[],zone
 let pointerHover=null,lastFrame=0,lastUi=0,lastAction=0,latestPose=null,nextPaidAt=0,busy=false,mode='capture',statusText='Capture your space',statusUntil=0;
 let followMode=true,followBase=null,eyeBase=null,captureEye=null,eyeResource=null,cameraPreview=null,previewResource=null,lastPreview=0,eyeState='idle',eyeUntil=0,rootYaw=0,promptPanel=null,promptContext=null,promptText='',xrDomOverlay=false;
 let debugPanel=null,debugShowing=false,debugLast=0,serverPoll=0,serverDiagnostic=[],mascotPointer=null,mascotTex=null,lastAvatar=0,mixBucket=[],xrKeyboard=null;
+let followOffset=[0,-.53,-1.16],followWorld=null,eyeWorld=null,depthState='unknown',depthChecked=false,depthFeature=false,depthBinding=null,meshyJob=null,meshyPollAt=0,meshConfirm=null;
 let particles=[],handPinch=new WeakMap(),lastNative=new WeakMap(),clickState=new WeakMap(),lastEyeUpdate=0;
 const PW=600,PH=420,MAX_CLOUD=10,TAU=2*Math.PI;
-const tools=[['gallery','▣'],['capture','◉'],['voice','♫'],['mix','⊕'],['follow','◎'],['debug','≡'],['collapse','◌'],['exit','×']];
-const objectTools=[['back','↶'],['refine','✦'],['prompt','✎'],['mix','⊕'],['folder','▤'],['bin','⌫'],['voice','♫'],['debug','≡'],['exit','×']];
-const sourceTools=[['back','↶'],['extract','✳'],['refine','✦'],['prompt','✎'],['mix','⊕'],['bin','⌫'],['follow','◎'],['debug','≡'],['exit','×']];
-function currentTools(){return selected?.kind==='object'?objectTools:selected?.kind==='source'?sourceTools:tools;}
+// One navigation pill. Image-specific actions belong only to the selected card.
+const tools=[['gallery','▣'],['capture','◉'],['voice','♫'],['follow','◎'],['debug','≡'],['collapse','◌'],['exit','×']];
+const sourceTools=[['extract','✳'],['refine','✦'],['prompt','✎'],['3d','⬡'],['mix','⊕'],['bin','⌫']];
+const objectTools=[['refine','✦'],['prompt','✎'],['3d','⬡'],['mix','⊕'],['folder','▤'],['bin','⌫']];
+function currentTools(){return tools;}
+function imageTools(){return selected?.kind==='source'?sourceTools:objectTools;}
 function cue(name,src){window.FreeLabSound?.play(name);if(src)haptic(src,name==='hover'?.16:.35,name==='hover'?23:55);}
 function haptic(src,strength=.25,ms=35){try{const gamepad=src?.gamepad;const a=gamepad?.hapticActuators?.[0];if(a?.pulse){a.pulse(strength,ms).catch?.(()=>{});}else gamepad?.vibrationActuator?.playEffect?.('dual-rumble',{duration:ms,strongMagnitude:strength,weakMagnitude:strength*.7})?.catch?.(()=>{});}catch{}}
 
 const promptTools=[['voice','◎'],['apply','↗'],['keyboard','⌨'],['cancel','×']];
+const threeDTools=[['submit3d','⬡'],['cancel3d','×']];
 const V=`attribute vec3 aPos;attribute vec2 aUV;uniform mat4 uMVP;varying vec2 vUV;void main(){vUV=aUV;gl_Position=uMVP*vec4(aPos,1.);}`;
 const F=`precision mediump float;varying vec2 vUV;uniform sampler2D uTex;uniform bool uFlip;void main(){vec2 uv=vec2(uFlip?1.-vUV.x:vUV.x,vUV.y);gl_FragColor=texture2D(uTex,uv);}`;
 const LV=`attribute vec3 aPos;uniform mat4 uVP;uniform float uSize;void main(){gl_Position=uVP*vec4(aPos,1.);gl_PointSize=uSize;}`;
@@ -34,6 +38,10 @@ function quatNorm(a){const d=Math.hypot(...a)||1;return a.map(v=>v/d);}
 function quatMul(a,b){const [x,y,z,w]=a,[X,Y,Z,W]=b;return [w*X+x*W+y*Z-z*Y,w*Y-x*Z+y*W+z*X,w*Z+x*Y-y*X,w*W-x*X-y*Y-z*Z];}
 function quatInv(a){return [-a[0],-a[1],-a[2],a[3]];}
 function quatY(yaw){return [0,Math.sin(yaw/2),0,Math.cos(yaw/2)];}
+function blend(a,b,s){return a.map((v,i)=>v+(b[i]-v)*s);}
+function smoothYaw(a,b,alpha){return a+Math.atan2(Math.sin(b-a),Math.cos(b-a))*alpha;}
+// The card and the toolbar use different world-space roots; the headset cannot pull a saved photo along with it.
+function poseForwardAnchor(pose,metres,below=0){return viewerAnchor(pose,below,metres);}
 function quatMatrix(q){const [x,y,z,w]=quatNorm(q),xx=x*x,yy=y*y,zz=z*z,xy=x*y,xz=x*z,yz=y*z,wx=w*x,wy=w*y,wz=w*z;
  return new Float32Array([1-2*(yy+zz),2*(xy+wz),2*(xz-wy),0,2*(xy-wz),1-2*(xx+zz),2*(yz+wx),0,2*(xz+wy),2*(yz-wx),1-2*(xx+yy),0,0,0,0,1]);}
 function poseQuat(frame,src){try{let pose=null;
@@ -96,16 +104,17 @@ function cardTexture(imageSrc,labelText,sub='PRIVATE CAPTURE',back=false,onDimen
 function cardDimensions(width,height,kind){const aspect=height/Math.max(1,width),base=kind==='source'?.88:kind==='object'?.37:.35;
  const limit=kind==='source'?.95:kind==='object'?.60:.54;const widthMetres=Math.min(base,limit/aspect);
  return [widthMetres,widthMetres*aspect];}
-function toolbarTexture(kind){const names=kind==='prompt'?promptTools:currentTools();const w=kind==='prompt'?430:820,h=kind==='prompt'?114:165,[c,ctx]=canvas2d(w,h),step=w/names.length;
- rrect(ctx,0,0,w,h,62,'#383f3b');
- if(kind!=='prompt'){text(ctx,'FREELAB  ·  HOLD TOP EDGE TO MOVE',33,31,19,'#dff1e1',620);
-  text(ctx,statusText.slice(0,73),33,60,18,'#adbfaf',460);}
- const top=kind==='prompt'?0:69;
- names.forEach(([id,glyph],idx)=>{const x=step*(idx+.5),active=pointerHover===id;
-  rrect(ctx,x-36,top+1,72,h-top-3,30,active?'#647a6b':'#383f3b');
-  text(ctx,glyph,x,top+51,44,active?'#c6ffd0':'#fff',460,'center');
-  const labels={voice:'SPEAK',mix:'MIX',debug:'LOG',back:'BACK',gallery:'LIB',capture:'CAMERA',extract:'EXTRACT',refine:'IMPROVE',prompt:'PROMPT',follow:followMode?'PIN':'FOLLOW',folder:'FOLDER',bin:'BIN',collapse:'HIDE',exit:'EXIT',voice:'SPEAK',apply:'APPLY',keyboard:'TYPE',cancel:'CLOSE'};
-  text(ctx,labels[id]||id.toUpperCase(),x,h-16,18,'#edf4eb',570,'center');});
+function toolbarTexture(kind){const names=kind==='prompt'?promptTools:kind==='context'?imageTools():kind==='3d'?threeDTools:tools;
+ const w=kind==='prompt'?430:kind==='context'?740:kind==='3d'?540:740,h=kind==='prompt'?114:kind==='context'?122:kind==='3d'?120:145;
+ const [c,ctx]=canvas2d(w,h),step=w/names.length;
+ rrect(ctx,0,0,w,h,55,'#363d39');
+ if(kind==='main'){text(ctx,'FREELAB   ·   GRAB HERE TO MOVE',26,28,18,'#e7f3e9',650);}
+ const top=kind==='main'?40:3;
+ names.forEach(([id,glyph],idx)=>{const cx=step*(idx+.5),active=pointerHover===id;
+  if(active)rrect(ctx,cx-step*.43,top+1,step*.86,h-top-3,22,'#526b5b');
+  text(ctx,glyph,cx,top+49,40,active?'#d0ffdc':'#f3f7f4',580,'center');
+  const labels={gallery:'LIB',capture:'CAMERA',voice:'VOICE',follow:followMode?'PIN':'FOLLOW',debug:'LOG',collapse:'HIDE',exit:'EXIT',extract:'EXTRACT',refine:'RESTORE',prompt:'PROMPT','3d':'3D',mix:'MIX',folder:'FOLDER',bin:'BIN',apply:'APPLY',keyboard:'TYPE',cancel:'CLOSE',submit3d:'GENERATE 3D'};
+  text(ctx,labels[id]||id.toUpperCase(),cx,h-15,19,'#f0f4f1',580,'center');});
  return texture(c);}
 function promptTexture(){const t=toolbarTexture('prompt');return t;}
 function eyeTexture(){const [c,ctx]=canvas2d(320,320);const t=texture(c);return {canvas:c,ctx,tex:t};}
@@ -141,7 +150,7 @@ function mascotTexture(){const [c,ctx]=canvas2d(200,240);ctx.clearRect(0,0,200,2
  ctx.fillStyle='#ffffff';for(const x of [68,123]){ctx.beginPath();ctx.arc(x,84,4,0,TAU);ctx.fill();}
  ctx.fillStyle='#42674b';ctx.beginPath();ctx.ellipse(100,117,7,5,0,0,TAU);ctx.fill();return texture(c);}
 function debugTexture(){const [c,ctx]=canvas2d(820,370);rrect(ctx,0,0,c.width,c.height,28,'#313c36');text(ctx,'XR / SERVER DIAGNOSTICS · NO REQUEST BODIES',24,36,23,'#cefad5',690);
- const messages=[...(window.FreeLab?.getTrace?.()||[]).filter(x=>['error','api','warn'].includes(x.kind)).slice(-6).map(x=>x.at+' '+x.message),...serverDiagnostic.slice(-5).map(x=>x.time.slice(11,19)+' '+x.method+' '+x.path+' · HTTP '+x.status+' · '+x.duration_ms+'ms')];
+ const messages=['DEPTH: '+depthState,...(window.FreeLab?.getTrace?.()||[]).filter(x=>['error','api','warn'].includes(x.kind)).slice(-6).map(x=>x.at+' '+x.message),...serverDiagnostic.slice(-5).map(x=>x.time.slice(11,19)+' '+x.method+' '+x.path+' · HTTP '+x.status+' · '+x.duration_ms+'ms')];
  if(!messages.length)messages.push('No recorded errors. Extract and API requests appear here when available.');
  messages.slice(-8).forEach((msg,i)=>text(ctx,String(msg).slice(0,92),24,80+i*34,18,'#ebf4ea',490));return texture(c);}
 async function loadServerDiagnostic(){if(!session||!debugShowing)return;try{const data=await window.FreeLab.serverDiagnostics();serverDiagnostic=data.entries||[];}catch(e){serverDiagnostic=[{time:new Date().toISOString(),method:'INFO',path:'Server diagnostics: '+e.message,status:'-',duration_ms:0}];}}
@@ -174,8 +183,29 @@ function tween(t){const now=performance.now();for(const c of cards){if(c.duratio
 function launchParticles(center){for(let i=0;i<45;i++){const a=Math.random()*TAU,s=Math.random()*.85+.14;particles.push({p:vadd(center,[Math.cos(a)*.12,Math.sin(a)*.12,Math.random()*.2]),v:[Math.cos(a)*s,Math.sin(a)*s,(Math.random()-.5)*s],born:performance.now(),ttl:750+Math.random()*650});}}
 function clearCards(){if(!gl)return;for(const c of cards)for(const t of c.resources||[])gl.deleteTexture(t);cards=[];selected=null;}
 function rootPos(c){return cloud&&!['toolbar','status','captureeye','capturepreview'].includes(c.kind)?vadd(c.pos,cloud.offset||[0,0,0]):c.pos;}
-function baseFor(c){if(c.kind==='pointer-mascot')return translate();if(['captureeye','capturepreview'].includes(c.kind))return eyeBase||root;return followMode&&['toolbar','status'].includes(c.kind)?followBase||root:root;}
-function cardModel(c){const p=rootPos(c);const sc=c.scale*(c.animScale===undefined?1:c.animScale);
+function baseFor(c){if(c.kind==='pointer-mascot'||['toolbar','status','captureeye','capturepreview','diagnostics'].includes(c.kind))return translate();return root;}
+function cameraYaw(pose){return yawFromMatrix(pose.transform.matrix);}
+function syncTrackedUI(pose,t){
+ const yaw=cameraYaw(pose),head=pose.transform.matrix;
+ // An upright, camera-facing toolbar with spatial inertia, no accidental inherited pivot.
+ if(followMode&&toolbar&&!held?.card?.kind?.includes('toolbar')){
+  const desired=point(head,[0,0,0]);const yawMatrix=rotateY(yaw),offset=point(yawMatrix,followOffset,0);
+  const target=vadd(desired,offset),alpha=1-Math.exp(-Math.min(.08,(t-lastFrame||16)/1000)*7.5);
+  toolbar.pos=blend(toolbar.pos,target,alpha);
+ }
+ if(toolbar)toolbar.q=quatY(yaw);
+ // Eye is deliberately smaller and trails the gaze instead of being cemented to the face.
+ if(captureEye){const target=point(poseForwardAnchor(pose,1.02,-.18),[0,0,0]);
+  const a=1-Math.exp(-Math.min(.08,(t-lastFrame||16)/1000)*3.1);
+  captureEye.pos=blend(captureEye.pos,target,a);captureEye.q=quatY(yaw);}
+ if(cameraPreview){cameraPreview.pos=vadd(captureEye?.pos||[head[12],head[13],head[14]],point(rotateY(yaw),[.30,0,-.03],0));cameraPreview.q=quatY(yaw);}
+ if(debugPanel){debugPanel.pos=vadd(toolbar?.pos||[head[12],head[13]-.5,head[14]-1.1],[0,-.38,0]);debugPanel.q=quatY(yaw);}
+ lastFrame=t;
+}
+function cardModel(c){
+ if(['contextbar','3dbar'].includes(c.kind)&&c.parentCard){const p=c.parentCard,sc=p.scale*(p.animScale===undefined?1:p.animScale),y=-p.size[1]*sc*.5-.095;
+  return matmul(baseFor(p),matmul(translate(...rootPos(p)),matmul(quatMatrix(p.q||quatY(p.rot||0)),matmul(translate(0,y,.012),scale(c.size[0],c.size[1],1)))));}
+ const p=rootPos(c),sc=c.scale*(c.animScale===undefined?1:c.animScale);
  return matmul(baseFor(c),matmul(translate(...p),matmul(quatMatrix(c.q||quatY(c.rot||0)),scale(c.size[0]*sc,c.size[1]*sc,1))));}
 function cardBack(c){return quatMatrix(c.q||quatY(c.rot||0))[10]<0;}
 function drawCard(c,vp){if(!c.visible||!c.front||c.animScale===0)return;const tex=cardBack(c)?c.back:c.front;
@@ -190,25 +220,25 @@ function decoration(vp){if(!cloud||cloud.collapsed||cloud.hidden)return;const co
 function highlightCards(vp,t){for(const c of cards){if(!c.visible||!(c.highlightUntil>t))continue;
  const m=cardModel(c),vertices=[[-.54,-.54,0],[.54,-.54,0],[.54,.54,0],[-.54,.54,0]].map(p=>point(m,p));line(vp,vertices,[.65,1,.75,.8],true,5);}}
 function sparkles(vp,t){const ps=[];particles=particles.filter(p=>t-p.born<p.ttl);for(const p of particles){const u=clamp((t-p.born)/1000,0,2);ps.push(point(root,vadd(p.p,vmul(p.v,u))));}if(ps.length)line(vp,ps,[.75,1,.78,.66],true,4);}
-function place(pose){root=viewerAnchor(pose,-.04,1.35);rootYaw=yawFromMatrix(pose.transform.matrix);
- followBase=viewerAnchor(pose,-.46,1.07);eyeBase=viewerAnchor(pose,-.13,1.06);poseReady=true;
- if(!toolbar){toolbar={id:'toolbar',kind:'toolbar',size:[1.08,.183],pos:followMode?[0,0,0]:[0,-.59,.19],q:[0,0,0,1],scale:1,visible:true,front:toolbarTexture('main'),back:null,resources:[]};toolbar.back=toolbar.front;toolbar.resources=[toolbar.front];}
- if(!captureEye){eyeResource=eyeTexture();captureEye={id:'captureeye',kind:'captureeye',size:[.145,.145],pos:[0,0,0],q:[0,0,0,1],scale:1,visible:true,front:eyeResource.tex,back:eyeResource.tex,resources:[eyeResource.tex]};paintEye(performance.now());}
+function place(pose){root=viewerAnchor(pose,-.04,1.45);rootYaw=yawFromMatrix(pose.transform.matrix);poseReady=true;
+ if(!toolbar){const h=pose.transform.matrix,world=point(h,[0,0,0]),off=point(rotateY(cameraYaw(pose)),followOffset,0);toolbar={id:'toolbar',kind:'toolbar',size:[.91,.18],pos:vadd(world,off),q:quatY(cameraYaw(pose)),scale:1,visible:true,front:toolbarTexture('main'),back:null,resources:[]};toolbar.back=toolbar.front;toolbar.resources=[toolbar.front];}
+ if(!captureEye){eyeResource=eyeTexture();captureEye={id:'captureeye',kind:'captureeye',size:[.087,.087],pos:point(poseForwardAnchor(pose,1.02,-.18),[0,0,0]),q:quatY(cameraYaw(pose)),scale:1,visible:true,front:eyeResource.tex,back:eyeResource.tex,resources:[eyeResource.tex]};paintEye(performance.now());}
  if(window.FreeLab?.getState?.()?.stream?.getVideoTracks?.().some(t=>t.readyState==='live'&&!t.muted))showLivePreview();
  if(!zones.length){for(const [id,glyph,pos] of [['folder-zone','▤',[-.7,-.8,.14]],['bin-zone','⌫',[.7,-.8,.14]],['mix-zone','⊕',[0,-.82,.14]]]){const t=zoneTexture(glyph,id==='bin-zone'?'BIN':id==='mix-zone'?'MIX':'FOLDER');zones.push({id,kind:'zone',pos,size:[.19,.19],rot:0,scale:1,visible:true,front:t,back:t,resources:[t]});}}
  setStatus('Select the central eye to enable camera or capture · drag toolbar header',7000);}
-function toggleFollow(){if(!toolbar)return;const oldBase=baseFor(toolbar),world=point(oldBase,toolbar.pos),worldQ=quatMul(quatY(yawFromMatrix(oldBase)),toolbar.q||[0,0,0,1]);followMode=!followMode;const newBase=baseFor(toolbar),inv=inverse(newBase);
- if(inv)toolbar.pos=point(inv,world);toolbar.q=quatMul(quatY(-yawFromMatrix(newBase)),worldQ);refreshToolbar();cue('pin');
- setStatus(followMode?'FOLLOW · drag the top edge to shift its position':'PINNED IN ROOM · drag the top edge to reposition',5500);}
+function toggleFollow(){if(!toolbar)return;
+ followMode=!followMode;
+ if(followMode&&latestPose){const h=latestPose.transform.matrix,yaw=cameraYaw(latestPose);const delta=vsub(toolbar.pos,[h[12],h[13],h[14]]);followOffset=point(rotateY(-yaw),delta,0);}
+ refreshToolbar();cue('pin');setStatus(followMode?'FOLLOW · smooth head tracking; drag header to offset':'PINNED · same room position, always facing you',5500);}
 
 function ray(frame,src){try{const sp=src.targetRaySpace?frame.getPose(src.targetRaySpace,refSpace):null;if(sp){const m=sp.transform.matrix;return {o:[m[12],m[13],m[14]],d:norm([-m[8],-m[9],-m[10]])};}
  if(src.hand){const a=frame.getJointPose(src.hand.get('index-finger-tip'),refSpace),b=frame.getJointPose(src.hand.get('wrist'),refSpace);if(a&&b){const o=[a.transform.position.x,a.transform.position.y,a.transform.position.z];const w=[b.transform.position.x,b.transform.position.y,b.transform.position.z];return {o,d:norm(vsub(o,w))};}}
  }catch{}return null;}
 function hitTest(r,c){if(!r||!c.visible||!c.front||c.animScale===0)return null;const m=cardModel(c),inv=inverse(m);if(!inv)return null;const o=point(inv,r.o),d=point(inv,r.d,0);if(Math.abs(d[2])<1e-6)return null;const k=-o[2]/d[2];if(k<=0||k>6)return null;const x=o[0]+d[0]*k,y=o[1]+d[1]*k;if(Math.abs(x)>.5||Math.abs(y)>.5)return null;const hitWorld=point(m,[x,y,0]);const dist=length(vsub(hitWorld,r.o));return {card:c,x,y,dist};}
-function pick(r){const opts=[...cards,toolbar,captureEye,promptPanel].filter(Boolean),all=opts.map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return all[0]||null;}
+function pick(r){const opts=[...cards,toolbar,captureEye,promptPanel,editbar].filter(Boolean),all=opts.map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return all[0]||null;}
 function buttonFromHit(h){if(!h)return null;if(h.card.kind==='captureeye')return 'capture';
  if(h.card.kind==='toolbar'&&h.y>.16)return null; // visible header is a real drag handle
- if(['toolbar','promptbar'].includes(h.card.kind)){const list=h.card.kind==='promptbar'?promptTools:currentTools();const idx=clamp(Math.floor((h.x+.5)*list.length),0,list.length-1);return list[idx][0];}
+ if(['toolbar','promptbar','contextbar','3dbar'].includes(h.card.kind)){const list=h.card.kind==='promptbar'?promptTools:h.card.kind==='contextbar'?imageTools():h.card.kind==='3dbar'?threeDTools:tools;const idx=clamp(Math.floor((h.x+.5)*list.length),0,list.length-1);return list[idx][0];}
  return null;}
 
 function grabStart(frame,src,manual=false){const r=ray(frame,src),h=pick(r);if(!h)return;
@@ -245,7 +275,11 @@ async function grabEnd(src,frame){if(held?.second?.src===src){held.second=null;r
  else if(h.card.kind==='binitem'){try{await window.FreeLab.updateXRObject(h.card.data.id,{shelf:'collection'});await openBin();setStatus('Object restored from Bin');}catch(e){setStatus(e.message);}}
 }
 function spatialData(c){return {x:+c.pos[0].toFixed(3),y:+c.pos[1].toFixed(3),z:+c.pos[2].toFixed(3),scale:+c.scale.toFixed(3),rotation:+c.rot.toFixed(3),qx:+(c.q||[0,0,0,1])[0].toFixed(5),qy:+(c.q||[0,0,0,1])[1].toFixed(5),qz:+(c.q||[0,0,0,1])[2].toFixed(5),qw:+(c.q||[0,0,0,1])[3].toFixed(5)};}
-function updateEditbar(){editbar=null;refreshToolbar();}
+function updateEditbar(){
+ if(editbar?.front&&gl)gl.deleteTexture(editbar.front);
+ editbar=null;
+ if(selected&&['object','source'].includes(selected.kind)&&gl){const tex=toolbarTexture('context');editbar={id:'context-actions',kind:'contextbar',parentCard:selected,size:[Math.max(.52,Math.min(.80,selected.size[0]*selected.scale*.95)),.115],pos:[0,0,0],scale:1,q:[0,0,0,1],visible:true,front:tex,back:tex,resources:[tex]};}
+ refreshToolbar();}
 
 function advanceGrab(frame){if(!held)return;const r=ray(frame,held.src);if(!r)return;
  const next=vadd(r.o,vmul(r.d,held.rayDist));if(!held.anchor){held.anchor=next;return;}
@@ -256,7 +290,9 @@ function advanceGrab(frame){if(!held)return;const r=ray(frame,held.src);if(!r)re
    const ir=inverse(base);if(!ir)return;const rootDelta=point(ir,delta,0);
    if(held.card.kind==='source'&&cloud){cloud.offset=vadd(cloud.offset||[0,0,0],rootDelta);}
    else held.card.pos=vadd(held.card.pos,rootDelta);
-   if(held.card.kind==='toolbar')held.card.pos=[clamp(held.card.pos[0],-1.5,1.5),clamp(held.card.pos[1],-.85,.85),clamp(held.card.pos[2],-.35,.6)];
+   if(held.card.kind==='toolbar'&&followMode&&latestPose){const h=latestPose.transform.matrix,yaw=cameraYaw(latestPose);
+    const d=vsub(held.card.pos,[h[12],h[13],h[14]]);followOffset=point(rotateY(-yaw),d,0);
+    followOffset=[clamp(followOffset[0],-.9,.9),clamp(followOffset[1],-1,.05),clamp(followOffset[2],-1.9,-.5)];}
    if(held.card.kind==='object'&&selected===held.card)updateEditbar();
   }
  }
@@ -280,6 +316,23 @@ function pinchPoll(frame,src){if(!src.hand||typeof frame.getJointPose!=='functio
 function updateHover(frame){let found=null,source=null;for(const src of session.inputSources){const hit=pick(ray(frame,src));if(hit){found=buttonFromHit(hit)||hit.card.id;source=src;break;}}
  if(pointerHover===found)return;pointerHover=found;if(found){window.FreeLabSound?.hover();haptic(source,.17,25);}refreshToolbar();}
 
+const handBones=[['wrist','thumb-metacarpal'],['thumb-metacarpal','thumb-phalanx-proximal'],['thumb-phalanx-proximal','thumb-phalanx-distal'],['thumb-phalanx-distal','thumb-tip'],
+ ...['index','middle','ring','pinky'].flatMap(n=>[['wrist',n+'-finger-metacarpal'],[n+'-finger-metacarpal',n+'-finger-phalanx-proximal'],[n+'-finger-phalanx-proximal',n+'-finger-phalanx-intermediate'],[n+'-finger-phalanx-intermediate',n+'-finger-phalanx-distal'],[n+'-finger-phalanx-distal',n+'-finger-tip']])];
+function drawHands(frame,vp){for(const src of session.inputSources){if(!src.hand||!frame.getJointPose)continue;const joints=new Map();
+ for(const joint of src.hand.values()){try{const p=frame.getJointPose(joint,refSpace);if(p){const pos=p.transform.position;joints.set(joint.jointName,[pos.x,pos.y,pos.z]);}}catch{}}
+ // Hand skeleton is real tracked XR joint data (not a video-derived mesh).
+ const lines=[];for(const [a,b] of handBones)if(joints.has(a)&&joints.has(b))lines.push(joints.get(a),joints.get(b));
+ if(lines.length)line(vp,lines,[.58,1,.70,.78]);if(joints.size)line(vp,[...joints.values()],[.78,1,.81,.95],true,8);
+ }}
+function depthCapability(frame,view){if(depthChecked)return;depthChecked=true;
+ try{if(typeof XRWebGLBinding==='function'&&session?.enabledFeatures?.has?.('depth-sensing')){
+  depthBinding=new XRWebGLBinding(session,gl);const info=depthBinding.getDepthInformation(view);
+  depthState=info?'GPU depth available (occlusion not enabled)':'Depth feature enabled; waiting for texture';
+ }else if(typeof frame.getDepthInformation==='function'&&session?.enabledFeatures?.has?.('depth-sensing')){
+  const info=frame.getDepthInformation(view);depthState=info?'CPU depth available (occlusion not enabled)':'Depth feature enabled; waiting for data';
+ }else depthState='No depth-sensing permission or API';
+ }catch(e){depthState='Depth query unavailable: '+e.message;}
+ window.FreeLab?.traceEvent?.('XR depth: '+depthState,'api');}
 function updateView(t,frame){if(!session)return;
  try {renderView(t,frame);}catch(e){console.error('FREELAB XR rendering stopped:',e);window.FreeLab?.notify?.('XR renderer error: '+(e?.message||String(e)));session?.end().catch(()=>{});}
 }
@@ -290,16 +343,16 @@ function updateMascot(frame,t){if(!window.FreeLab?.pref?.('mascot')){if(mascotPo
  if(!mascotPointer){mascotTex=mascotTexture();mascotPointer={id:'pointer-mascot',kind:'pointer-mascot',size:[.12,.15],pos:[0,0,0],q:[0,0,0,1],scale:1,visible:true,front:mascotTex,back:mascotTex};}
  const h=pick(rayOne),dest=vadd(rayOne.o,vmul(rayOne.d,(h?.dist||1.2)-.055));dest[1]+=.045;
  mascotPointer.pos=vadd(vmul(mascotPointer.pos,.66),vmul(dest,.34));mascotPointer.q=quatY(yawFromMatrix(latestPose?.transform?.matrix||translate()));mascotPointer.visible=true;}
-function renderView(t,frame){const pose=frame.getViewerPose(refSpace);if(!pose){session.requestAnimationFrame(updateView);return;}latestPose=pose;if(!poseReady)place(pose);followBase=viewerAnchor(pose,-.46,1.07);eyeBase=viewerAnchor(pose,-.13,1.06);
- advanceGrab(frame);for(const src of session.inputSources)pinchPoll(frame,src);tween(t);updateMascot(frame,t);updateDebugCard(t);if(captureEye&&t-lastEyeUpdate>67){if(eyeState!=='idle'&&t>eyeUntil)eyeState='idle';paintEye(t);lastEyeUpdate=t;}updateLivePreview(t);if(t-lastUi>150){updateHover(frame);lastUi=t;}
+function renderView(t,frame){const pose=frame.getViewerPose(refSpace);if(!pose){session.requestAnimationFrame(updateView);return;}latestPose=pose;if(!poseReady)place(pose);syncTrackedUI(pose,t);
+ poll3d(t);advanceGrab(frame);for(const src of session.inputSources)pinchPoll(frame,src);tween(t);updateMascot(frame,t);updateDebugCard(t);if(captureEye&&t-lastEyeUpdate>67){if(eyeState!=='idle'&&t>eyeUntil)eyeState='idle';paintEye(t);lastEyeUpdate=t;}updateLivePreview(t);if(t-lastUi>150){updateHover(frame);lastUi=t;}
  gl.bindFramebuffer(gl.FRAMEBUFFER,session.renderState.baseLayer.framebuffer);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
  for(const view of pose.views){const vp0=session.renderState.baseLayer.getViewport(view);gl.viewport(vp0.x,vp0.y,vp0.width,vp0.height);const vp=matmul(view.projectionMatrix,view.transform.inverse.matrix);
- decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(captureEye)drawCard(captureEye,vp);if(cameraPreview?.visible)drawCard(cameraPreview,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(mascotPointer?.visible)drawCard(mascotPointer,vp);if(held?.card&&['object','source'].includes(held.card.kind))for(const z of zones)drawCard(z,vp);sparkles(vp,t);highlightCards(vp,t);
+ decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(editbar)drawCard(editbar,vp);if(captureEye)drawCard(captureEye,vp);if(cameraPreview?.visible)drawCard(cameraPreview,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(mascotPointer?.visible)drawCard(mascotPointer,vp);if(held?.card&&['object','source'].includes(held.card.kind))for(const z of zones)drawCard(z,vp);sparkles(vp,t);highlightCards(vp,t);drawHands(frame,vp);depthCapability(frame,view);
  for(const src of session.inputSources){const r=ray(frame,src);if(!r)continue;const h=pick(r),end=vadd(r.o,vmul(r.d,h?.dist||1.2));const colour=src.hand?[.72,1,.75,.7]:[.77,.88,1,.72];line(vp,[r.o,end],colour);line(vp,[end],colour,true,h?16:9);}
  }session.requestAnimationFrame(updateView);}
 function ringPosition(i,n){const a=(i/(Math.max(5,n)))*TAU-.32;const rings=n>6&&i>=6?1.15:1;const radiusX=.76*rings,radiusY=.48*rings;return [Math.cos(a)*radiusX,Math.sin(a)*radiusY+.03,-.10+Math.sin(i*2.4)*.18];}
 function sourceCard(data){return addCard('source','source',{label:data.legacy?'LEGACY ARCHIVE':'CAPTURE  '+String(data.id).padStart(2,'0'),subtitle:data.legacy?'OLDER SAVED OBJECTS · NOT A ROOM FRAME':'SOURCE FRAME  ·  PRIVATE',image:data.image||data.image_url,description:'Captured real pixels, not the WebXR passthrough compositor'},[0,.07,0],[.88,.63]);}
-async function showCloud(id){closePrompt();const next=clouds.find(c=>c.id===id);if(!next){setStatus('Capture not found');return;}clearCards();mode='capture';cloud={...next,offset:['x','y','z'].map(k=>Number(next.spatial?.[k])||0)};
+async function showCloud(id){if(latestPose){root=viewerAnchor(latestPose,-.03,1.42);rootYaw=cameraYaw(latestPose);}closePrompt();const next=clouds.find(c=>c.id===id);if(!next){setStatus('Capture not found');return;}clearCards();mode='capture';cloud={...next,offset:['x','y','z'].map(k=>Number(next.spatial?.[k])||0)};
  if(next.hidden&&id>0){next.hidden=false;window.FreeLab.updateXRCloud(id,{hidden:false}).catch(()=>{});}
  const src=sourceCard(next);if(['qx','qy','qz','qw'].every(k=>typeof next.spatial?.[k]==='number'))src.q=quatNorm([next.spatial.qx,next.spatial.qy,next.spatial.qz,next.spatial.qw]);src.animScale=.08;animate(src,src.pos,0,660);
  const visible=next.objects.filter(o=>o.shelf!=='bin').slice(0,MAX_CLOUD);
@@ -311,7 +364,7 @@ async function showCloud(id){closePrompt();const next=clouds.find(c=>c.id===id);
  if(id>0)await window.FreeLab.useXRFrame?.(next.image||next.image_url).catch(e=>setStatus(e.message));
 }
 function spatialLoc(o,i,n){const pos=ringPosition(i,n);if(o.spatial&&typeof o.spatial.x==='number')return [o.spatial.x,o.spatial.y,o.spatial.z];return pos;}
-async function openGallery(){mode='gallery';selected=null;updateEditbar();clearCards();cloud=null;
+async function openGallery(){if(latestPose){root=viewerAnchor(latestPose,-.03,1.42);rootYaw=cameraYaw(latestPose);}mode='gallery';selected=null;updateEditbar();clearCards();cloud=null;
  try{clouds=await window.FreeLab.listXRClouds();}catch(e){setStatus(e.message);return;}
  const previews=clouds.filter(x=>!x.hidden).slice(0,MAX_CLOUD);for(let i=0;i<previews.length;i++){const c=previews[i],col=i%4,row=Math.floor(i/4);addCard('gallery'+c.id,'gallery',{id:c.id,image:c.image_url,label:'CAPTURE '+c.id,subtitle:c.objects.length+' OBJECT(S)'},[(col-1.5)*.38,.21-row*.43,-.05],[.31,.35]);}
  setStatus(previews.length?`${previews.length} saved capture(s) · select one to open`:'No saved captures yet · press +');}
@@ -342,6 +395,7 @@ async function makeCapture(){if(busy)return;busy=true;
   setEyeState('snapping',2200);setStatus('CAPTURING · original image preserved',11000);
   let pending=null;
   const item=await window.FreeLab.saveXRFrame(image=>{
+   if(latestPose){root=viewerAnchor(latestPose,-.03,1.42);rootYaw=cameraYaw(latestPose);}
    clearCards();cloud=null;mode='capture';pending=addCard('source','source',{
    image,label:'CAPTURE · SAVING',subtitle:'SAVING PRIVATE FRAME · NO MODEL BILLING'},[0,.07,0],[.88,.63]);
    pending.animScale=.05;animate(pending,pending.pos,0,850);
@@ -402,7 +456,7 @@ function openPrompt(prefill=''){const target=currentPromptTarget();if(!target)re
  promptContext=target;promptText=prefill;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);
  promptPanel={id:'promptbar',kind:'promptbar',pos:vadd(target.card.pos,[0,-.43,.18]),size:[.48,.11],q:[0,0,0,1],scale:1,visible:true,front:toolbarTexture('prompt')};promptPanel.back=promptPanel.front;
  setStatus('PROMPT · Speak, Type, then Apply · source is preserved',9000);}
-function closePrompt(){if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;promptContext=null;promptText='';}
+function closePrompt(){if(meshConfirm)meshConfirm=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;promptContext=null;promptText='';}
 function findLabel(phrase){const clean=phrase.toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
  const m=clean.match(/^(?:where (?:is|are) (?:my |the |a )?|find (?:my |the |a )?|show (?:me )?(?:my |the )?|locate (?:my |the )?|highlight (?:my |the )?)(.+?)(?: please)?$/);
  return m?.[1]?.trim()||null;}
@@ -461,19 +515,34 @@ async function collapse(){if(!cloud)return openGallery();if(cloud.collapsed){awa
  cloud.collapsed=true;const dest=vadd([0,.07,.01],cloud.offset||[0,0,0]);cards.forEach((c,i)=>{animate(c,dest,i*35,950,true);});launchParticles(dest);
  if(cloud.id>0)window.FreeLab.updateXRCloud(cloud.id,{collapsed:true}).catch(e=>setStatus(e.message));setStatus('Cloud collapsing · tap ▣ for saved captures',4500);
  setTimeout(()=>{if(cloud?.collapsed){clearCards();cloud=null;selected=null;updateEditbar();}},1350);}
+async function submit3d(){if(!meshConfirm||busy)return;const target=meshConfirm;
+ close3d();busy=true;setStatus('3D job starting · Meshy charges credits only after confirmation',11000);
+ try{const job=await window.FreeLab.createXR3D(target.captureId,target.objectId);meshyJob=job.id;meshyPollAt=0;
+  setStatus('3D generation queued · Meshy · job '+String(job.id).slice(0,8)+' · use LOG for status',14000);
+ }catch(e){setStatus('3D generation failed · '+e.message,16000);}finally{busy=false;}}
+function close3d(){if(promptPanel?.kind==='3dbar'){if(gl)gl.deleteTexture(promptPanel.front);promptPanel=null;}meshConfirm=null;}
+function open3d(){if(!selected||!['source','object'].includes(selected.kind)||!cloud?.id)return setStatus('Select an image to generate a 3D model');
+ closePrompt();close3d();meshConfirm={captureId:cloud.id,objectId:selected.kind==='object'?selected.data.id:null,label:selected.data.label};
+ const tex=toolbarTexture('3d');promptPanel={id:'3dbar',kind:'3dbar',parentCard:selected,pos:[0,0,0],size:[.50,.11],q:[...selected.q],scale:1,visible:true,front:tex,back:tex};
+ setStatus('Meshy IMAGE → 3D · requires server key · paid only after GENERATE 3D',15000);}
+async function poll3d(t){if(!meshyJob||t-meshyPollAt<14000)return;meshyPollAt=t;
+ try{const job=await window.FreeLab.checkXR3D(meshyJob);if(job.status==='SUCCEEDED'){setStatus('3D MODEL READY · GLB available in the Collection / 3D Models panel',17000);cue('bloom');meshyJob=null;}
+ else if(['FAILED','CANCELED'].includes(job.status)){setStatus('3D job '+job.status+' · '+(job.error||'review provider account'),14000);meshyJob=null;}
+ else if(debugShowing)setStatus('3D generation '+job.progress+'% · '+job.status,5500);
+ }catch(e){setStatus('3D polling issue · '+e.message,12000);}}
 async function action(id){const t=performance.now();if(t-lastAction<200)return;lastAction=t;
  switch(id){case 'back':selected=null;updateEditbar();return setStatus('All tools · select a card to see image actions');case 'capture':return makeCapture();case 'extract':return runExtract();case 'sam':return runSam();
- case 'voice':return voicePrompt();case 'debug':debugShowing=!debugShowing;if(debugShowing){serverPoll=0;loadServerDiagnostic();}return setStatus(debugShowing?'LOG OPEN · API errors and server request status':'LOG CLOSED',6500);case 'mix':return mixAdd();case 'prompt':return openPrompt();case 'refine':return openPrompt('Restore this image with more detail and a higher resolution. Preserve the original subject, composition and identity; do not invent new objects.');case 'apply':return applyPrompt();case 'keyboard':return keyboardPrompt();case 'cancel':return closePrompt();
+ case '3d':return open3d();case 'submit3d':return submit3d();case 'cancel3d':return close3d();case 'voice':return voicePrompt();case 'debug':debugShowing=!debugShowing;if(debugShowing){serverPoll=0;loadServerDiagnostic();}return setStatus(debugShowing?'LOG OPEN · API errors and server request status':'LOG CLOSED',6500);case 'mix':return mixAdd();case 'prompt':return openPrompt();case 'refine':return openPrompt('Restore this image with more detail and a higher resolution. Preserve the original subject, composition and identity; do not invent new objects.');case 'apply':return applyPrompt();case 'keyboard':return keyboardPrompt();case 'cancel':return closePrompt();
  case 'follow':return toggleFollow();case 'gallery':return openGallery();case 'collapse':return collapse();
  case 'exit':return session?.end();case 'bin':return selected?.kind==='object'?changeObject('bin'):selected?.kind==='source'?binSource():openBin();case 'folder':return changeObject('folder');}}
 async function start(){if(session)return;if(!navigator.xr||!await navigator.xr.isSessionSupported('immersive-ar'))throw Error('Use Meta Quest Browser with immersive-ar support');
- setup();await gl.makeXRCompatible();session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['local'],optionalFeatures:['local-floor','hand-tracking','plane-detection','anchors','dom-overlay'],domOverlay:{root:document.getElementById('xrPromptEditor')}});xrDomOverlay=Boolean(session.domOverlayState);session.updateRenderState({baseLayer:new XRWebGLLayer(session,gl,{alpha:true,antialias:false})});
- try{refSpace=await session.requestReferenceSpace('local-floor');}catch{refSpace=await session.requestReferenceSpace('local');}poseReady=false;
+ setup();await gl.makeXRCompatible();session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['local'],optionalFeatures:['local-floor','hand-tracking','plane-detection','anchors','dom-overlay','depth-sensing'],depthSensing:{usagePreference:['gpu-optimized','cpu-optimized'],dataFormatPreference:['luminance-alpha','float32']},domOverlay:{root:document.getElementById('xrPromptEditor')}});xrDomOverlay=Boolean(session.domOverlayState);session.updateRenderState({baseLayer:new XRWebGLLayer(session,gl,{alpha:true,antialias:false})});
+ try{refSpace=await session.requestReferenceSpace('local-floor');}catch{refSpace=await session.requestReferenceSpace('local');}poseReady=false;depthChecked=false;depthState='not requested';
  session.addEventListener('selectstart',e=>{lastNative.set(e.inputSource,performance.now());grabStart(e.frame,e.inputSource);});
  session.addEventListener('selectend',e=>{lastNative.set(e.inputSource,performance.now());grabEnd(e.inputSource,e.frame);});
  session.addEventListener('squeezestart',e=>{lastNative.set(e.inputSource,performance.now());grabStart(e.frame,e.inputSource);});
  session.addEventListener('squeezeend',e=>{lastNative.set(e.inputSource,performance.now());grabEnd(e.inputSource,e.frame);});
- session.addEventListener('end',()=>{cue('release');session=null;poseReady=false;held=null;clearCards();cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(captureEye?.front)gl.deleteTexture(captureEye.front);if(cameraPreview?.front)gl.deleteTexture(cameraPreview.front);cameraPreview=null;previewResource=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
+ session.addEventListener('end',()=>{cue('release');session=null;poseReady=false;held=null;clearCards();cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(captureEye?.front)gl.deleteTexture(captureEye.front);if(cameraPreview?.front)gl.deleteTexture(cameraPreview.front);cameraPreview=null;previewResource=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
  const saved=await window.FreeLab.listXRClouds().catch(()=>[]);clouds=saved;setStatus('CAPTURE → EXTRACT → PROMPT · camera pixels required',8500);session.requestAnimationFrame(updateView);
 }
 window.FreeLabXR={start,isRunning:()=>!!session};

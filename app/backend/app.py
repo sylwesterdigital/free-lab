@@ -5,7 +5,7 @@ from pathlib import Path
 from functools import wraps
 from flask import Flask,abort,g,jsonify,request,send_file,session
 from werkzeug.middleware.proxy_fix import ProxyFix
-from . import db,providers,secrets as keyvault,sam,provider_checks,media
+from . import db,providers,secrets as keyvault,sam,provider_checks,media,meshy3d
 
 APP_ROOT=Path(__file__).resolve().parents[1]
 DATA_DIR=Path(os.getenv('FREE_LAB_DATA_DIR',APP_ROOT/'var')).resolve()
@@ -500,7 +500,73 @@ def admin_diagnostics():
 def media_capabilities():
     return jsonify(image_edit={'meta':{'model':'muse-image-1.0','available':bool(keyvault.get_meta_key(g.con))}},
                    speech={'meta':{'model':'muse-voice-transcribe-1.0','available':bool(keyvault.get_meta_key(g.con))}},
-                   video={},three_d={},message='3D/video creation requires provider-specific adapters; no inference is submitted for those options.')
+                   video={},three_d={'meshy':{'available':bool(keyvault.get_key(g.con,'meshy')),'async':True,'model':'meshy-6-lite'}},message='3D generation is opt-in via Meshy. Other 3D/video provider adapters are not yet connected.')
+
+def job_3d_dict(row):
+    return {'id':row['id'],'capture_id':row['capture_id'],'object_id':row['object_id'],
+            'provider':row['provider'],'status':row['status'],'progress':row['progress'],
+            'credits':row['credits'],'glb_url':row['glb_url'],'thumbnail_url':row['thumbnail_url'],
+            'error':row['error'],'created_at':row['created_at']}
+
+@app.get('/api/media/3d')
+@require_user
+def jobs_3d():
+    rows=g.con.execute('SELECT * FROM jobs_3d WHERE owner_id=? ORDER BY id DESC LIMIT 50',(g.user['id'],)).fetchall()
+    return jsonify(jobs=[job_3d_dict(row) for row in rows])
+
+@app.post('/api/media/3d')
+@require_user
+def media_3d_start():
+    v=body()
+    if v.get('provider','meshy')!='meshy':return jsonify(error='Only Meshy 3D generation is connected'),422
+    if v.get('confirm_paid') is not True:return jsonify(error='Explicit paid-task confirmation required'),400
+    cid=v.get('capture_id');oid=v.get('object_id')
+    if type(cid) is not int or cid<=0:return jsonify(error='Capture ID required'),400
+    cap=g.con.execute('SELECT image_name FROM captures WHERE id=? AND owner_id=? AND hidden=0',(cid,g.user['id'])).fetchone()
+    if not cap:abort(404)
+    name=cap['image_name']
+    if oid is not None:
+        if type(oid) is not int or oid<=0:return jsonify(error='Invalid object ID'),400
+        obj=g.con.execute('SELECT image_name FROM objects WHERE id=? AND capture_id=? AND owner_id=? AND shelf!=?',
+                          (oid,cid,g.user['id'],'bin')).fetchone()
+        if not obj or not obj['image_name']:abort(404)
+        name=obj['image_name']
+    key=keyvault.get_key(g.con,'meshy')
+    if not key:return jsonify(error='Save a Meshy API key in Admin → Model Connections before generating 3D'),503
+    raw=(IMAGE_DIR/name).read_bytes()
+    digest=hashlib.sha256(raw+secrets.token_bytes(16)+b'meshy-image-to-3d').hexdigest()
+    try:call=db.begin_inference(g.con,g.user['id'],digest,'meshy-image-to-3d',
+         daily_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','0')),
+         user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','0')),
+         cooldown=int(os.getenv('FREE_LAB_COOLDOWN_SECONDS','20')))
+    except ValueError as e:return jsonify(error=str(e)),429
+    try:
+        task=meshy3d.submit(raw,key)
+        with g.con:
+            job=g.con.execute('''INSERT INTO jobs_3d(owner_id,capture_id,object_id,provider_task)
+                   VALUES(?,?,?,?)''',(g.user['id'],cid,oid,task)).lastrowid
+        db.finish_inference(g.con,call,'ok')
+        return jsonify(id=job,status='PENDING',provider='meshy',paid_task_submitted=True),202
+    except (ValueError,RuntimeError,OSError) as e:
+        db.finish_inference(g.con,call,'error');return jsonify(error=str(e)),502
+
+@app.get('/api/media/3d/<int:jid>')
+@require_user
+def media_3d_status(jid):
+    row=g.con.execute('SELECT * FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
+    if not row:abort(404)
+    # The read-only status call never creates an additional billable task.
+    if row['status'] in ('PENDING','IN_PROGRESS','UNKNOWN') or (row['status']=='SUCCEEDED' and request.args.get('refresh')=='1'):
+        key=keyvault.get_key(g.con,'meshy')
+        if not key:return jsonify(error='Meshy API key missing: cannot poll task'),503
+        try:info=meshy3d.status(row['provider_task'],key)
+        except (RuntimeError,ValueError) as e:return jsonify(error=str(e)),502
+        with g.con:
+            g.con.execute('''UPDATE jobs_3d SET status=?,progress=?,credits=?,glb_url=?,thumbnail_url=?,error=?,
+                  updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND owner_id=?''',
+                  (info['status'],info['progress'],info['credits'],info['glb_url'],info['thumbnail_url'],info['error'],jid,g.user['id']))
+        row=g.con.execute('SELECT * FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
+    return jsonify(job_3d_dict(row))
 
 @app.post('/api/media/edit')
 @require_user

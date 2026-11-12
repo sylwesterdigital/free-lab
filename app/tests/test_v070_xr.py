@@ -12,7 +12,7 @@ SERVER=(ROOT/'backend/app.py').read_text()
 
 class XRTests(unittest.TestCase):
  def test_eye_half_size_and_portal(self):
-  self.assertIn('size:[.145,.145]',XR)
+  self.assertIn('size:[.087,.087]',XR)
   self.assertIn('<small>ENTER</small><strong>XR</strong>',HTML)
  def test_xr_keyboard_never_ends_session(self):
   region=XR.split('async function keyboardPrompt(){',1)[1].split('async function changeObject',1)[0]

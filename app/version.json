@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.7.0",
-  "description": "Native XR keyboard, voice commands, image mixing, diagnostics, optional spatial mascot"
+  "version": "0.8.0",
+  "description": "Upright spatial navigation, image-attached actions, tracked hands, opt-in Meshy 3D jobs"
 }

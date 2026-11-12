@@ -14,8 +14,8 @@ SOUND=(ROOT/'frontend/assets/sound.js').read_text()
 class SpatialInteractionTests(unittest.TestCase):
     def test_single_toolbar_and_no_fixed_footer(self):
         self.assertIn('function currentTools()',XR)
-        self.assertIn('function updateEditbar(){editbar=null;refreshToolbar();}',XR)
-        self.assertNotIn('drawCard(editbar,vp)',XR)
+        self.assertIn('function updateEditbar(){',XR)
+        self.assertIn('if(editbar)drawCard(editbar,vp)',XR)
         self.assertIn('if(h.card.kind===\'toolbar\'&&h.y>.16)return null',XR)
         self.assertIn('class="feature-bloom"',HTML)
         self.assertNotIn('class="action-bar"',HTML)
@@ -40,8 +40,8 @@ class SpatialInteractionTests(unittest.TestCase):
         self.assertIn('if(pending){',XR)
         self.assertNotIn('await showCloud(data.id);',XR[XR.index('async function makeCapture()'):XR.index('function bloomChildren(')])
     def test_pinned_orientation_and_safe_grab(self):
-        self.assertIn('worldQ=quatMul(',XR)
-        self.assertIn('toolbar.q=quatMul(',XR)
+        self.assertIn('if(toolbar)toolbar.q=quatY(yaw)',XR)
+        self.assertIn('followOffset=point(rotateY(-yaw),d,0)',XR)
         self.assertIn("session.addEventListener('squeezestart'",XR)
         self.assertIn("session.addEventListener('squeezeend'",XR)
         self.assertNotIn("session.addEventListener('squeeze',",XR)
@@ -50,7 +50,7 @@ class SpatialInteractionTests(unittest.TestCase):
         self.assertIn("arrival:[[392",SOUND)
         self.assertIn('hapticActuators',XR)
         self.assertIn("window.FreeLabSound?.play('enter')",APP)
-        self.assertIn('sound.js?v=0.7.0',HTML)
+        self.assertIn('sound.js?v=0.8.0',HTML)
     def test_prompt_improve_preserves_source(self):
         self.assertIn("case 'refine':return openPrompt('Restore this image with more detail",XR)
         self.assertIn('bloomChildren([o],context.card)',XR)

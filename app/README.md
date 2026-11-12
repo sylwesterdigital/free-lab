@@ -37,3 +37,12 @@ Credentials saved to the server remain encrypted with the existing `/etc/free-la
 `./watch-free-lab.sh --dry-run` from the repo root validates manifests and runs Python/JS checks before deployment. The existing watcher runs continuously and processes `updates/FREE_LAB_RELEASE_v0.7.0.zip`; do not replace it.
 
 Official references: https://developers.meta.com/vr/documentation/web/webxr-keyboard/ and https://dev.meta.ai/docs/image-generation
+
+
+## v0.8.0 — spatial transforms and image-to-3D
+
+- Enter XR, turn and walk: navigation follows with inertia. Pin preserves room position but keeps its menu upright and user-facing. Grab its header to offset it. The eye follows separately at a slower rate.
+- Captured photos open at the current headset position (separate from navigation). Select an image for the rotating Extract / Restore / Prompt / 3D / Mix / Folder / Bin actions attached directly beneath it.
+- Tracked hands display a real WebXR joint-point skeleton when joints are exposed by Quest Browser; controller and hand rays still work. `depth-sensing` is optional and its availability appears in the XR Log. **Actual environment-depth occlusion and photoreal hand meshes are not implemented in v0.8.0.**
+- To generate a 3D model: add a Meshy API key under Admin → Model Connections; select a saved photo or object in XR → 3D → Generate 3D (paid confirmation). The private image is passed as a data URI, not published. Polling is read-only. Completed GLB downloads and credits are listed in Collection → Your 3D Models. Signed asset links expire and can be refreshed. No GLB rendering inside XR yet.
+- Existing profiles, encrypted keys, SQLite collections, and configured request quotas remain unchanged. The existing ZIP watcher requires no replacement.

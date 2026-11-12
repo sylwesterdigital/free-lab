@@ -1,16 +1,14 @@
 {
-  "version": "0.7.0",
-  "title": "In-XR Voice, Image Mix & Native Keyboard · v0.7.0",
-  "datetime": "2026-11-12 05:00 GMT",
+  "version": "0.8.0",
+  "title": "Spatial Alignment, Hand Tracking & Image-to-3D \u00b7 v0.8.0",
+  "datetime": "2026-11-12 05:16 UTC",
   "changes": [
-    "Half-size central XR camera eye, with an ENTER / XR two-line landing portal and clear microphone preflight control.",
-    "Native Quest Browser XR system keyboard integration through a focused DOM input; unsupported builds show an in-place warning and never intentionally end the XR session.",
-    "Six-second Meta voice transcription uses an already-granted microphone stream. Voice commands such as “where is my backpack?” search saved recognized objects and highlight matching image cards without additional visual inference.",
-    "Each source/object card has an X to close it in XR without deleting the saved photograph. Binning a source hides it privately; it can be restored from the Bin.",
-    "Optional small mascot pointer, spoken status updates and playful comments; original procedural camera shutter and paper-crumple audio effects.",
-    "Private Mix bucket accepts two selected images, including source photographs, and generates a child image with Muse Image only after an explicit Apply action.",
-    "An optional in-XR LOG panel shows client API errors and an admin-only bounded server request diagnostic feed (status, path and elapsed time; no request bodies or credentials).",
-    "“Improve” is renamed to a restoration instruction: “Restore this image with more detail and a higher resolution,” while preserving the source photograph.",
-    "No change to the macOS watcher, cloud/database schema, provider credentials or server billing limits."
+    "Luminous green ENTER / XR portal with guided pulse and reduced-motion support.",
+    "Upright camera-facing world-space navigation; smoothly damped Follow with header-drag offsets; Pin stays in room.",
+    "Capture eye eases separately; every new source capture is placed relative to the current headset, not the toolbar or original XR entry point.",
+    "Selected source and object actions attach directly below the image and inherit its rotation; general navigation is no longer duplicated.",
+    "WebXR tracked hand-joint skeleton, controller/hand rays, and depth-sensing availability diagnostics. Physical-depth occlusion is not yet enabled.",
+    "Meshy image-to-3D tasks require a configured server vault key and explicit paid confirmation; private owner-scoped job records, progress, credits and GLB links.",
+    "No automatic image analysis or 3D generation; prior SQLite data and request limits are retained. Watcher unchanged."
   ]
 }

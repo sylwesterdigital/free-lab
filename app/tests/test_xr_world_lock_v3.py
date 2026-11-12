@@ -7,8 +7,8 @@ APP=Path(__file__).resolve().parents[1]
 class XRWorldLockTests(unittest.TestCase):
     def test_fixed_room_pose_not_viewer_following(self):
         text=(APP/'frontend/assets/xr.js').read_text()
-        self.assertIn('root=viewerAnchor(pose,-.04,1.35)',text)
-        self.assertIn('followBase=viewerAnchor(pose,-.46,1.07)',text)
+        self.assertIn('root=viewerAnchor(pose,-.04,1.45)',text)
+        self.assertIn('syncTrackedUI(pose,t)',text)
         self.assertIn('matmul(vp,cardModel(c))',text)
         self.assertIn('targetRaySpace',text)
         self.assertIn('getJointPose',text)

@@ -1,4 +1,4 @@
-/* FREELAB Spatial Cloud 0.7.0 — camera and model calls explicitly opt-in. */
+/* FREELAB Spatial Cloud 0.8.0 — camera and model calls explicitly opt-in. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
 const state={user:null,config:null,objects:[],tab:'mine',stream:null,micStream:null,snapshot:null,snapshotOrigin:null,xr:null,sessionKeys:new Map()};
@@ -105,7 +105,7 @@ async function xrDiagnostics(){const messages=[];messages.push('Secure context: 
  if(navigator.mediaDevices?.enumerateDevices)try{const devices=await navigator.mediaDevices.enumerateDevices();messages.push('Video input devices: '+devices.filter(d=>d.kind==='videoinput').length);devices.filter(d=>d.kind==='videoinput').slice(0,5).forEach((d,i)=>messages.push(' '+(i+1)+'. '+(d.label||'unlabelled, permission needed')));}catch(e){messages.push('enumerateDevices: '+e.name);}
  messages.push('Controller/hand tracking: checked only after entering an XR session.');messages.push('WebXR passthrough does NOT expose a readable camera frame.');
  $('xrDiagnostics').textContent=messages.join('\n');}
-function setLibrary(open){const p=$('workspace');p.classList.toggle('hidden',!open);$('toggleLibrary').setAttribute('aria-expanded',String(open));}
+function setLibrary(open){const p=$('workspace');p.classList.toggle('hidden',!open);$('toggleLibrary').setAttribute('aria-expanded',String(open));if(open)refresh3DJobs();}
 
 function selectTab(tab){state.tab=tab;document.querySelectorAll('.tab').forEach(e=>e.classList.toggle('active',e.dataset.list===tab));}
 function presentLog(force=false){if(!state.user)return;fetch('/changelog.json',{cache:'no-store'}).then(r=>r.json()).then(log=>{const key='free-lab-log:'+state.user.id+':'+log.version;if(!force&&localStorage.getItem(key))return;
@@ -117,7 +117,8 @@ async function init(){
  $('loginForm').onsubmit=async e=>{e.preventDefault();$('loginError').textContent='';try{const data=await api('/login',{method:'POST',body:JSON.stringify({username:$('username').value,password:$('password').value})});$('password').value='';await afterAuth(data.user);}catch(error){$('loginError').textContent=error.message;}};
  const m=await api('/me').catch(()=>({user:null}));if(m.user)await afterAuth(m.user);else{await refresh();$('loginView').classList.remove('hidden');}
  $('enterXR').onclick=async()=>{window.FreeLabSound?.unlock();window.FreeLabSound?.play('enter');try{if(!state.user)throw Error('Sign in before entering XR');await window.FreeLabXR.start();}catch(e){notify(e.message)}};
- $('toggleLibrary').onclick=()=>setLibrary($('workspace').classList.contains('hidden'));$('closeLibrary').onclick=()=>setLibrary(false);
+ $('toggleLibrary').onclick=()=>setLibrary($('workspace').classList.contains('hidden'));$('refresh3DJobs').onclick=refresh3DJobs;
+ $('closeLibrary').onclick=()=>setLibrary(false);
  document.querySelectorAll('.provider-option').forEach(btn=>btn.onclick=()=>{$('providerChoice').value=btn.dataset.provider;document.querySelectorAll('.provider-option').forEach(b=>b.classList.toggle('selected',b===btn));$('providerResult').textContent='Provider: '+btn.textContent+'. Test without generation or save a credential.';});
  document.querySelectorAll('.model-option').forEach(btn=>btn.onclick=()=>{$('modelChoice').value=btn.dataset.model;document.querySelectorAll('.model-option').forEach(b=>b.classList.toggle('selected',b===btn));});
  $('providerForm').onsubmit=saveProvider;$('testProvider').onclick=testProvider;$('clearSessionKey').onclick=async()=>{state.sessionKeys.delete(currentProvider());$('providerKey').value='';await loadProviderList();await refresh();notify('Tab-only key cleared');};$('segment').onclick=()=>segmentSnapshot();$('toggleScan').onclick=toggleScan;$('cancelScan').onclick=()=>$('scanConsent').classList.add('hidden');$('confirmScan').onclick=startScanConfirmed;document.addEventListener('visibilitychange',()=>{if(document.hidden)stopScan()});
@@ -140,6 +141,28 @@ async function saveXRFrame(onLocal){
  if(typeof onLocal==='function')onLocal(state.snapshot);
  const r=await api('/captures',{method:'POST',body:JSON.stringify({image:state.snapshot})});
  return {...r,image:state.snapshot};
+}
+async function createXR3D(cid,oid){
+ const payload={provider:'meshy',capture_id:cid,object_id:oid??null,confirm_paid:true};
+ return api('/media/3d',{method:'POST',body:JSON.stringify(payload)});
+}
+async function checkXR3D(id,refresh=false){return api('/media/3d/'+id+(refresh?'?refresh=1':''));}
+async function refresh3DJobs(){
+ const panel=$('modelJobs');if(!panel)return;
+ panel.replaceChildren();try{
+  const response=await api('/media/3d');
+  if(!response.jobs.length){panel.append(el('p','small-muted','No 3D jobs yet. Select an image in XR → 3D → Generate.'));return;}
+  for(const job of response.jobs){const row=el('div','model-job');
+   row.append(el('strong','',`3D · ${job.provider} · ${job.status} · ${job.progress}%`));
+   row.append(el('span','small-muted',`Source #${job.capture_id||'-'} · ${job.credits===null?'Credits pending':job.credits+' credits'}`));
+   if(job.error)row.append(el('p','small-muted',job.error));
+   if(job.glb_url){const a=el('a','tiny-btn','Open / download GLB');a.href=job.glb_url;a.rel='noopener noreferrer';a.target='_blank';row.append(a);
+    const renew=el('button','tiny-btn','Renew link');renew.onclick=async()=>{try{await checkXR3D(job.id,true);await refresh3DJobs();}catch(e){notify(e.message)}};row.append(renew);}
+   if(!['SUCCEEDED','FAILED','CANCELED'].includes(job.status)){
+    const button=el('button','tiny-btn','Check status');button.onclick=async()=>{try{await checkXR3D(job.id);await refresh3DJobs();}catch(e){notify(e.message)}};row.append(button);}
+   panel.append(row);
+  }
+ }catch(e){panel.append(el('p','small-muted','3D jobs unavailable · '+e.message));}
 }
 async function recognizeXR(cid){
  if(!state.snapshot)throw Error('Capture an image first');
@@ -263,6 +286,6 @@ function wirePromptEditor(){
  };
 }
 
-window.FreeLab={enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
+window.FreeLab={createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
 document.addEventListener('DOMContentLoaded',()=>{init().catch(e=>notify('Initialization failed: '+e.message));const bloom=$('featureBloom');if(bloom){setTimeout(()=>window.FreeLabSound?.play('arrival'),3000);bloom.querySelectorAll('.feature-seed').forEach(button=>{button.addEventListener('mouseenter',()=>window.FreeLabSound?.hover());button.addEventListener('focus',()=>window.FreeLabSound?.hover());});}});
 })();

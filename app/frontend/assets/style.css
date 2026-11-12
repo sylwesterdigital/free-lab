@@ -56,3 +56,19 @@
 .experience-preferences input{accent-color:#a3eab6;width:17px;height:17px;flex-shrink:0}
 .experience-preferences button{align-self:flex-start}
 @media(max-width:740px){.xr-portal .xr-letter small{font-size:13px}.xr-portal .xr-letter strong{font-size:43px}}
+
+/* v0.8 — luminous entry portal; no extra footer navigation. */
+.xr-portal{
+ background:radial-gradient(circle at 37% 27%,#effff0 0%,#baffc8 18%,#62ed86 49%,#136a43 82%,#103624 100%);
+ color:#071e12;border:2px solid #caffd6;
+ box-shadow:0 0 20px #7aff9f,0 0 53px #59ed87,0 0 120px #3eff754f,inset 0 0 32px #d6ffe4;
+ animation:portal-call 2.8s ease-in-out infinite;
+}
+.xr-portal:focus-visible,.xr-portal:hover{
+ transform:translateY(-7px) scale(1.08);
+ box-shadow:0 0 27px #d5ffe3,0 0 82px #54ff8c,0 0 155px #39ff7b9c,inset 0 0 36px #fff;
+}
+.xr-portal .xr-letter small,.xr-portal .xr-letter strong{color:#0b2819;text-shadow:0 1px 3px #e4ffe3}
+@keyframes portal-call{0%,100%{filter:brightness(1);box-shadow:0 0 17px #77ffa4,0 0 42px #6dff9380,0 0 97px #5cff7d55,inset 0 0 24px #ccffdb}50%{filter:brightness(1.13);box-shadow:0 0 35px #baffce,0 0 80px #6dffa9,0 0 155px #4bff81a0,inset 0 0 32px #effff3}}
+.model-jobs{padding:18px 0 22px;border-bottom:1px solid #ffffff19;margin-bottom:24px}.model-jobs-title{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:10px;font-size:11px;letter-spacing:.08em}.model-job{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #ffffff12}.model-job strong{font-size:12px}.model-job a{text-decoration:none;color:#d9f8dd;background:#294538}
+@media(prefers-reduced-motion:reduce){.xr-portal{animation:none}}

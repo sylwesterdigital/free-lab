@@ -65,7 +65,7 @@ class UIContractTests(unittest.TestCase):
     def test_immersive_follow_not_mixed_with_saved_card_root(self):
         s=(APP/'frontend/assets/xr.js').read_text()
         self.assertIn('function viewerAnchor',s)
-        self.assertIn("['toolbar','status']",s)
+        self.assertIn('function syncTrackedUI(pose,t)',s)
         self.assertIn('function toggleFollow()',s)
         self.assertIn('source frame',s.lower())
         start=s.index('async function runExtract()')
