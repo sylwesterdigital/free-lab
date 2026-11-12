@@ -60,7 +60,9 @@ def body():
     return v
 
 def item_dict(row):
-    result={k:row[k] for k in ('id','label','description','provider','visibility','created_at')}
+    result={k:row[k] for k in ('id','label','description','provider','visibility','created_at','capture_id','folder','shelf')}
+    try:result['spatial']=json.loads(row['spatial_json'] or '{}')
+    except (ValueError,TypeError):result['spatial']={}
     result['has_image']=bool(row['image_name'])
     return result
 
@@ -173,6 +175,10 @@ def segment_image():
     v=body()
     try:raw=decode_jpeg(v)
     except ValueError as e:return jsonify(error=str(e)),400
+    cid=v.get('capture_id')
+    if cid is not None:
+        if type(cid) is not int or not g.con.execute('SELECT 1 FROM captures WHERE id=? AND owner_id=?',(cid,g.user['id'])).fetchone():
+            return jsonify(error='Capture is not owned by this profile'),403
     prompt=str(v.get('prompt','')).strip().lower()
     if not re.fullmatch(r'[a-z0-9][a-z0-9 -]{0,58}[a-z0-9]',prompt):
         return jsonify(error='Use one object noun phrase (2–60 characters)'),400
@@ -207,9 +213,9 @@ def segment_image():
                 crop.save(out,format='JPEG',quality=78,optimize=True)
                 try:
                     with g.con:
-                        oid=g.con.execute('INSERT INTO objects(owner_id,label,description,provider,image_name,sha256) VALUES(?,?,?,?,?,?)',
+                        oid=g.con.execute('INSERT INTO objects(owner_id,label,description,provider,image_name,sha256,capture_id) VALUES(?,?,?,?,?,?,?)',
                         (g.user['id'],prompt,'SAM 3.1 bounding-box crop (not a decoded segmentation mask)',
-                         'sam-3.1-box',name,hashlib.sha256(out.read_bytes()).hexdigest())).lastrowid
+                         'sam-3.1-box',name,hashlib.sha256(out.read_bytes()).hexdigest(),cid)).lastrowid
                     result['saved_ids'].append(oid)
                 except Exception:
                     out.unlink(missing_ok=True)
@@ -218,6 +224,62 @@ def segment_image():
     except (RuntimeError,ValueError) as e:
         db.finish_inference(g.con,call,'error')
         return jsonify(error=str(e)),502
+
+
+@app.get('/api/captures')
+@require_user
+def capture_clouds():
+    rows=g.con.execute('SELECT * FROM captures WHERE owner_id=? ORDER BY id DESC LIMIT 50',(g.user['id'],)).fetchall()
+    result=[]
+    for row in rows:
+        items=g.con.execute('SELECT * FROM objects WHERE owner_id=? AND capture_id=? ORDER BY id LIMIT 80',(g.user['id'],row['id'])).fetchall()
+        result.append({'id':row['id'],'image_url':f'/api/captures/{row["id"]}/image',
+           'created_at':row['created_at'],'collapsed':bool(row['collapsed']),'hidden':bool(row['hidden']),
+           'objects':[item_dict(obj) for obj in items]})
+    return jsonify(captures=result)
+
+@app.post('/api/captures')
+@require_user
+def save_capture_cloud():
+    v=body()
+    try:raw=decode_jpeg(v)
+    except ValueError as e:return jsonify(error=str(e)),400
+    count=g.con.execute('SELECT count(*) FROM captures WHERE owner_id=?',(g.user['id'],)).fetchone()[0]
+    if count>=50:return jsonify(error='50 private capture limit reached; reuse saved captures.'),429
+    name=secrets.token_hex(16)+'.jpg';dest=IMAGE_DIR/name;dest.write_bytes(raw)
+    try:
+        with g.con:
+            cid=g.con.execute('INSERT INTO captures(owner_id,image_name,sha256) VALUES(?,?,?)',
+                  (g.user['id'],name,hashlib.sha256(raw).hexdigest())).lastrowid
+    except Exception:
+        dest.unlink(missing_ok=True);raise
+    return jsonify(id=cid,image_url=f'/api/captures/{cid}/image',created=True),201
+
+@app.get('/api/captures/<int:cid>/image')
+@require_user
+def capture_cloud_image(cid):
+    row=g.con.execute('SELECT image_name FROM captures WHERE id=? AND owner_id=?',(cid,g.user['id'])).fetchone()
+    if not row:abort(404)
+    path=IMAGE_DIR/row['image_name']
+    if not path.is_file():abort(404)
+    response=send_file(path,mimetype='image/jpeg',conditional=True,max_age=0)
+    response.headers['Cache-Control']='private, no-store'
+    return response
+
+@app.patch('/api/captures/<int:cid>')
+@require_user
+def update_capture_cloud(cid):
+    v=body();fields=[];values=[]
+    for field in ('hidden','collapsed'):
+        if field in v:
+            if type(v[field]) is not bool:return jsonify(error='Capture flag must be boolean'),400
+            fields.append(field+'=?');values.append(int(v[field]))
+    if not fields:return jsonify(error='No supported capture update'),400
+    with g.con:
+        changed=g.con.execute('UPDATE captures SET '+','.join(fields)+' WHERE id=? AND owner_id=?',
+                             (*values,cid,g.user['id'])).rowcount
+    if not changed:abort(404)
+    return jsonify(ok=True)
 
 @app.get('/api/objects')
 @require_user
@@ -270,15 +332,38 @@ def create_object():
 @app.patch('/api/objects/<int:oid>')
 @require_user
 def update_object(oid):
-    v=body();mode=v.get('visibility','private')
-    if mode not in ('private','public','link'):abort(400)
-    token=secrets.token_urlsafe(32) if mode=='link' else None
-    hashed=hashlib.sha256(token.encode()).hexdigest() if token else None
+    v=body()
+    fields=[];args=[];token=None
+    if 'visibility' in v:
+        mode=v['visibility']
+        if mode not in ('private','public','link'):return jsonify(error='Invalid visibility'),400
+        token=secrets.token_urlsafe(32) if mode=='link' else None
+        hashed=hashlib.sha256(token.encode()).hexdigest() if token else None
+        fields.extend(('visibility=?','share_hash=?'));args.extend((mode,hashed))
+    if 'folder' in v:
+        folder=str(v['folder']).strip()[:32]
+        if not re.fullmatch(r'[A-Za-z0-9 _-]{1,32}',folder):return jsonify(error='Invalid folder'),400
+        fields.append('folder=?');args.append(folder)
+    if 'shelf' in v:
+        if v['shelf'] not in ('collection','bin'):return jsonify(error='Invalid shelf'),400
+        fields.append('shelf=?');args.append(v['shelf'])
+        if v['shelf']=='bin':fields.extend(('visibility=?','share_hash=?'));args.extend(('private',None))
+    if 'spatial' in v:
+        value=v['spatial']
+        if not isinstance(value,dict) or set(value)-{'x','y','z','scale','rotation'}:
+            return jsonify(error='Invalid spatial transform'),400
+        allowed={'x':(-2.5,2.5),'y':(-2.0,2.0),'z':(-1.5,1.5),'scale':(.45,3),'rotation':(-6.29,6.29)}
+        for k,x in value.items():
+            lo,hi=allowed[k]
+            if type(x) not in (float,int) or not lo<=x<=hi:
+                return jsonify(error='Transform out of bounds'),400
+        fields.append('spatial_json=?');args.append(json.dumps(value))
+    if not fields:return jsonify(error='No supported update'),400
     with g.con:
-        n=g.con.execute('UPDATE objects SET visibility=?,share_hash=? WHERE id=? AND owner_id=?',
-                   (mode,hashed,oid,g.user['id'])).rowcount
-    if not n:abort(404)
-    return jsonify(ok=True,visibility=mode,share_token=token)
+        changed=g.con.execute('UPDATE objects SET '+','.join(fields)+' WHERE id=? AND owner_id=?',
+                             (*args,oid,g.user['id'])).rowcount
+    if not changed:abort(404)
+    return jsonify(ok=True,share_token=token)
 
 @app.delete('/api/objects/<int:oid>')
 @require_user
@@ -308,6 +393,10 @@ def capture():
     try:raw=decode_jpeg(v)
     except ValueError as e:return jsonify(error=str(e)),400
     digest=hashlib.sha256(raw).hexdigest()
+    cid=v.get('capture_id')
+    if cid is not None:
+        if type(cid) is not int or not g.con.execute('SELECT 1 FROM captures WHERE id=? AND owner_id=?',(cid,g.user['id'])).fetchone():
+            return jsonify(error='Capture is not owned by this profile'),403
     use_model=v.get('recognize') is True
     if use_model and not request_meta_key(v):
         return jsonify(error='Meta API key not configured. Save a manual snapshot instead.'),503
@@ -331,15 +420,34 @@ def capture():
         if not detections:return jsonify(error='No recognizable objects found; nothing stored'),422
     else: detections=[{'label':str(v['label']).strip()[:80],'description':str(v.get('description',''))[:240],'box':None}]
     ids=[]
-    # Unique file name: one copy of JPEG shared by records in this capture; files use IDs to ease deletion.
+    # Muse's approximate 0-1000 boxes produce tangible image cards. These are
+    # rough bounding-box crops, NOT pixel-accurate SAM masks.
+    source=None
+    if use_model:
+        from PIL import Image,ImageOps
+        Image.MAX_IMAGE_PIXELS=12_000_000
+        try:
+            im=Image.open(io.BytesIO(raw))
+            if im.width*im.height>12_000_000:return jsonify(error='Image pixels exceed 12 million'),400
+            source=ImageOps.exif_transpose(im).convert('RGB')
+        except Exception:return jsonify(error='Cannot decode capture JPEG'),400
     with g.con:
         for obj in detections:
-            name=secrets.token_hex(16)+'.jpg'
-            path=IMAGE_DIR/name
-            path.write_bytes(raw)
+            content=raw
+            box=obj.get('box')
+            if source is not None and box and box!=[0,0,1000,1000]:
+                x1,y1,x2,y2=box
+                pad=32
+                left=max(0,int((x1-pad)*source.width/1000));top=max(0,int((y1-pad)*source.height/1000))
+                right=min(source.width,int((x2+pad)*source.width/1000));bottom=min(source.height,int((y2+pad)*source.height/1000))
+                if right-left>=12 and bottom-top>=12:
+                    crop=source.crop((left,top,right,bottom));crop.thumbnail((800,800))
+                    mem=io.BytesIO();crop.save(mem,format='JPEG',quality=77,optimize=True)
+                    content=mem.getvalue()
+            name=secrets.token_hex(16)+'.jpg';path=IMAGE_DIR/name;path.write_bytes(content)
             try:
-                oid=g.con.execute('INSERT INTO objects(owner_id,label,description,provider,image_name,sha256) VALUES(?,?,?,?,?,?)',
-                  (g.user['id'],obj['label'],obj['description'],model,name,digest)).lastrowid
+                oid=g.con.execute('INSERT INTO objects(owner_id,label,description,provider,image_name,sha256,capture_id) VALUES(?,?,?,?,?,?,?)',
+                  (g.user['id'],obj['label'],obj['description'],model,name,hashlib.sha256(content).hexdigest(),cid)).lastrowid
             except Exception:
                 path.unlink(missing_ok=True);raise
             ids.append(oid)

@@ -11,6 +11,14 @@ CREATE TABLE IF NOT EXISTS users (
  role TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('member','admin')),
  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+CREATE TABLE IF NOT EXISTS captures (
+ id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ image_name TEXT NOT NULL, sha256 TEXT NOT NULL,
+ hidden INTEGER NOT NULL DEFAULT 0 CHECK(hidden IN (0,1)),
+ collapsed INTEGER NOT NULL DEFAULT 0 CHECK(collapsed IN (0,1)),
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS captures_owner ON captures(owner_id,id DESC);
 CREATE TABLE IF NOT EXISTS objects (
  id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  label TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', provider TEXT NOT NULL DEFAULT 'manual',
@@ -50,6 +58,13 @@ def init(path):
         fields={row['name'] for row in con.execute('PRAGMA table_info(inference_calls)')}
         if 'usage_json' not in fields:
             con.execute("ALTER TABLE inference_calls ADD COLUMN usage_json TEXT NOT NULL DEFAULT '{}' ")
+        fields={row['name'] for row in con.execute('PRAGMA table_info(objects)')}
+        for name,definition in (
+            ('capture_id','INTEGER REFERENCES captures(id) ON DELETE SET NULL'),
+            ('folder',"TEXT NOT NULL DEFAULT 'Unsorted'"),
+            ('shelf',"TEXT NOT NULL DEFAULT 'collection'"),
+            ('spatial_json',"TEXT NOT NULL DEFAULT '{}'")):
+            if name not in fields:con.execute('ALTER TABLE objects ADD COLUMN '+name+' '+definition)
 
 def hash_password(password, salt=None):
     salt=salt or secrets.token_bytes(16)

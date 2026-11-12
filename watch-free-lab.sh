@@ -10,7 +10,7 @@ from pathlib import Path,PurePosixPath
 
 ROOT=Path(sys.argv[1]).resolve();sys.argv=[sys.argv[0]]+sys.argv[2:]
 UPDATES=ROOT/'updates';UPLOADS=ROOT/'uploads';STATE=ROOT/'.free-lab'
-VERSION='0.3.0';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
+VERSION='0.4.0';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
 REPO='git@github.com:sylwesterdigital/free-lab.git'
 HOST=os.getenv('FREE_LAB_SSH_HOST','root@46.62.232.64')
 PORT=os.getenv('FREE_LAB_SSH_PORT','333')

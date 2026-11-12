@@ -1,15 +1,15 @@
 {
-  "version": "0.3.0",
-  "title": "Spatial Studio · Reality check",
-  "datetime": "2026-11-11 21:40 GMT",
+  "version": "0.4.0",
+  "title": "Spatial Cloud · Dandelion Collection",
+  "datetime": "2026-11-12 00:20 GMT",
   "changes": [
-    "Fixed head-following XR interface: panel now remains in the local room reference space, with recentering and header dragging.",
-    "Added visible controller/hand pointing rays, target markers, pinch and trigger selection, plus a private inventory view inside XR.",
-    "Added an explicit camera-readiness diagnostic to distinguish passthrough visualization from actual readable pixels.",
-    "Added Aholo Lux3D, OpenAI, Gemini and Grok/xAI to admin-only model connections.",
-    "API keys may be kept in current-tab RAM or saved encrypted in the Ubuntu vault; new read-only authentication checks avoid inference jobs.",
-    "Added Meshy balance lookup where provided, Meta token usage tracking and a separate FREE LAB rolling request-quota meter.",
-    "SAM 3.1 detected bounding boxes can be saved as private JPEG object crops, not transparent segmentation masks.",
-    "Replaced browser-native scan consent and provider/model selects with floating in-app controls."
+    "Capture a real camera or uploaded image into a large, world-locked 3D photo card; no inference request is made simply by capturing.",
+    "Recognized Muse image regions bloom around their source like a dandelion; the results are labeled approximate bounding-box crops, not decoded SAM masks.",
+    "Point with Quest controllers or pinch with tracked hands to select, hold and drag images in space; select a card twice to flip its back, or resize and flip with a small edit pill.",
+    "Compact dark, borderless spatial toolbar: Gallery, Capture, Muse, SAM, Folder, Bin, Collapse and Exit. Squeeze recenters the empty workspace or flips a selected card.",
+    "Collapse/expand a capture cloud on curved paths with brief green particles; captured images and objects remain in the private collection.",
+    "Added SQLite captures linked to images and detected objects, persistent relative card transforms, private folders and non-destructive Bin/Restore.",
+    "Existing profiles, object inventory, server-stored credentials, quotas and private sharing are preserved by additive migrations.",
+    "Billing remains opt-in: Muse and per-object SAM each require a deliberate action; Quest Browser must expose actual camera pixels or a photo must be uploaded."
   ]
 }

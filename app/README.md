@@ -1,28 +1,36 @@
-# FREELAB — Spatial Studio v0.3.0
+# FREELAB — Spatial Cloud v0.4.0
 
 Self-hosted Quest 3 mixed-reality discovery MVP. Built for macOS M2 Pro development, Ubuntu serving, and browser-based WebXR. Domain: https://free-lab.cam/.
 
-## What's new in 0.3.0
+## What's new in 0.4.0 — spatial dandelion collector
 
-- **Real world-locked XR UI**: the 3D panel is placed once using the viewer pose and thereafter rendered in a `local-floor` / `local` reference space; moving your head no longer moves the panel. The header can be moved using tracked input, and RECENTER brings it back in front of you. World locking is only maintained for a running session: this does NOT create a persistent spatial anchor across sessions.
-- **Visible input**: WebXR controller and hand `targetRaySpace` laser pointers and hover cursors, plus select/trigger and thumb/index pinch fallback for hand tracking. Not a rendered hand mesh, full-body skeletal pose, or Horizon OS system menu replacement. Device/firmware runtime support must be verified on Quest 3.
-- **Focused capture HUD in XR**: SNAPSHOT (local/free), MUSE (one charged recognition), SAM (one charged image segmentation), CHANGE OBJECT noun target, COLLECTION, RECENTER, EXIT. Entering XR never triggers inference. A browser camera stream must be live *before* entering; passthrough pixels are not automatically readable from WebXR.
-- **Practical SAM collection**: save detected image bounding boxes as labeled private JPEG crops in the SQLite inventory; this is NOT decoded alpha-mask segmentation, 3D reconstruction, plane detection, or accurate world-space coordinates. Up to six crops per image request.
-- **Admin provider keys**: Meta, Aholo Labs (Lux3D/world reconstruction), Meshy, Tripo, fal.ai, Replicate, OpenAI, Google Gemini, xAI/Grok Imagine. Per-provider selection uses custom pill buttons, not Quest Browser's oversized native menus.
-- **Credential choices**: per tab in-memory JavaScript `Map` (cleared on refresh/logout) or encrypted server-side SQLite vault with its separate `/etc/free-lab-vault.key`. No localStorage/sessionStorage persistence. Temporary Meta key is transmitted to FREE LAB's server only for a deliberate request, never in HTML or URL.
-- **Free-of-inference account checks**: fixed read-only endpoints for Meta, Aholo, Meshy, OpenAI, Gemini, xAI and Replicate. Aholo uses its documented *raw* Authorization header, not Bearer. Meshy exposes available credits; other providers generally do not expose a reliable account balance here. Tripo and fal.ai checks are disabled when no verified read-only endpoint is known. A provider may apply account-specific API usage policies; no generation calls are made.
-- **Usage clarity**: FREE LAB's SQLite ledger tracks recent Muse/SAM requests and reported token counts; 24 global / 8 per profile per rolling 24 hours are local request quotas, not Meta billing caps. Change in `/etc/free-lab.env`, restart `free-lab.service`.
-- **XR/camera diagnostics and native-free consent**: Test Camera and XR readiness display actual media track labels, video pixel resolution and supported XR session modes. Start-20s-scan confirmation is an in-app dialog.
-- **Landing remains cinematic**: original 3D FREELAB mascot, dark spatial canvas and central XR portal with local fallback. Three.js r181 scene remains pinned to external CDN, so the project is not completely offline/self-contained yet.
+In the browser on Quest 3, press the **XR** portal. There is no head-locked dashboard: the scene contains a world-locked photo and a minimal, borderless grey control pill floating near it. Input rays are visible when controllers or hands are detected. The world root is placed only once on session start or when you deliberately recenter.
 
-**Known hardware/browser limit:** some Quest 3 Browser/OS versions do not grant `getUserMedia({video:{facingMode:'environment'}})` access to headset camera pixels; when permission is absent this release cannot infer objects from passthrough. Use the upload fallback to test recognition and SAM while addressing the camera path. WebXR headset passthrough by itself is display-only, not a video source.
+**Spatial workflow:**
+
+1. Before XR, choose **Test camera** and verify readable room pixels, or **Upload image** (when Quest Browser cannot obtain environment pixels). The XR passthrough display alone cannot be captured by JavaScript.
+2. Enter XR and point to **+ CAPTURE**, pinch or pull the trigger. The image is saved as a private `captures` row and becomes a large spatial thumbnail; zero paid model calls. A cloud can also be revisited from **▣ LIB**.
+3. Press **✦ MUSE** deliberately. A single paid Muse image request produces up to six labeled approximate boxes; actual cropped JPEGs bloom from the source on curved paths. This is **not** a pixel-accurate segmentation mask.
+4. Select a recognized object thumbnail. Press **⌗ SAM** to make **one** charged SAM 3.1 request for that label; SAM's rectangular image regions appear as additional cards. Wait for the 20-second request cooldown enforced by the server. SAM's RLE masks are **not decoded** by this release.
+5. Point and hold a controller trigger or hand pinch to **drag** a spatial card. Selecting an existing card again flips it to descriptive text. A miniature edit pill enables flip / smaller / larger. Its transform is saved to SQLite relative to its capture. **▤ FOLDER** cycles among Unsorted, Keep, Room and Objects; **⌫ BIN** moves a selected item to a private virtual Bin. During an active drag, temporary floating FOLDER/BIN drop targets appear for direct drop gestures. Without a selection, Bin opens a room-space restoration gallery.
+6. **◌ HIDE** collapses the cloud with a short curved animation and luminous particles, then removes it from the active scene without deleting data. **▣ LIB** reopens saved captures; **+** begins another. **× EXIT** ends XR. Squeeze with no selection explicitly recenters the workspace.
+
+### Data and privacy
+
+- Existing SQLite DB, profiles, object images, encrypted provider vault and usage limits are preserved. New `captures` table and `objects.capture_id`, `folder`, `shelf`, `spatial_json` fields are added idempotently.
+- Captures and their images require owner authentication. Up to 50 captures per user (each compressed JPEG under 450 KB). No spatial positions are transferred to the public model providers; only manually requested images are transmitted.
+- Moving an object to Bin forces its visibility to private and revokes existing link shares. Gallery access remains profile-scoped; binning does not delete the associated image.
+- The cards represent **2D images in a 3D room-space collection**, not a metric reconstruction of the real objects and not physical occlusion-accurate placement. World locking lasts for the current XR session, not across device reboots.
+- The application-wide quota remains 24 total / 8 per profile per rolling 24 hours, 20-second cooldown, configurable in `/etc/free-lab.env`; not a hard dollar cap or Meta API spend cap.
+
+**WebXR camera limitation:** some Quest Browser firmware only exposes avatar camera or refuses environment camera. Use the upload workflow; full optical passthrough access may require a separate native Quest capture companion. Never assume the headset compositor supplies image pixels for inference.
 
 ## Deploy from macOS
 
 ```bash
 cd /Users/smielniczuk/Documents/works/free-lab
-cp ~/Downloads/watch-free-lab-v0.3.0.sh ./watch-free-lab.sh
-cp ~/Downloads/FREE_LAB_RELEASE_v0.3.0.zip ./uploads/
+cp ~/Downloads/watch-free-lab-v0.4.0.sh ./watch-free-lab.sh
+cp ~/Downloads/FREE_LAB_RELEASE_v0.4.0.zip ./uploads/
 chmod +x ./watch-free-lab.sh
 ./watch-free-lab.sh --dry-run
 ./watch-free-lab.sh --once
@@ -34,7 +42,7 @@ The watcher validates source file hashes, archive safety, all required version m
 
 Sign in with your administrator account, open the small round account button at the top right, and select **Admin / model connections**. Choose Meta and paste the API key. Save. The key never appears in responses, console logs or static assets. Saved keys are encrypted before being written to `/var/lib/free-lab/free-lab.sqlite3`; the vault encryption key is `/etc/free-lab-vault.key` (root:free-lab, 0640), created only if absent. **Back up the DB and vault key together, securely and separately from your Git repository. If the vault key is lost, saved API credentials cannot be decrypted.** Environment `MODEL_API_KEY` is supported as a legacy fallback; it is never overwritten.
 
-Other provider credentials can be securely saved and deleted by admin. **3D generation API calls are NOT integrated in v0.3.0**; storing a key does not automatically enable 3D reconstruction.
+Other provider credentials can be securely saved and deleted by admin. **3D generation API calls are NOT integrated in v0.4.0**; storing a key does not automatically enable 3D reconstruction.
 
 ## Camera and costs
 
@@ -60,7 +68,7 @@ The CLI prints expected base SAM segmentation cost before any request. `--send` 
 
 ## Roadmap / limitations
 
-- **Not done yet:** continuous raw video stream into SAM, WebRTC multiplayer, world-anchored recognized object labels, true scene meshing, full decoded SAM masks, provider-specific 3D generation workflows, gesture vocabularies beyond point/select and pinch, or reliable shared spatial anchors.
+- **Not done yet:** decoded SAM pixel masks and true occlusion, multi-object SAM batching, continuous raw video stream into SAM, WebRTC multiplayer, world-anchored recognized object labels, true scene meshing, full decoded SAM masks, provider-specific 3D generation workflows, gesture vocabularies beyond point/select and pinch, or reliable shared spatial anchors.
 - WebXR support for hand input and tracking varies with Quest Browser version. Plane detection/anchors are requested as optional browser features but are not yet consumed by the UI.
 - Three.js enhanced landing scene currently imports the pinned Three.js r181 module over a public CDN on first visit. The WebXR HUD, API, SQLite, auth, and CSS mascot **do not require a CDN**. To run fully offline, vendor a verified copy of Three.js r181 `build/three.module.js` and `build/three.core.js` under `frontend/assets/vendor/`. Both files are required; the module imports its core sibling. Until then, the app is functional but the Three.js enhancement is not self-contained.
 - No model inference has been executed in a paid Meta account or tested on a physical Quest by this packaging process. Verify the hosted app, permissions and prices in your environment.

@@ -1,4 +1,4 @@
-/* FREELAB Spatial Studio 0.3.0 — camera and model calls explicitly opt-in. */
+/* FREELAB Spatial Cloud 0.4.0 — camera and model calls explicitly opt-in. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
 const state={user:null,config:null,objects:[],tab:'mine',stream:null,snapshot:null,xr:null,sessionKeys:new Map()};
@@ -11,12 +11,20 @@ async function api(path,opts={}){const init={credentials:'same-origin',...opts,h
  const response=await fetch('/api'+path,init);let result={};try{result=await response.json()}catch{}if(!response.ok)throw Error(result.error||'HTTP '+response.status);return result;}
 async function refresh(){try{const h=await api('/health');$('healthStatus').textContent=h.ok?'System online':'Offline';$('connectionDot').classList.toggle('good',h.ok);state.config=await api('/config');const enabled=state.config.inference_enabled||Boolean(sessionMeta());$('modelStatus').textContent=(enabled?state.config.model+' · on demand':'Muse offline · manual mode');$('modelStatus').previousElementSibling.classList.toggle('good',enabled);}
  catch(e){$('healthStatus').textContent='Disconnected';}}
-async function loadObjects(){const path=state.tab==='mine'?'/objects':'/public';const data=await api(path);state.objects=data.objects;renderObjects();}
+async function loadObjects(){const path=state.tab==='mine'?'/objects':'/public';const data=await api(path);state.objects=state.tab==='public'?data.objects:data.objects.filter(x=>state.tab==='bin'?x.shelf==='bin':x.shelf!=='bin');renderObjects();}
 function renderObjects(){const box=$('items');box.replaceChildren();if(state.tab==='mine'){$('objectCount').textContent=String(state.objects.length);$('objectCounter').textContent=String(state.objects.length).padStart(2,'0');}
- if(!state.objects.length){const e=el('div','empty-state');e.append(el('span','', '◌'),el('strong','',state.tab==='mine'?'Nothing collected yet':'No public objects yet'),el('p','',state.tab==='mine'?'Upload a snapshot, enable camera, or create an entry manually.':'Objects appear here only when their owners publish them.'));box.append(e);return;}
+ if(!state.objects.length){const e=el('div','empty-state');e.append(el('span','', '◌'),el('strong','',state.tab==='bin'?'Your bin is empty':state.tab==='mine'?'Nothing collected yet':'No public objects yet'),el('p','',state.tab==='bin'?'Objects moved to the virtual bin stay private until permanently deleted.':state.tab==='mine'?'Upload a snapshot, enable camera, or create an entry manually.':'Objects appear here only when their owners publish them.'));box.append(e);return;}
  for(const o of state.objects){const card=el('article','object-card');let img;if(o.has_image){img=el('img','object-photo');img.loading='lazy';img.alt='Collected object';img.src=state.tab==='mine'?'/api/objects/'+o.id+'/image':'/api/objects/'+o.id+'/image';}else img=el('div','object-placeholder','◈');card.append(img);
  const b=el('div','object-body'),meta=el('div','object-meta');meta.append(el('span','',o.provider==='manual'?'MANUAL':o.provider.toUpperCase()),el('span','',o.visibility.toUpperCase()));b.append(meta,el('h3','',o.label),el('p','',o.description||'Recognized spatial object'));
- if(state.tab==='mine'){const acts=el('div','object-actions');for(const [name,mode] of [['Private','private'],['Public','public'],['Share link','link']]){const btn=el('button','tiny-btn',name);btn.onclick=()=>changeVisibility(o.id,mode);acts.append(btn);}const del=el('button','tiny-btn','Delete');del.onclick=()=>removeObject(o.id);acts.append(del);b.append(acts);}else b.append(el('span','small-muted','By '+o.owner));card.append(b);box.append(card);}}
+ if(state.tab==='mine'||state.tab==='bin'){const acts=el('div','object-actions');if(state.tab==='mine')for(const [name,mode] of [['Private','private'],['Public','public'],['Share link','link']]){const btn=el('button','tiny-btn',name);btn.onclick=()=>changeVisibility(o.id,mode);acts.append(btn);}if(state.tab==='mine'){
+ const folder=el('button','tiny-btn',o.folder||'Unsorted');folder.title='Cycle collection folder';folder.onclick=()=>cycleFolder(o);acts.append(folder);
+ const bin=el('button','tiny-btn','Move to bin');bin.onclick=()=>changeShelf(o.id,'bin');acts.append(bin);
+ }else{
+ const restore=el('button','tiny-btn','Restore');restore.onclick=()=>changeShelf(o.id,'collection');acts.append(restore);
+ const del=el('button','tiny-btn','Permanently delete');del.onclick=()=>removeObject(o.id);acts.append(del);
+ }b.append(acts);}else b.append(el('span','small-muted','By '+o.owner));card.append(b);box.append(card);}}
+async function changeShelf(id,shelf){try{await api('/objects/'+id,{method:'PATCH',body:JSON.stringify({shelf})});await loadObjects();notify(shelf==='bin'?'Moved to private Bin':'Restored to collection');}catch(e){notify(e.message);}}
+async function cycleFolder(o){const folders=['Unsorted','Keep','Room','Objects'];const next=folders[(folders.indexOf(o.folder)+1)%folders.length];try{await api('/objects/'+o.id,{method:'PATCH',body:JSON.stringify({folder:next})});await loadObjects();notify('Folder: '+next);}catch(e){notify(e.message);}}
 async function changeVisibility(id,mode){try{const data=await api('/objects/'+id,{method:'PATCH',body:JSON.stringify({visibility:mode})});if(data.share_token){const link=location.origin+'/shared.html?token='+data.share_token;try{await navigator.clipboard.writeText(link);notify('Private share link copied')}catch{prompt('Copy the private share URL',link)}}else notify('Visibility set to '+mode);await loadObjects();}catch(e){notify(e.message);}}
 async function removeObject(id){if(!confirm('Delete this object and its snapshot?'))return;try{await api('/objects/'+id,{method:'DELETE'});await loadObjects();notify('Object removed')}catch(e){notify(e.message)}}
 async function openCamera(){ $('cameraPanel').classList.remove('hidden');if(state.stream){$('cameraVideo').classList.remove('hidden');return;}try{const devices=navigator.mediaDevices;if(!devices?.getUserMedia)throw Error('Camera API unavailable');
@@ -97,6 +105,52 @@ async function init(){
  $('createProfile').onsubmit=async e=>{e.preventDefault();try{await api('/admin/profiles',{method:'POST',body:JSON.stringify({username:$('newUsername').value,display_name:$('newDisplayName').value,password:$('newPassword').value})});e.target.reset();notify('New private profile created')}catch(error){notify(error.message)}};
  $('showChangelog').onclick=()=>presentLog(true);$('dismissChangelog').onclick=dismissLog;$('continueChangelog').onclick=dismissLog;
 }
-window.FreeLab={openCamera,closeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
+
+// Spatial cloud interface: no background inference, all writes are profile-scoped.
+async function saveXRFrame(onLocal){
+ if(state.stream){snapshot();}
+ if(!state.snapshot)throw Error('No camera pixels. Use Test Camera or Upload Image before entering XR.');
+ if(typeof onLocal==='function')onLocal(state.snapshot);
+ const r=await api('/captures',{method:'POST',body:JSON.stringify({image:state.snapshot})});
+ return {...r,image:state.snapshot};
+}
+async function recognizeXR(cid){
+ if(!state.snapshot)throw Error('Capture an image first');
+ const payload={image:state.snapshot,recognize:true,capture_id:cid,model:$('modelChoice').value};
+ if(sessionMeta())payload.session_api_key=sessionMeta();
+ const result=await api('/capture',{method:'POST',body:JSON.stringify(payload)});
+ state.tab='mine';selectTab('mine');await loadObjects();
+ if(state.user?.role==='admin')loadUsage().catch(()=>{});
+ return {items:state.objects.filter(x=>result.ids.includes(x.id)),detections:result.objects,usage:result.usage};
+}
+async function segmentXR(cid,noun){
+ if(!state.snapshot)throw Error('Capture an image first');
+ const payload={image:state.snapshot,prompt:noun,save:true,capture_id:cid};
+ if(sessionMeta())payload.session_api_key=sessionMeta();
+ const result=await api('/segment',{method:'POST',body:JSON.stringify(payload)});
+ state.tab='mine';selectTab('mine');await loadObjects();
+ if(state.user?.role==='admin')loadUsage().catch(()=>{});
+ return {items:state.objects.filter(x=>result.saved_ids.includes(x.id)),boxes:result.boxes||[],usage:result.usage};
+}
+async function useXRFrame(url){
+ if(typeof url!=='string')throw Error('Missing stored capture image');
+ if(url.startsWith('data:image/jpeg;base64,')){state.snapshot=url;return;}
+ const resp=await fetch(url,{credentials:'same-origin'});if(!resp.ok)throw Error('Cannot reload private captured frame');
+ const image=await createImageBitmap(await resp.blob());
+ try{compress(image);}finally{image.close();}
+}
+async function listXRClouds(){
+ const captures=(await api('/captures')).captures;
+ const older=(await api('/objects')).objects.filter(o=>o.capture_id===null);
+ if(older.length){
+   const first=older.find(o=>o.has_image);
+   captures.push({id:0,image_url:first?'/api/objects/'+first.id+'/image':null,objects:older,hidden:false,collapsed:false,legacy:true});
+ }
+ return captures;
+}
+async function updateXRObject(id,patch){await api('/objects/'+id,{method:'PATCH',body:JSON.stringify(patch)});}
+async function updateXRCloud(id,patch){await api('/captures/'+id,{method:'PATCH',body:JSON.stringify(patch)});}
+
+window.FreeLab={useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
 document.addEventListener('DOMContentLoaded',()=>init().catch(e=>notify('Initialization failed: '+e.message)));
 })();
