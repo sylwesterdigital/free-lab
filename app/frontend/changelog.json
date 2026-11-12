@@ -1,13 +1,14 @@
 {
-  "version": "0.9.3",
-  "title": "Thumb String Lab · v0.9.3",
-  "datetime": "2026-11-12 09:05 UTC",
+  "version": "0.9.4",
+  "title": "Five-Finger Chord Lab \u00b7 v0.9.4",
+  "datetime": "2026-11-12 16:07 UTC",
   "changes": [
-    "Added optional right-thumbstick String Lab using tracked left/right thumb-tip joints (no model inference).",
-    "Touch thumb tips for 160 ms to link green endpoints; stretch toward 1 m to shift the thick ribbon from green through yellow/orange to red.",
-    "Original WebAudio elastic-string tone increases in pitch with distance and ends in a synthesized pop when the strand snaps.",
-    "Snapped fragments hang briefly from thumb joints, fall with simulated gravity, fade, then require the hands to separate before reattachment.",
-    "Runs only in immersive WebXR; automatically silences the oscillator on tracking loss, lab disable, or XR exit.",
-    "All existing captures, API keys, model routes, database and watcher remain unchanged."
+    "Added a new independent five-string experiment toggled by clicking the left controller thumbstick in immersive XR.",
+    "Five fingertip pairs (left/right thumb, index, middle, ring, little) each have their own animated string and C-major notes C4, D4, E4, F4, G4.",
+    "Each string starts with a different colour spectrum, changes colour under tension and snaps at its own length with a small randomized variation.",
+    "Multiple notes can sound simultaneously as a soft chord; the snap uses an original A4 pop and falling ribbon fragments.",
+    "After a string snaps, its fingers must separate and touch again to rearm; other strings remain active.",
+    "Only one lab mode runs at a time: right thumbstick switches back to the original thumb-to-thumb String Lab.",
+    "Local WebXR hand joints and WebAudio only; no new API calls, server settings, migrations or watcher changes."
   ]
 }

@@ -1,5 +1,5 @@
 /* FREELAB 0.7 — original procedural audio, no assets or external calls. */
-(()=>{'use strict';let ctx=null,lastHover=0,enabled=true,arrivalQueued=false;let stringVoice=null;
+(()=>{'use strict';let ctx=null,lastHover=0,enabled=true,arrivalQueued=false;let stringVoice=null;const fingerVoices=new Map();
 function unlock(){if(!enabled)return false;try{if(!ctx)ctx=new (window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume().then(()=>{if(arrivalQueued){arrivalQueued=false;play('arrival');}}).catch(()=>{});return true;}catch{return false;}}
 function note(hz,when,seconds=0.16,volume=.06,type='sine',slide=1){if(!ctx||ctx.state!=='running')return;
  const o=ctx.createOscillator(),g=ctx.createGain(),f=ctx.createBiquadFilter();o.type=type;o.frequency.setValueAtTime(hz,when);if(slide!==1)o.frequency.exponentialRampToValueAtTime(Math.max(45,hz*slide),when+seconds);f.type='lowpass';f.frequency.value=2500;o.connect(f);f.connect(g);g.connect(ctx.destination);
@@ -43,7 +43,34 @@ function stringSnap(){stringStop();if(!ctx||ctx.state!=='running')return;
  noiseBurst(0,.105,.11,1900);note(670,ctx.currentTime+.012,.19,.065,'triangle',.28);
 }
 function stringAttach(){if(!enabled||!unlock())return;play('grab');stringStart();}
+// Five polyphonic, intentionally quiet voices (C/D/E/F/G); A4 punctuates a snap.
+// One oscillator pair per active fingertip link, no external assets or microphone.
+function fingerAttach(id,hz){
+ if(!enabled||!unlock()||!ctx||ctx.state!=='running'||fingerVoices.has(id))return;
+ const a=ctx.createOscillator(),b=ctx.createOscillator(),gain=ctx.createGain(),filter=ctx.createBiquadFilter();
+ const harmonic=ctx.createGain();a.type='sine';b.type='triangle';filter.type='lowpass';filter.frequency.value=1250;
+ a.frequency.value=hz;b.frequency.value=hz*2;harmonic.gain.value=.12;
+ a.connect(filter);b.connect(harmonic);harmonic.connect(filter);filter.connect(gain);gain.connect(ctx.destination);
+ gain.gain.value=.00001;a.start();b.start();fingerVoices.set(id,{a,b,gain,filter});
+ note(hz,ctx.currentTime+.01,.12,.018,'sine');
+}
+function fingerUpdate(id,hz,tension){
+ if(!enabled||!ctx||ctx.state!=='running')return;
+ const v=fingerVoices.get(id);if(!v)return;const t=Math.min(1,Math.max(0,tension)),at=ctx.currentTime;
+ // Keep the C-major starting notes audible, bending gently upward with tension.
+ const freq=hz*Math.pow(2,.55*t);
+ v.a.frequency.setTargetAtTime(freq,at,.032);v.b.frequency.setTargetAtTime(freq*2.002,at,.032);
+ v.filter.frequency.setTargetAtTime(900+1350*t,at,.05);
+ v.gain.gain.setTargetAtTime(.006+.008*t,at,.05);
+}
+function fingerStop(id){const v=fingerVoices.get(id);if(!v)return;fingerVoices.delete(id);
+ try{const at=ctx.currentTime;v.gain.gain.setTargetAtTime(.00001,at,.02);v.a.stop(at+.18);v.b.stop(at+.18);}catch{}
+}
+function fingersStopAll(){for(const id of [...fingerVoices.keys()])fingerStop(id);}
+function fingerSnap(id){fingerStop(id);if(!enabled||!ctx||ctx.state!=='running')return;
+ noiseBurst(0,.085,.035,2100);note(440,ctx.currentTime+.01,.21,.027,'sine',.84);
+}
 function hover(){const now=performance.now();if(now-lastHover<140)return;lastHover=now;play('hover');}
 document.addEventListener('pointerdown',unlock,{passive:true});document.addEventListener('keydown',unlock,{passive:true});
-window.FreeLabSound={unlock,play,hover,stringStart,stringUpdate,stringStop,stringSnap,stringAttach,setEnabled:v=>{enabled=Boolean(v);if(!enabled)stringStop();},getEnabled:()=>enabled};
+window.FreeLabSound={unlock,play,hover,stringStart,stringUpdate,stringStop,stringSnap,stringAttach,fingerAttach,fingerUpdate,fingerStop,fingerSnap,fingersStopAll,setEnabled:v=>{enabled=Boolean(v);if(!enabled){stringStop();fingersStopAll();}},getEnabled:()=>enabled};
 })();
