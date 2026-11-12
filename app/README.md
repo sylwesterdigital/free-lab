@@ -80,3 +80,7 @@ The CLI prints expected base SAM segmentation cost before any request. `--send` 
 - https://dev.meta.ai/docs/pricing-rate-limits
 - https://developers.meta.com/vr/documentation/web/webxr-mixed-reality/
 - https://developers.meta.com/vr/support/investigations/1557993751977106/
+
+
+### v0.4.1 Quest renderer fix
+Fixed WebGL texture parameter arity; disabled multisample XR layer; removed an absent local Three.js import; nginx now returns 404 for nonexistent assets. The landing mascot uses pinned CDN Three.js with an offline CSS fallback. No account data or credentials are reset.

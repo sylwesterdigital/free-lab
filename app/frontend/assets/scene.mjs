@@ -6,10 +6,9 @@ const stage=document.getElementById('sceneStage');
 const fallback=document.getElementById('sceneFallback');
 if(canvas&&stage){
  try{
-  // Pinned dependency. Can be replaced with /assets/vendor/three.module.js for fully offline builds.
-  let THREE;
-  try{THREE=await import('/assets/vendor/three.module.js');}
-  catch{THREE=await import('https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.module.js');}
+  // Load only the pinned CDN module: do not request an absent local vendor file.
+  // If the CDN is unavailable, the local CSS mascot remains visible.
+  const THREE=await import('https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.module.js');
   const scene=new THREE.Scene();scene.background=new THREE.Color(0x0a0e0d);scene.fog=new THREE.FogExp2(0x0b1110,.055);
   const camera=new THREE.PerspectiveCamera(38,1,.1,70);camera.position.set(0.2,3.2,8.4);camera.lookAt(0,.75,0);
   const renderer=new THREE.WebGLRenderer({canvas,alpha:false,antialias:true,powerPreference:'high-performance'});

@@ -53,6 +53,11 @@ server {
        default_type application/javascript;
        try_files $uri =404;
     }
+    # Never return the SPA's index.html for a missing JS, CSS or image asset.
+    # Otherwise browsers report a misleading text/html module MIME error.
+    location /assets/ {
+       try_files $uri =404;
+    }
     location / {
        try_files $uri $uri/ /index.html;
     }

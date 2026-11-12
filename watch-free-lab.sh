@@ -10,7 +10,7 @@ from pathlib import Path,PurePosixPath
 
 ROOT=Path(sys.argv[1]).resolve();sys.argv=[sys.argv[0]]+sys.argv[2:]
 UPDATES=ROOT/'updates';UPLOADS=ROOT/'uploads';STATE=ROOT/'.free-lab'
-VERSION='0.4.0';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
+VERSION='0.4.1';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
 REPO='git@github.com:sylwesterdigital/free-lab.git'
 HOST=os.getenv('FREE_LAB_SSH_HOST','root@46.62.232.64')
 PORT=os.getenv('FREE_LAB_SSH_PORT','333')
@@ -101,6 +101,16 @@ def validate(archive,stage):
         if f'<meta name="free-lab-version" content="{v}">' not in (stage/'app/frontend/index.html').read_text():raise BadArchive('HTML version marker mismatch')
         if 'ENTER SPATIAL REALITY' not in (stage/'app/frontend/index.html').read_text() or 'id="enterXR"' not in (stage/'app/frontend/index.html').read_text():raise BadArchive('Missing WebXR portal UX')
         if not (stage/'app/frontend/assets/scene.mjs').is_file() or not (stage/'app/backend/secrets.py').is_file():raise BadArchive('Spatial scene or encrypted vault missing')
+        # Detect missing local ES modules, invalid WebGL calls and SPA-HTML asset fallbacks before deployment.
+        xr_source=(stage/'app/frontend/assets/xr.js').read_text()
+        scene_source=(stage/'app/frontend/assets/scene.mjs').read_text()
+        deploy_source=(stage/'app/deploy/install.py').read_text()
+        for call in re.findall(r'gl\.texParameteri\(([^()]*)\)',xr_source):
+            if len(call.split(','))!=3:raise BadArchive('Invalid WebGL texParameteri call (3 arguments required): '+call)
+        if "import('/assets/" in scene_source or 'import("/assets/' in scene_source:
+            raise BadArchive('Unbundled local ES module reference')
+        if 'location /assets/' not in deploy_source or 'try_files $uri =404;' not in deploy_source:
+            raise BadArchive('Missing assets 404 guard in nginx')
         for p in (stage/'app').rglob('*.py'):run(['python3','-m','py_compile',p],timeout=15)
         for p in (stage/'app/frontend/assets').glob('*.js'):run(['node','--check',p],timeout=15)
         for p in (stage/'app/frontend/assets').glob('*.mjs'):run(['node','--check',p],timeout=15)
@@ -202,7 +212,16 @@ def verify_public(v):
         raise Failure('Public version / API health did not match')
     if f'<meta name="free-lab-version" content="{v}">' not in home:
         raise Failure('Public HTML is not updated')
-    say('Verified public HTTPS frontend + Flask + SQLite at '+URL,'PASS')
+    for path,signature in (('assets/xr.js','FREELAB'),('assets/scene.mjs','FREELAB')):
+        req=urllib.request.Request(URL+path+'?verify='+str(int(time.time())),headers={'Cache-Control':'no-cache','User-Agent':'FreeLabRelease/0.4.1'})
+        with urllib.request.urlopen(req,timeout=25) as response:
+            mime=response.headers.get('Content-Type','').split(';',1)[0].strip().lower()
+            body=response.read(180000)
+            if mime not in ('text/javascript','application/javascript'):
+                raise Failure('Wrong JavaScript MIME for /'+path+': '+mime)
+            if signature.encode() not in body or body.lstrip().lower().startswith(b'<!doctype html'):
+                raise Failure('Bad JavaScript body for /'+path+' (HTML fallback or stale release)')
+    say('Verified public HTTPS frontend, JavaScript assets + Flask + SQLite at '+URL,'PASS')
 
 def save_local_and_git(stage,v,manifest):
     members=sorted(manifest['sha256'])+['watch-free-lab.sh']
