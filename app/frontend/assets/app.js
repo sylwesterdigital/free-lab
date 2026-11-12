@@ -1,4 +1,4 @@
-/* FREELAB Spatial Cloud 0.4.1 — camera and model calls explicitly opt-in. */
+/* FREELAB Spatial Cloud 0.5.0 — camera and model calls explicitly opt-in. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
 const state={user:null,config:null,objects:[],tab:'mine',stream:null,snapshot:null,xr:null,sessionKeys:new Map()};
@@ -9,7 +9,7 @@ function cameraReport(){if(!state.stream)return 'NO CAMERA · preflight required
 function notify(msg){const t=$('toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.add('hidden'),4400);}
 async function api(path,opts={}){const init={credentials:'same-origin',...opts,headers:{'X-Free-Lab':'1',...(opts.body?{'Content-Type':'application/json'}:{}),...(opts.headers||{})}};
  const response=await fetch('/api'+path,init);let result={};try{result=await response.json()}catch{}if(!response.ok)throw Error(result.error||'HTTP '+response.status);return result;}
-async function refresh(){try{const h=await api('/health');$('healthStatus').textContent=h.ok?'System online':'Offline';$('connectionDot').classList.toggle('good',h.ok);state.config=await api('/config');const enabled=state.config.inference_enabled||Boolean(sessionMeta());$('modelStatus').textContent=(enabled?state.config.model+' · on demand':'Muse offline · manual mode');$('modelStatus').previousElementSibling.classList.toggle('good',enabled);}
+async function refresh(){try{const h=await api('/health');$('healthStatus').textContent=h.ok?'System online':'Offline';$('connectionDot').classList.toggle('good',h.ok);state.config=await api('/config');const enabled=state.config.inference_enabled||Boolean(sessionMeta());$('modelStatus').textContent=(enabled?'AI ready · on demand':'AI offline · manual mode');$('modelStatus').previousElementSibling.classList.toggle('good',enabled);}
  catch(e){$('healthStatus').textContent='Disconnected';}}
 async function loadObjects(){const path=state.tab==='mine'?'/objects':'/public';const data=await api(path);state.objects=state.tab==='public'?data.objects:data.objects.filter(x=>state.tab==='bin'?x.shelf==='bin':x.shelf!=='bin');renderObjects();}
 function renderObjects(){const box=$('items');box.replaceChildren();if(state.tab==='mine'){$('objectCount').textContent=String(state.objects.length);$('objectCounter').textContent=String(state.objects.length).padStart(2,'0');}
@@ -57,7 +57,7 @@ async function segmentSnapshot(forcedPrompt=null){try{
  for(const found of boxes){const [x1,y1,x2,y2]=found.box;ctx.strokeRect(x1,y1,x2-x1,y2-y1);ctx.fillText(prompt,x1+5,Math.max(20,y1-7));}
  overlay.classList.remove('hidden');notify(`${boxes.length} SAM box(es) · ${data.saved_ids?.length||0} private crop(s) saved (not mask cutouts).`);state.tab='mine';selectTab('mine');await loadObjects();if(state.user?.role==='admin')loadUsage().catch(()=>{});return boxes.length;
  }catch(e){notify(e.message);return false;}finally{$('segment').disabled=false;}}
-async function loadUsage(){if(!state.user)return;const data=await api('/usage');const summary=$('usageSummary');if(!summary)return;summary.textContent=`FREE LAB rolling 24h: ${data.user_last_24h}/${data.user_cap} requests for this profile · ${data.global_last_24h}/${data.global_cap} overall. Local SQLite limits only; NOT a billing/spend cap. Set in /etc/free-lab.env on Ubuntu. `+((data.recent||[]).length?`Latest: ${data.recent[0].provider} / ${data.recent[0].status} / ${JSON.stringify(data.recent[0].tokens)}`:'No inference requests yet.');}
+async function loadUsage(){if(!state.user)return;const data=await api('/usage');const summary=$('usageSummary');if(!summary)return;summary.textContent=`FREE LAB rolling 24h: ${data.user_last_24h}/${data.user_cap||'unlimited'} requests for this profile · ${data.global_last_24h}/${data.global_cap||'unlimited'} overall. Local SQLite limits only; NOT a billing/spend cap. Set in /etc/free-lab.env on Ubuntu. `+((data.recent||[]).length?`Latest: ${data.recent[0].provider} / ${data.recent[0].status} / ${JSON.stringify(data.recent[0].tokens)}`:'No inference requests yet.');}
 async function loadProviderList(){if(state.user?.role!=='admin')return;
  const result=await api('/admin/providers');const box=$('providerList');box.replaceChildren();
  for(const p of result.providers){const sessionOnly=state.sessionKeys.has(p.provider);const chip=el('div','provider-chip'+(p.configured||sessionOnly?' enabled':''));chip.append(el('span','status'),el('span','',p.name+' · '+(p.configured?'Server '+p.source:sessionOnly?'Tab session':'Not set')));
@@ -89,6 +89,7 @@ function presentLog(force=false){if(!state.user)return;fetch('/changelog.json',{
 function dismissLog(){const key=$('changelog').dataset.key;if(key)localStorage.setItem(key,'seen');$('changelog').classList.add('hidden');}
 async function afterAuth(user){state.user=user;$('main').classList.remove('hidden');$('loginView').classList.add('hidden');$('profileSummary').textContent=user.display_name+' · @'+user.username+' · '+user.role;$('adminTools').classList.toggle('hidden',user.role!=='admin');await refresh();await loadObjects();presentLog();if(user.role==='admin')await loadProviderList().catch(e=>notify(e.message));}
 async function init(){
+ wirePromptEditor();
  $('loginForm').onsubmit=async e=>{e.preventDefault();$('loginError').textContent='';try{const data=await api('/login',{method:'POST',body:JSON.stringify({username:$('username').value,password:$('password').value})});$('password').value='';await afterAuth(data.user);}catch(error){$('loginError').textContent=error.message;}};
  const m=await api('/me').catch(()=>({user:null}));if(m.user)await afterAuth(m.user);else{await refresh();$('loginView').classList.remove('hidden');}
  $('enterXR').onclick=async()=>{try{if(!state.user)throw Error('Sign in before entering XR');await window.FreeLabXR.start();}catch(e){notify(e.message)}};
@@ -151,6 +152,79 @@ async function listXRClouds(){
 async function updateXRObject(id,patch){await api('/objects/'+id,{method:'PATCH',body:JSON.stringify(patch)});}
 async function updateXRCloud(id,patch){await api('/captures/'+id,{method:'PATCH',body:JSON.stringify(patch)});}
 
-window.FreeLab={useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
+
+// Explicit media actions: a text or voice prompt never spends tokens until Apply.
+async function promptXR(cid,oid,prompt){
+ const payload={capture_id:cid,object_id:oid||null,prompt,provider:'meta',kind:'image'};
+ if(sessionMeta())payload.session_api_key=sessionMeta();
+ const r=await api('/media/edit',{method:'POST',body:JSON.stringify(payload)});
+ if(state.user?.role==='admin')loadUsage().catch(()=>{});
+ await loadObjects();return r.object;
+}
+async function transcribeXR(wavBase64){
+ const payload={wav:wavBase64};if(sessionMeta())payload.session_api_key=sessionMeta();
+ return (await api('/media/transcribe',{method:'POST',body:JSON.stringify(payload)})).text;
+}
+async function recordWavPrompt(){
+ if(!navigator.mediaDevices?.getUserMedia)throw Error('Microphone unavailable on this Quest Browser');
+ const stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true},video:false});
+ let audio;
+ try{
+   audio=new (window.AudioContext||window.webkitAudioContext)({sampleRate:16000});
+   await audio.resume();const source=audio.createMediaStreamSource(stream);
+   const proc=audio.createScriptProcessor(4096,1,1);const chunks=[];
+   source.connect(proc);proc.connect(audio.destination);
+   proc.onaudioprocess=evt=>{const chunk=new Float32Array(evt.inputBuffer.getChannelData(0));chunks.push(chunk);};
+   await new Promise(resolve=>setTimeout(resolve,6500));
+   proc.disconnect();source.disconnect();
+   const total=chunks.reduce((n,x)=>n+x.length,0);
+   if(total<1600)throw Error('No microphone samples recorded');
+   const sampleRate=audio.sampleRate;const frames=Math.min(total,sampleRate*9);
+   const merged=new Float32Array(frames);let off=0;
+   for(const c of chunks){if(off>=frames)break;const take=Math.min(c.length,frames-off);merged.set(c.subarray(0,take),off);off+=take;}
+   const stride=sampleRate/16000;const outSamples=Math.floor(frames/stride);
+   const out=new ArrayBuffer(44+outSamples*2);const dv=new DataView(out);
+   const ss=(n,where)=>{for(let i=0;i<n.length;i++)dv.setUint8(where+i,n.charCodeAt(i));};
+   ss('RIFF',0);dv.setUint32(4,36+outSamples*2,true);ss('WAVE',8);ss('fmt ',12);
+   dv.setUint32(16,16,true);dv.setUint16(20,1,true);dv.setUint16(22,1,true);
+   dv.setUint32(24,16000,true);dv.setUint32(28,32000,true);
+   dv.setUint16(32,2,true);dv.setUint16(34,16,true);ss('data',36);dv.setUint32(40,outSamples*2,true);
+   for(let i=0;i<outSamples;i++){const v=Math.max(-1,Math.min(1,merged[Math.floor(i*stride)]));dv.setInt16(44+i*2,v<0?v*32768:v*32767,true);}
+   const bytes=new Uint8Array(out);let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
+   return btoa(binary);
+ }finally{stream.getTracks().forEach(t=>t.stop());await audio?.close().catch(()=>{});}
+}
+let pendingPrompt=null;
+function closePrompt(){document.getElementById('xrPromptEditor').classList.add('hidden');pendingPrompt=null;}
+function openPromptEditor(context,initialText='',onApply=null){
+ pendingPrompt={...context,onApply};const modal=document.getElementById('xrPromptEditor');
+ document.getElementById('xrPromptTarget').textContent='EDIT '+(context?.label||'SELECTED PHOTO');
+ document.getElementById('xrPromptText').value=initialText;
+ document.getElementById('xrPromptResult').textContent='Original image will be preserved. One paid image edit is submitted only on Apply.';
+ modal.classList.remove('hidden');document.getElementById('xrPromptText').focus();
+}
+function wirePromptEditor(){
+ document.getElementById('xrPromptClose').onclick=closePrompt;
+ document.getElementById('xrPromptVoice').onclick=async()=>{
+  const status=document.getElementById('xrPromptResult');status.textContent='Recording microphone for 6.5 seconds…';
+  try{const wav=await recordWavPrompt();status.textContent='Transcribing with Meta (paid)…';
+      const transcript=await transcribeXR(wav);document.getElementById('xrPromptText').value=transcript;
+      status.textContent='Transcript ready. Check the words, then press Apply.';}
+  catch(e){status.textContent=e.message;}
+ };
+ document.getElementById('xrPromptApply').onclick=async()=>{
+  if(!pendingPrompt)return;const context=pendingPrompt;
+  const value=document.getElementById('xrPromptText').value.trim();
+  if(value.length<3)return notify('Enter a prompt of at least 3 characters');
+  const button=document.getElementById('xrPromptApply');button.disabled=true;
+  document.getElementById('xrPromptResult').textContent='Generating one image with Meta…';
+  try{const item=await promptXR(context.captureId,context.objectId,value);
+    closePrompt();if(context.onApply)await context.onApply(item);notify('Generated image saved privately');}
+  catch(e){document.getElementById('xrPromptResult').textContent=e.message;}
+  finally{button.disabled=false;}
+ };
+}
+
+window.FreeLab={promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
 document.addEventListener('DOMContentLoaded',()=>init().catch(e=>notify('Initialization failed: '+e.message)));
 })();

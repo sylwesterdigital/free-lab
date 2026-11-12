@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.4.1",
-  "description": "Spatial capture clouds"
+  "version": "0.5.0",
+  "description": "Spatial follow and image prompting"
 }

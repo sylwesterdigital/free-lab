@@ -25,24 +25,15 @@ In the browser on Quest 3, press the **XR** portal. There is no head-locked dash
 
 **WebXR camera limitation:** some Quest Browser firmware only exposes avatar camera or refuses environment camera. Use the upload workflow; full optical passthrough access may require a separate native Quest capture companion. Never assume the headset compositor supplies image pixels for inference.
 
-## Deploy from macOS
+## Deploy from macOS (single ZIP; no separate watcher upgrade)
 
-```bash
-cd /Users/smielniczuk/Documents/works/free-lab
-cp ~/Downloads/watch-free-lab-v0.4.0.sh ./watch-free-lab.sh
-cp ~/Downloads/FREE_LAB_RELEASE_v0.4.0.zip ./uploads/
-chmod +x ./watch-free-lab.sh
-./watch-free-lab.sh --dry-run
-./watch-free-lab.sh --once
-```
-
-The watcher validates source file hashes, archive safety, all required version markers, Python/JS syntax, and unittest checks before contacting GitHub/Ubuntu. It deploys via SSH `root@46.62.232.64:333` to `free-lab.cam`, then verifies public version/API health and pushes main. The watcher keeps older ZIPs untouched; highest version takes priority. Do not place passwords or keys in the repository/ZIP.
+Keep your existing running watcher. Save only `FREE_LAB_RELEASE_v0.5.0.zip` into `updates/`. The watcher validates it and deploys automatically. Do not replace the watcher manually; the unchanged v0.4.1 watcher is bundled only because the release manifest requires an exact watcher hash. Check status with `./watch-free-lab.sh --status` if necessary. Older downloaded ZIPs do not require re-installation.
 
 ## Admin key vault
 
 Sign in with your administrator account, open the small round account button at the top right, and select **Admin / model connections**. Choose Meta and paste the API key. Save. The key never appears in responses, console logs or static assets. Saved keys are encrypted before being written to `/var/lib/free-lab/free-lab.sqlite3`; the vault encryption key is `/etc/free-lab-vault.key` (root:free-lab, 0640), created only if absent. **Back up the DB and vault key together, securely and separately from your Git repository. If the vault key is lost, saved API credentials cannot be decrypted.** Environment `MODEL_API_KEY` is supported as a legacy fallback; it is never overwritten.
 
-Other provider credentials can be securely saved and deleted by admin. **3D generation API calls are NOT integrated in v0.4.0**; storing a key does not automatically enable 3D reconstruction.
+Other provider credentials can be securely saved and deleted by admin. **3D generation and video API calls are NOT integrated in v0.5.0**; storing a key does not automatically enable 3D reconstruction.
 
 ## Camera and costs
 
@@ -50,7 +41,7 @@ Quest WebXR `immersive-ar` passthrough is compositor output, not directly access
 
 - Muse Ember is the low-cost default; Spark 1.3 is optional.
 - SAM 3.1 accepts an image and a *single short noun phrase* such as `chair`, returns boxes and masks; this UI draws boxes only.
-- Current limits: 24 total model requests per rolling day, 8 per profile, 20 seconds cooldown. All Muse/SAM requests share those caps. This is a request cap, NOT a hard spending cap.
+- Request limits: defaults are now unlimited (0), and can optionally be configured with `FREE_LAB_DAILY_LIMIT` and `FREE_LAB_USER_DAILY_LIMIT` in `/etc/free-lab.env` (0 = unlimited); a cooldown remains unless adjusted with `FREE_LAB_COOLDOWN_SECONDS` for image edits. Existing server environment variables take precedence. All Muse/SAM requests share those caps. This is a request cap, NOT a hard spending cap.
 - SAM 3.1 published image price: $2.50 / 1,000 images. Video: $0.20 / 1,000 frames with a minimum charge of 50 frames per video call. Verify pricing before larger tests.
 - Opt-in 20-second scan only uses a camera stream exposed by the browser and visible to the page. If no stream is granted, it refuses to start.
 - All saved images/inventory are private unless shared or explicitly published by their owner.
@@ -84,3 +75,15 @@ The CLI prints expected base SAM segmentation cost before any request. `--send` 
 
 ### v0.4.1 Quest renderer fix
 Fixed WebGL texture parameter arity; disabled multisample XR layer; removed an absent local Three.js import; nginx now returns 404 for nonexistent assets. The landing mascot uses pinned CDN Three.js with an offline CSS fallback. No account data or credentials are reset.
+
+
+### v0.5.0 Spatial Follow, Extract and Prompt
+
+- Follow toolbar stays upright: derived from head **yaw** instead of head pitch/roll, 0.85 m in front and approximately 0.21 m below the eyes. Press Follow/Pin and drag the pill to reposition it in either mode. Source/photo cards stay in the room.
+- Capture a photo, then press EXTRACT on the picture. AI recognition crops bloom directly from the source and do **not** clear the original. The source card and cloud position are saved to SQLite.
+- Select an object or the source and choose PROMPT. SPEAK records about six seconds of microphone audio and optionally submits it to Meta Voice Transcribe. APPLY sends one paid request to Muse Image 1.0. TYPE opens the keyboard editor; Quest Browser DOM Overlay is requested and if not supported it exits XR to open the editor. Reenter XR and open LIB to view the saved result.
+- Edit creates a new **private** JPEG image object with `parent_object_id`, not a replacement of the original. META is the only wired image edit backend; xAI, Gemini, OpenAI, Aholo and 3D/video services remain credential-only until tested adapters are implemented.
+- Pinch/trigger drag supports position and wrist/grip orientation; two simultaneous grips on one card change its scale. These paths are programmed but must still be tested on a physical Quest 3.
+- EXTRACTION is Muse bounding-box cropping. REFINE uses SAM bounding boxes. No decoded transparent SAM masks or physical room mesh is claimed.
+- Source capture requires readable **environment-camera pixels**, which is independent of immersive passthrough. If inaccessible on Quest, upload a photo in 2D before entering XR.
+- No deployment watcher code was modified in this release; the existing v0.4.1 watcher remains the correct version.

@@ -5,7 +5,7 @@ from pathlib import Path
 from functools import wraps
 from flask import Flask,abort,g,jsonify,request,send_file,session
 from werkzeug.middleware.proxy_fix import ProxyFix
-from . import db,providers,secrets as keyvault,sam,provider_checks
+from . import db,providers,secrets as keyvault,sam,provider_checks,media
 
 APP_ROOT=Path(__file__).resolve().parents[1]
 DATA_DIR=Path(os.getenv('FREE_LAB_DATA_DIR',APP_ROOT/'var')).resolve()
@@ -60,7 +60,7 @@ def body():
     return v
 
 def item_dict(row):
-    result={k:row[k] for k in ('id','label','description','provider','visibility','created_at','capture_id','folder','shelf')}
+    result={k:row[k] for k in ('id','label','description','provider','visibility','created_at','capture_id','folder','shelf','parent_object_id','operation')}
     try:result['spatial']=json.loads(row['spatial_json'] or '{}')
     except (ValueError,TypeError):result['spatial']={}
     result['has_image']=bool(row['image_name'])
@@ -76,7 +76,7 @@ def health():
 @app.get('/api/config')
 def config():
     return jsonify(version=VERSION,model=os.getenv('META_MODEL','muse-ember-1.0'),
-      inference_enabled=bool(keyvault.get_meta_key(g.con)),max_snapshots_per_day=int(os.getenv('FREE_LAB_DAILY_LIMIT','24')))
+      inference_enabled=bool(keyvault.get_meta_key(g.con)),max_snapshots_per_day=int(os.getenv('FREE_LAB_DAILY_LIMIT','0')))
 
 @app.get('/api/me')
 def me():
@@ -154,8 +154,8 @@ def usage():
     mine=g.con.execute("SELECT COUNT(*) AS n FROM inference_calls WHERE user_id=? AND julianday(created_at)>=julianday('now')-1",(g.user['id'],)).fetchone()['n']
     recent=g.con.execute("SELECT provider,status,created_at,usage_json FROM inference_calls WHERE user_id=? ORDER BY id DESC LIMIT 20",(g.user['id'],)).fetchall()
     return jsonify(global_last_24h=global_used,user_last_24h=mine,
-        global_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','24')),
-        user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','8')),
+        global_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','0')),
+        user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','0')),
         hard_dollar_cap=False,
         recent=[{'provider':r['provider'],'status':r['status'],'time':r['created_at'],
                  'tokens':json.loads(r['usage_json'] or '{}')} for r in recent])
@@ -186,8 +186,8 @@ def segment_image():
     if not api_key:return jsonify(error='Meta key not configured'),503
     digest=hashlib.sha256(raw+prompt.encode()).hexdigest()
     try:call=db.begin_inference(g.con,g.user['id'],digest,'sam-3.1',
-       daily_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','24')),
-       user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','8')))
+       daily_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','0')),
+       user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','0')))
     except ValueError as e:return jsonify(error=str(e)),429
     try:
         result=sam.segment_jpeg(raw,prompt,api_key)
@@ -235,7 +235,7 @@ def capture_clouds():
         items=g.con.execute('SELECT * FROM objects WHERE owner_id=? AND capture_id=? ORDER BY id LIMIT 80',(g.user['id'],row['id'])).fetchall()
         result.append({'id':row['id'],'image_url':f'/api/captures/{row["id"]}/image',
            'created_at':row['created_at'],'collapsed':bool(row['collapsed']),'hidden':bool(row['hidden']),
-           'objects':[item_dict(obj) for obj in items]})
+           'spatial':json.loads(row['spatial_json'] or '{}'),'objects':[item_dict(obj) for obj in items]})
     return jsonify(captures=result)
 
 @app.post('/api/captures')
@@ -274,6 +274,11 @@ def update_capture_cloud(cid):
         if field in v:
             if type(v[field]) is not bool:return jsonify(error='Capture flag must be boolean'),400
             fields.append(field+'=?');values.append(int(v[field]))
+    if 'spatial' in v:
+        c=v['spatial']
+        if not isinstance(c,dict) or set(c)!={'x','y','z'} or any(type(n) not in (int,float) or not -3<=n<=3 for n in c.values()):
+            return jsonify(error='Invalid capture position'),400
+        fields.append('spatial_json=?');values.append(json.dumps(c))
     if not fields:return jsonify(error='No supported capture update'),400
     with g.con:
         changed=g.con.execute('UPDATE captures SET '+','.join(fields)+' WHERE id=? AND owner_id=?',
@@ -350,9 +355,9 @@ def update_object(oid):
         if v['shelf']=='bin':fields.extend(('visibility=?','share_hash=?'));args.extend(('private',None))
     if 'spatial' in v:
         value=v['spatial']
-        if not isinstance(value,dict) or set(value)-{'x','y','z','scale','rotation'}:
+        if not isinstance(value,dict) or set(value)-{'x','y','z','scale','rotation','qx','qy','qz','qw'}:
             return jsonify(error='Invalid spatial transform'),400
-        allowed={'x':(-2.5,2.5),'y':(-2.0,2.0),'z':(-1.5,1.5),'scale':(.45,3),'rotation':(-6.29,6.29)}
+        allowed={'x':(-2.5,2.5),'y':(-2.0,2.0),'z':(-1.5,1.5),'scale':(.45,3),'rotation':(-6.29,6.29),'qx':(-1,1),'qy':(-1,1),'qz':(-1,1),'qw':(-1,1)}
         for k,x in value.items():
             lo,hi=allowed[k]
             if type(x) not in (float,int) or not lo<=x<=hi:
@@ -408,8 +413,8 @@ def capture():
         model=str(v.get('model') or os.getenv('META_MODEL','muse-ember-1.0'))
         if model not in providers.MODEL_IDS:return jsonify(error='Unsupported Muse model'),400
         try:call=db.begin_inference(g.con,g.user['id'],digest,model,
-                  daily_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','24')),
-                  user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','8')))
+                  daily_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','0')),
+                  user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','0')))
         except ValueError as e:return jsonify(error=str(e)),429
         try:
             detections,usage=providers.identify(raw,model,api_key=request_meta_key(v))
@@ -452,6 +457,84 @@ def capture():
                 path.unlink(missing_ok=True);raise
             ids.append(oid)
     return jsonify(ids=ids,objects=detections,provider=model,usage=usage),201
+
+
+# Image operations use a capability router. Only image-edit is live in this release;
+# unsupported media types return an explicit error before reserving billable usage.
+@app.get('/api/media/capabilities')
+@require_user
+def media_capabilities():
+    return jsonify(image_edit={'meta':{'model':'muse-image-1.0','available':bool(keyvault.get_meta_key(g.con))}},
+                   speech={'meta':{'model':'muse-voice-transcribe-1.0','available':bool(keyvault.get_meta_key(g.con))}},
+                   video={},three_d={},message='3D/video creation requires provider-specific adapters; no inference is submitted for those options.')
+
+@app.post('/api/media/edit')
+@require_user
+def media_edit():
+    v=body()
+    prompt=v.get('prompt')
+    if not isinstance(prompt,str) or not 3<=len(prompt.strip())<=750:
+        return jsonify(error='Prompt must be 3–750 characters'),400
+    if v.get('kind','image')!='image':return jsonify(error='Only image editing is connected. No provider charged.'),422
+    if v.get('provider','meta')!='meta':return jsonify(error='Image provider not connected yet. Select Meta; no request charged.'),422
+    cid=v.get('capture_id');oid=v.get('object_id')
+    if type(cid) is not int or cid<=0:return jsonify(error='Select a private capture first'),400
+    cap=g.con.execute('SELECT * FROM captures WHERE id=? AND owner_id=?',(cid,g.user['id'])).fetchone()
+    if not cap:abort(404)
+    source_name=cap['image_name'];parent=None;label='Capture '+str(cid)
+    if oid is not None:
+        if type(oid) is not int or oid<=0:return jsonify(error='Invalid object ID'),400
+        obj=g.con.execute('SELECT * FROM objects WHERE id=? AND owner_id=? AND capture_id=?',(oid,g.user['id'],cid)).fetchone()
+        if not obj or not obj['image_name'] or obj['shelf']=='bin':abort(404)
+        source_name=obj['image_name'];parent=oid;label=obj['label']
+    raw=(IMAGE_DIR/source_name).read_bytes()
+    if not raw.startswith(b'\xff\xd8') or len(raw)>2_000_000:return jsonify(error='Stored source is not a suitable JPEG'),422
+    key=request_meta_key(v)
+    if not key:return jsonify(error='Configure Meta API key first'),503
+    digest=hashlib.sha256(raw+prompt.strip().encode('utf-8')+secrets.token_bytes(12)+b'|muse-image-1.0').hexdigest()
+    try:call=db.begin_inference(g.con,g.user['id'],digest,'muse-image-1.0',
+         daily_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','0')),
+         user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','0')),
+         cooldown=int(os.getenv('FREE_LAB_COOLDOWN_SECONDS','20')))
+    except ValueError as e:return jsonify(error=str(e)),429
+    try:
+        jpeg,usage=media.edit_meta_image(raw,prompt.strip(),key)
+        name=secrets.token_hex(16)+'.jpg';file=IMAGE_DIR/name;file.write_bytes(jpeg)
+        try:
+            with g.con:
+                new_id=g.con.execute('''INSERT INTO objects(owner_id,label,description,provider,image_name,sha256,capture_id,parent_object_id,operation)
+                       VALUES(?,?,?,?,?,?,?,?,?)''',(g.user['id'],('Edited '+label)[:80],prompt.strip()[:240],
+                        'muse-image-1.0',name,hashlib.sha256(jpeg).hexdigest(),cid,parent,'image_edit')).lastrowid
+        except Exception:
+            file.unlink(missing_ok=True);raise
+        db.finish_inference(g.con,call,'ok',usage)
+        return jsonify(id=new_id,object=item_dict(g.con.execute('SELECT * FROM objects WHERE id=?',(new_id,)).fetchone()),
+                       usage=usage,provider='meta'),201
+    except (RuntimeError,ValueError,OSError) as e:
+        db.finish_inference(g.con,call,'error');return jsonify(error=str(e)),502
+
+@app.post('/api/media/transcribe')
+@require_user
+def media_transcribe():
+    v=body();b64=v.get('wav','')
+    if not isinstance(b64,str) or len(b64)>500_000:return jsonify(error='Speech clip too large'),400
+    try:wav=base64.b64decode(b64,validate=True)
+    except (ValueError,base64.binascii.Error):return jsonify(error='Invalid speech encoding'),400
+    if len(wav)<80 or len(wav)>360_000 or wav[:4]!=b'RIFF' or wav[8:12]!=b'WAVE':
+        return jsonify(error='Expected a short 16 kHz WAV clip (max 10 seconds)'),400
+    key=request_meta_key(v)
+    if not key:return jsonify(error='Meta key not configured'),503
+    digest=hashlib.sha256(wav+b'|transcription').hexdigest()
+    try:call=db.begin_inference(g.con,g.user['id'],digest,'muse-voice-transcribe-1.0',
+         daily_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','0')),user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','0')),
+         cooldown=0)
+    except ValueError as e:return jsonify(error=str(e)),429
+    try:
+        transcript=media.transcribe_meta(wav,key)
+        db.finish_inference(g.con,call,'ok',{})
+        return jsonify(text=transcript[:750])
+    except (RuntimeError,ValueError) as e:
+        db.finish_inference(g.con,call,'error');return jsonify(error=str(e)),502
 
 @app.get('/')
 def home():

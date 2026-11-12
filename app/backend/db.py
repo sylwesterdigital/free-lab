@@ -58,12 +58,16 @@ def init(path):
         fields={row['name'] for row in con.execute('PRAGMA table_info(inference_calls)')}
         if 'usage_json' not in fields:
             con.execute("ALTER TABLE inference_calls ADD COLUMN usage_json TEXT NOT NULL DEFAULT '{}' ")
+        capture_fields={row['name'] for row in con.execute('PRAGMA table_info(captures)')}
+        if 'spatial_json' not in capture_fields:con.execute("ALTER TABLE captures ADD COLUMN spatial_json TEXT NOT NULL DEFAULT '{}'")
         fields={row['name'] for row in con.execute('PRAGMA table_info(objects)')}
         for name,definition in (
             ('capture_id','INTEGER REFERENCES captures(id) ON DELETE SET NULL'),
             ('folder',"TEXT NOT NULL DEFAULT 'Unsorted'"),
             ('shelf',"TEXT NOT NULL DEFAULT 'collection'"),
-            ('spatial_json',"TEXT NOT NULL DEFAULT '{}'")):
+            ('spatial_json',"TEXT NOT NULL DEFAULT '{}'"),
+            ('parent_object_id','INTEGER REFERENCES objects(id) ON DELETE SET NULL'),
+            ('operation',"TEXT NOT NULL DEFAULT ''")):
             if name not in fields:con.execute('ALTER TABLE objects ADD COLUMN '+name+' '+definition)
 
 def hash_password(password, salt=None):
@@ -104,8 +108,8 @@ def begin_inference(con,uid,digest,provider,daily_cap=24,user_cap=8,cooldown=20)
         recent=con.execute("SELECT COUNT(*) FROM inference_calls WHERE user_id=? AND julianday(created_at) >= julianday('now') - (? / 86400.0)",(uid,cooldown)).fetchone()[0]
         duplicate=con.execute("SELECT COUNT(*) FROM inference_calls WHERE user_id=? AND image_sha256=? AND status='ok'",(uid,digest)).fetchone()[0]
         if duplicate: raise ValueError('This image was already analysed; use the saved record')
-        if global_day>=daily_cap or user_day>=user_cap: raise ValueError('Daily inference budget reached')
-        if recent: raise ValueError('Wait before making another model request')
+        if (daily_cap>0 and global_day>=daily_cap) or (user_cap>0 and user_day>=user_cap): raise ValueError('Daily inference budget reached')
+        if cooldown>0 and recent: raise ValueError('Wait before making another model request')
         call=con.execute('INSERT INTO inference_calls(user_id,image_sha256,provider,status) VALUES(?,?,?,?)',
                          (uid,digest,provider,'reserved')).lastrowid
         con.commit()

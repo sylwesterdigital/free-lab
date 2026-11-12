@@ -1,13 +1,15 @@
 {
-  "version": "0.4.1",
-  "title": "Quest XR Renderer Hotfix · v0.4.1",
-  "datetime": "2026-11-12 01:30 GMT",
+  "version": "0.5.0",
+  "title": "Spatial Follow + Image Prompt · v0.5.0",
+  "datetime": "2026-11-12 02:30 GMT",
   "changes": [
-    "Fixed the XR WebGL texture creation exception (texParameteri now receives three required arguments).",
-    "Disabled XR multisampling for Quest Browser compatibility; the original source photo and collection remain unchanged.",
-    "Removed an import of a Three.js file that did not exist in the release; the landing scene uses the pinned CDN with an offline CSS fallback.",
-    "Nginx now returns HTTP 404 for missing assets instead of returning the HTML homepage as a JavaScript module.",
-    "Added pre-deployment guards against missing local modules and invalid WebGL texture calls, and a live JavaScript MIME smoke test.",
-    "No changes to saved captures, profiles, encrypted provider keys, or billable request limits."
+    "Upright small XR toolbar, following the viewer just below eye line by default; Pin mode keeps the toolbar in the room and both modes are draggable.",
+    "Captured source photo remains in place during extraction; object crops bloom from the original on curved trajectories instead of rebuilding the entire scene.",
+    "EXTRACT, PROMPT and REFINE replace exposed model-family terminology in immersive controls; Meta routing stays under the hood.",
+    "Prompt any saved source or object photo; send one explicit paid Muse Image edit and keep the generated child alongside the original, privately saved.",
+    "Speech-to-text for short microphone instructions and a keyboard prompt editor with XR DOM-overlay fallback; microphone compatibility depends on Quest Browser.",
+    "Controller and hand grip orientation supports free card rotation; two-input distance scales a selected object, and capture/card positions are persisted.",
+    "Backend allows unlimited request quota when FREE_LAB_DAILY_LIMIT=0 and FREE_LAB_USER_DAILY_LIMIT=0; provider billing remains separate. No change to encrypted provider keys.",
+    "3D and video adapters are intentionally not activated until provider-specific paid workflows and tests exist."
   ]
 }

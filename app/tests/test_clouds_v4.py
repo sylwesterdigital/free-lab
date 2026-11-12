@@ -36,7 +36,7 @@ class SchemaTests(unittest.TestCase):
 class XRStaticTests(unittest.TestCase):
  def test_spatial_objects_and_input(self):
   text=(ROOT/'frontend/assets/xr.js').read_text()
-  for term in ('immersive-ar','local-floor','targetRaySpace','getJointPose','hitTest','cardModel','startAnimation','showCloud','openBin','launchParticles','grabStart','grabEnd','spatialData','runSam','runMuse'):
+  for term in ('immersive-ar','local-floor','targetRaySpace','getJointPose','hitTest','cardModel','startAnimation','showCloud','openBin','launchParticles','grabStart','grabEnd','spatialData','runSam','runExtract'):
    if term=='startAnimation':continue
    self.assertIn(term,text)
   self.assertNotIn('panelMatrix=mul(view.transform.matrix',text)

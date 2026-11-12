@@ -16,3 +16,18 @@
 
 /* Spatial button pickers replace Quest Browser's unstyled native dropdown menus. */
 .provider-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.provider-option{border:1px solid #5b6a61;border-radius:14px;min-height:47px;padding:11px 8px;color:#d6e4da;background:#1b2821;font-size:12px;font-weight:630;line-height:1.25;transition:background .15s,border-color .15s}.provider-option:hover,.provider-option:focus-visible{background:#2e4937;border-color:#b5fccc}.provider-option.selected{background:#d6f3d9;border-color:#e0ffe3;color:#1a3221}.model-options{display:flex;gap:8px}.model-option{background:#18251d;color:#c6dbc9;border-radius:10px;padding:9px 17px;border:1px solid #57715f;font-size:13px;font-weight:600}.model-option small{display:block;font-size:10px;font-weight:450;color:inherit;opacity:.8}.model-option.selected{color:#173523;background:#e1f6e2}.profile-card .provider-grid button{font-family:inherit}@media(max-width:650px){.provider-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* v0.5.0: keyboard editor for immersive DOM overlay or post-XR fallback. */
+.xr-prompt-editor{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;background:rgba(5,8,8,.74);backdrop-filter:blur(6px);padding:18px}
+.xr-prompt-editor.hidden{display:none!important}
+.xr-prompt-content{width:min(580px,100%);border:0;border-radius:27px;background:#343c38;color:white;padding:24px;display:grid;gap:17px;box-shadow:none}
+.xr-prompt-heading{display:flex;align-items:start;justify-content:space-between;gap:16px}
+.xr-prompt-heading h2{font-size:27px;margin:7px 0 0;font-weight:580;letter-spacing:-.7px}
+.xr-prompt-heading button{border:0;border-radius:100px;width:37px;height:37px;background:#4d5751;color:#fff;font-size:27px;cursor:pointer}
+.xr-prompt-content textarea{width:100%;resize:vertical;min-height:110px;border:0;border-radius:18px;background:#252d29;color:#fff;padding:16px;font:500 17px/1.4 system-ui;outline:none}
+.xr-prompt-content textarea:focus{outline:2px solid #88d89a}
+.xr-prompt-actions{display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap}
+.xr-prompt-actions button{border:0;border-radius:30px;background:#4e5953;color:#fff;padding:12px 20px;font-size:15px;cursor:pointer}
+.xr-prompt-actions #xrPromptApply{background:#d3f8da;color:#102319;font-weight:720}
+#xrPromptResult,.xr-prompt-note{font-size:13px;line-height:1.5;color:#c5d6ca;margin:0}
+.xr-prompt-content .tiny-label{color:#a8f0b4}
