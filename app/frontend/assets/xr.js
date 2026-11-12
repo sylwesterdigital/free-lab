@@ -1,4 +1,4 @@
-/* FREELAB 0.9.4 — five-finger melodic lab and independent tracked-thumb lab.
+/* FREELAB 0.9.5 — continuous non-overlapping string ribbons; melodic lab + tracked-thumb lab.
    Minimal WebGL WebXR renderer: real camera input only, no fake passthrough pixels.
    World-positioned photos, yaw-upright follow toolbar, image derivatives, spatial grab.
    Flat grey floating controls, double-sided, draggable spatial cards.
@@ -296,31 +296,31 @@ function addCard(id,kind,data,loc,size){let c;
 
 // Isolated thumb-string experiment. The active Quest input modality determines when
 // the right controller (toggle) and two tracked thumb-tip joints (simulation) exist.
-const STRAND_V=`attribute vec3 aPos;attribute vec4 aColor;uniform mat4 uVP;varying vec4 vColor;void main(){vColor=aColor;gl_Position=uVP*vec4(aPos,1.0);}`;
-const STRAND_F=`precision mediump float;varying vec4 vColor;void main(){gl_FragColor=vColor;}`;
+const STRAND_V=`attribute vec3 aPos;attribute float aSide;uniform mat4 uVP;varying float vSide;void main(){vSide=aSide;gl_Position=uVP*vec4(aPos,1.0);}`;
+const STRAND_F=`precision mediump float;varying float vSide;uniform vec3 uColor;uniform float uOpacity;void main(){float d=abs(vSide);float core=1.0-smoothstep(.22,.43,d);float halo=1.0-smoothstep(.30,1.0,d);float a=uOpacity*(.88*core+.16*halo);if(a<.006)discard;vec3 bright=min(vec3(1.0),uColor*1.08+vec3(.09));gl_FragColor=vec4(mix(uColor,bright,core*.7),a);}`;
 let strandProgram=null,strandBuffer=null,stringLab=null,stringLabState=null,rightStickDown=false,lastStringWarning=0;
 let fingerLab=null,fingerLabState=null,leftStickDown=false,lastFingerWarning=0;
 function stringColor(t){const stops=[[0,[.18,1,.38]],[.36,[.66,1,.30]],[.58,[1,.93,.18]],[.78,[1,.49,.10]],[1,[1,.12,.10]]];
  for(let i=1;i<stops.length;i++)if(t<=stops[i][0]){const a=stops[i-1],b=stops[i],u=(t-a[0])/(b[0]-a[0]);return a[1].map((c,j)=>c+(b[1][j]-c)*u);}
  return stops[stops.length-1][1];}
-function strandCross(a,b){return[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
-// A camera-facing triangle ribbon, not gl.LINES (which is often locked to 1 pixel on Quest).
-function strandRibbon(vp,path,width,rgb,alpha,eye){if(!strandProgram||path.length<2||alpha<=.001)return;
- const vertices=[],addVertex=p=>vertices.push(...p,...rgb,alpha);
- for(let i=0;i<path.length-1;i++){
-  const a=path[i],b=path[i+1],direction=norm(vsub(b,a)),mid=vmul(vadd(a,b),.5),view=norm(vsub(eye,mid));
-  let normal=norm(strandCross(direction,view));if(length(normal)<.01)normal=[1,0,0];
-  const taper=.92+.08*Math.sin(Math.PI*(i+.5)/(path.length-1)),edge=vmul(normal,width*taper*.5);
-  const al=vadd(a,edge),ar=vsub(a,edge),bl=vadd(b,edge),br=vsub(b,edge);
-  for(const p of [al,ar,bl,bl,ar,br])addVertex(p);
- }
+// One connected TRIANGLE_STRIP per strand. The shader produces its core + glow
+// in a single pass, with depth writes OFF so transparent pixels cannot occlude
+// the bright centre or compete with a second co-planar ribbon.
+function strandRibbon(vp,path,width,rgb,alpha,eye){
+ if(!strandProgram||path.length<2||alpha<=.001)return;
+ const vertices=window.FreeLabStrandGeometry?.buildRibbon(path,eye,width);
+ if(!vertices?.length)return;
  gl.useProgram(strandProgram);gl.bindBuffer(gl.ARRAY_BUFFER,strandBuffer);
- const stride=7*4,position=gl.getAttribLocation(strandProgram,'aPos'),color=gl.getAttribLocation(strandProgram,'aColor');
+ const stride=4*4,position=gl.getAttribLocation(strandProgram,'aPos'),side=gl.getAttribLocation(strandProgram,'aSide');
  gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,3,gl.FLOAT,false,stride,0);
- gl.enableVertexAttribArray(color);gl.vertexAttribPointer(color,4,gl.FLOAT,false,stride,3*4);
+ gl.enableVertexAttribArray(side);gl.vertexAttribPointer(side,1,gl.FLOAT,false,stride,3*4);
  gl.uniformMatrix4fv(gl.getUniformLocation(strandProgram,'uVP'),false,vp);
- gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices),gl.DYNAMIC_DRAW);
- gl.drawArrays(gl.TRIANGLES,0,vertices.length/7);
+ gl.uniform3fv(gl.getUniformLocation(strandProgram,'uColor'),rgb);
+ gl.uniform1f(gl.getUniformLocation(strandProgram,'uOpacity'),alpha);
+ gl.bufferData(gl.ARRAY_BUFFER,vertices,gl.DYNAMIC_DRAW);
+ gl.depthMask(false);
+ try{gl.drawArrays(gl.TRIANGLE_STRIP,0,vertices.length/4);}
+ finally{gl.depthMask(true);}
 }
 function stringLine(a,b,sag=.0){const n=28,path=[];for(let i=0;i<=n;i++){
  const u=i/n,p=blend(a,b,u);p[1]-=sag*Math.sin(Math.PI*u);path.push(p);
@@ -364,16 +364,14 @@ function drawStringLab(vp,t,pose){const state=stringLabState;if(!state||!stringL
  if(state.mode==='linked'&&state.left&&state.right){
   const tension=clamp(state.span,0,1),color=stringColor(tension),width=.021-.013*tension;
   const path=stringLine(state.left,state.right,.065*(1-tension));
-  strandRibbon(vp,path,width*2.25,color,.12,eye);
-  strandRibbon(vp,path,width,color,.92,eye);
+  strandRibbon(vp,path,width*2.25,color,.98,eye);
   line(vp,[state.left,state.right],[...color,.24],true,20);
   line(vp,[state.left,state.right],[...color,1],true,10);
  }else if(state.mode==='snapped'&&state.broken){
   const b=state.broken,age=t-b.start,fade=clamp(1-(age-540)/1040,0,1);
   const l=snappedHalf(age<450&&state.left?state.left:b.left,b.left,-1,age),r=snappedHalf(age<450&&state.right?state.right:b.right,b.right,1,age);
   for(const path of [l,r]){
-   strandRibbon(vp,path,.022,stringColor(.94),.19*fade,eye);
-   strandRibbon(vp,path,.010,stringColor(.90),.88*fade,eye);
+   strandRibbon(vp,path,.026,stringColor(.92),fade,eye);
   }
   if(age<410){line(vp,[l[0],r[0]],[1,.31,.15,fade],true,13);}
  }
@@ -420,15 +418,14 @@ function drawFingerLab(vp,t,pose){if(!fingerLab?.enabled||!fingerLabState?.enabl
   if(strand.mode==='linked'&&strand.left&&strand.right){
    const col=window.FreeLabFingerLab.gradient({start:strand.start,end:strand.end},strand.tension);
    const width=.018-.010*strand.tension,path=stringLine(strand.left,strand.right,.042*(1-strand.tension));
-   strandRibbon(vp,path,width*2.1,col,.15,eye);strandRibbon(vp,path,width,col,.92,eye);
+   strandRibbon(vp,path,width*2.1,col,.98,eye);
    line(vp,[strand.left,strand.right],[...col,1],true,8);
   }else if(strand.mode==='snapped'&&strand.broken){
    const age=t-strand.broken.start,fade=clamp(1-(age-500)/1050,0,1),b=strand.broken;
    const left=snappedHalf(age<440&&strand.left?strand.left:b.left,b.left,-1,age);
    const right=snappedHalf(age<440&&strand.right?strand.right:b.right,b.right,1,age);
    for(const path of [left,right]){
-    strandRibbon(vp,path,.019,strand.end,.17*fade,eye);
-    strandRibbon(vp,path,.008,strand.end,.88*fade,eye);
+    strandRibbon(vp,path,.022,strand.end,fade,eye);
    }
   }
  }

@@ -1,14 +1,13 @@
 {
-  "version": "0.9.4",
-  "title": "Five-Finger Chord Lab \u00b7 v0.9.4",
-  "datetime": "2026-11-12 16:07 UTC",
+  "version": "0.9.5",
+  "title": "Stable Spatial Strings · v0.9.5",
+  "datetime": "2026-11-12 17:35 UTC",
   "changes": [
-    "Added a new independent five-string experiment toggled by clicking the left controller thumbstick in immersive XR.",
-    "Five fingertip pairs (left/right thumb, index, middle, ring, little) each have their own animated string and C-major notes C4, D4, E4, F4, G4.",
-    "Each string starts with a different colour spectrum, changes colour under tension and snaps at its own length with a small randomized variation.",
-    "Multiple notes can sound simultaneously as a soft chord; the snap uses an original A4 pop and falling ribbon fragments.",
-    "After a string snaps, its fingers must separate and touch again to rearm; other strings remain active.",
-    "Only one lab mode runs at a time: right thumbstick switches back to the original thumb-to-thumb String Lab.",
-    "Local WebXR hand joints and WebAudio only; no new API calls, server settings, migrations or watcher changes."
+    "Rebuilt both String Lab and Five-Finger Chord Lab strings as single continuous triangle strips with shared joins, eliminating the overlapping quad seams seen in Quest.",
+    "Replaced separate coplanar green glow and bright core meshes with one shader-rendered luminous strand to avoid depth fighting.",
+    "Disabled depth writes only while rendering transparent strands; restored them immediately afterwards.",
+    "Added stable camera-facing miter joins with a bounded width, robust edge-on fallback and slight separation from hand-joint points.",
+    "Preserved the thumbstick shortcuts, five-note C–G scale, finger-dependent gradients, pitch response, individual snapping and falling fragments.",
+    "Added executable geometry and renderer regression checks; no API calls, database migrations or watcher changes."
   ]
 }
