@@ -26,12 +26,12 @@ class SpatialInteractionTests(unittest.TestCase):
         self.assertIn('function paintEye(',XR)
         self.assertIn('captureEye',XR)
         self.assertIn('enableXRCamera()',XR)
-        self.assertIn('select the eye again to save',XR)
+        self.assertIn('press the eye again to save',XR)
         self.assertIn('async function enableXRCamera()',APP)
         self.assertIn('video.videoWidth',APP)
-        self.assertIn('function updateLivePreview(',XR)
-        self.assertIn('LIVE CAMERA · REAL PIXELS',XR)
-        self.assertIn('showLivePreview()',XR)
+        self.assertNotIn('function updateLivePreview(',XR)
+        self.assertNotIn('LIVE CAMERA · REAL PIXELS',XR)
+        self.assertNotIn('showLivePreview()',XR)
         self.assertIn("state.snapshotOrigin!=='upload'",XR)
         self.assertNotIn('toDataURL(\'image/jpeg\')',XR)  # camera pixels never extracted from passthrough WebGL framebuffer
     def test_photo_aspect_no_cover_and_in_place_save(self):
@@ -51,7 +51,7 @@ class SpatialInteractionTests(unittest.TestCase):
         self.assertIn("arrival:[[392",SOUND)
         self.assertIn('hapticActuators',XR)
         self.assertIn("window.FreeLabSound?.play('enter')",APP)
-        self.assertIn('sound.js?v=0.9.7',HTML)
+        self.assertIn('sound.js?v=0.9.8',HTML)
     def test_prompt_improve_preserves_source(self):
         self.assertIn("case 'refine':return restoreSelected()",XR)
         self.assertIn('return applyPrompt()',XR)

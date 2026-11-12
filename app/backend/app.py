@@ -76,7 +76,7 @@ def health():
 @app.get('/api/config')
 def config():
     return jsonify(version=VERSION,model=os.getenv('META_MODEL','muse-ember-1.0'),
-      inference_enabled=bool(keyvault.get_meta_key(g.con)),max_snapshots_per_day=int(os.getenv('FREE_LAB_DAILY_LIMIT','0')))
+      inference_enabled=bool(keyvault.get_meta_key(g.con)),max_snapshots_per_day=application_inference_limits()['daily_cap'])
 
 @app.get('/api/me')
 def me():
@@ -154,8 +154,8 @@ def usage():
     mine=g.con.execute("SELECT COUNT(*) AS n FROM inference_calls WHERE user_id=? AND julianday(created_at)>=julianday('now')-1",(g.user['id'],)).fetchone()['n']
     recent=g.con.execute("SELECT provider,status,created_at,usage_json FROM inference_calls WHERE user_id=? ORDER BY id DESC LIMIT 20",(g.user['id'],)).fetchall()
     return jsonify(global_last_24h=global_used,user_last_24h=mine,
-        global_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','0')),
-        user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','0')),
+        global_cap=application_inference_limits()['daily_cap'],
+        user_cap=application_inference_limits()['user_cap'],
         hard_dollar_cap=False,
         recent=[{'provider':r['provider'],'status':r['status'],'time':r['created_at'],
                  'tokens':json.loads(r['usage_json'] or '{}')} for r in recent])
@@ -186,8 +186,8 @@ def segment_image():
     if not api_key:return jsonify(error='Meta key not configured'),503
     digest=hashlib.sha256(raw+prompt.encode()).hexdigest()
     try:call=db.begin_inference(g.con,g.user['id'],digest,'sam-3.1',
-       daily_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','0')),
-       user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','0')))
+       daily_cap=application_inference_limits()['daily_cap'],
+       user_cap=application_inference_limits()['user_cap'])
     except ValueError as e:return jsonify(error=str(e)),429
     try:
         result=sam.segment_jpeg(raw,prompt,api_key)
@@ -229,7 +229,7 @@ def segment_image():
 @app.get('/api/captures')
 @require_user
 def capture_clouds():
-    rows=g.con.execute('SELECT * FROM captures WHERE owner_id=? ORDER BY id DESC LIMIT 50',(g.user['id'],)).fetchall()
+    rows=g.con.execute('SELECT * FROM captures WHERE owner_id=? ORDER BY id DESC LIMIT 500',(g.user['id'],)).fetchall()
     result=[]
     for row in rows:
         items=g.con.execute('SELECT * FROM objects WHERE owner_id=? AND capture_id=? ORDER BY id LIMIT 80',(g.user['id'],row['id'])).fetchall()
@@ -244,8 +244,6 @@ def save_capture_cloud():
     v=body()
     try:raw=decode_jpeg(v)
     except ValueError as e:return jsonify(error=str(e)),400
-    count=g.con.execute('SELECT count(*) FROM captures WHERE owner_id=?',(g.user['id'],)).fetchone()[0]
-    if count>=50:return jsonify(error='50 private capture limit reached; reuse saved captures.'),429
     name=secrets.token_hex(16)+'.jpg';dest=IMAGE_DIR/name;dest.write_bytes(raw)
     try:
         with g.con:
@@ -394,6 +392,14 @@ def decode_jpeg(v):
     if len(raw)>450_000 or len(raw)<100 or not (raw.startswith(b'\xff\xd8') and raw.endswith(b'\xff\xd9')):raise ValueError('Invalid or oversized JPEG')
     return raw
 
+def application_inference_limits():
+    """No implicit paid-request quota. Opt in through the protected server environment."""
+    if os.getenv('FREE_LAB_ENFORCE_INFERENCE_LIMITS','0').strip().lower() not in ('1','true','yes','on'):
+        return {'daily_cap':0,'user_cap':0,'cooldown':0}
+    return {'daily_cap':max(0,int(os.getenv('FREE_LAB_DAILY_LIMIT','0'))),
+            'user_cap':max(0,int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','0'))),
+            'cooldown':max(0,int(os.getenv('FREE_LAB_COOLDOWN_SECONDS','0')))}
+
 @app.post('/api/capture')
 @require_user
 def capture():
@@ -416,8 +422,8 @@ def capture():
         model=str(v.get('model') or os.getenv('META_MODEL','muse-ember-1.0'))
         if model not in providers.MODEL_IDS:return jsonify(error='Unsupported Muse model'),400
         try:call=db.begin_inference(g.con,g.user['id'],digest,model,
-                  daily_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','0')),
-                  user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','0')))
+                  daily_cap=application_inference_limits()['daily_cap'],
+                  user_cap=application_inference_limits()['user_cap'])
         except ValueError as e:return jsonify(error=str(e)),429
         try:
             detections,usage=providers.identify(raw,model,api_key=request_meta_key(v))
@@ -511,7 +517,7 @@ def job_3d_dict(row):
 @app.get('/api/media/3d')
 @require_user
 def jobs_3d():
-    rows=g.con.execute('SELECT * FROM jobs_3d WHERE owner_id=? ORDER BY id DESC LIMIT 50',(g.user['id'],)).fetchall()
+    rows=g.con.execute('SELECT * FROM jobs_3d WHERE owner_id=? ORDER BY id DESC LIMIT 500',(g.user['id'],)).fetchall()
     return jsonify(jobs=[job_3d_dict(row) for row in rows])
 
 @app.post('/api/media/3d')
@@ -536,9 +542,9 @@ def media_3d_start():
     raw=(IMAGE_DIR/name).read_bytes()
     digest=hashlib.sha256(raw+secrets.token_bytes(16)+b'meshy-image-to-3d').hexdigest()
     try:call=db.begin_inference(g.con,g.user['id'],digest,'meshy-image-to-3d',
-         daily_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','0')),
-         user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','0')),
-         cooldown=int(os.getenv('FREE_LAB_COOLDOWN_SECONDS','20')))
+         daily_cap=application_inference_limits()['daily_cap'],
+         user_cap=application_inference_limits()['user_cap'],
+         cooldown=application_inference_limits()['cooldown'])
     except ValueError as e:return jsonify(error=str(e)),429
     try:
         task=meshy3d.submit(raw,key)
@@ -621,9 +627,9 @@ def media_edit():
     if not key:return jsonify(error='Configure Meta API key first'),503
     digest=hashlib.sha256(b''.join(raws)+prompt.strip().encode('utf-8')+secrets.token_bytes(12)+b'|muse-image-1.0').hexdigest()
     try:call=db.begin_inference(g.con,g.user['id'],digest,'muse-image-1.0',
-         daily_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','0')),
-         user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','0')),
-         cooldown=int(os.getenv('FREE_LAB_COOLDOWN_SECONDS','20')))
+         daily_cap=application_inference_limits()['daily_cap'],
+         user_cap=application_inference_limits()['user_cap'],
+         cooldown=application_inference_limits()['cooldown'])
     except ValueError as e:return jsonify(error=str(e)),429
     try:
         jpeg,usage=media.edit_meta_images(raws,prompt.strip(),key) if mix_sources else media.edit_meta_image(raws[0],prompt.strip(),key)
@@ -654,7 +660,7 @@ def media_transcribe():
     if not key:return jsonify(error='Meta key not configured'),503
     digest=hashlib.sha256(wav+b'|transcription').hexdigest()
     try:call=db.begin_inference(g.con,g.user['id'],digest,'muse-voice-transcribe-1.0',
-         daily_cap=int(os.getenv('FREE_LAB_DAILY_LIMIT','0')),user_cap=int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','0')),
+         daily_cap=application_inference_limits()['daily_cap'],user_cap=application_inference_limits()['user_cap'],
          cooldown=0)
     except ValueError as e:return jsonify(error=str(e)),429
     try:

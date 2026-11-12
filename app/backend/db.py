@@ -110,15 +110,13 @@ def user_from_id(con,uid):
 def user_from_name(con,name):
     return con.execute('SELECT * FROM users WHERE username=?',(name,)).fetchone()
 
-def begin_inference(con,uid,digest,provider,daily_cap=24,user_cap=8,cooldown=20):
+def begin_inference(con,uid,digest,provider,daily_cap=0,user_cap=0,cooldown=0):
     """Reserve one paid request in a SQLite IMMEDIATE transaction across processes."""
     con.execute('BEGIN IMMEDIATE')
     try:
         global_day=con.execute("SELECT COUNT(*) FROM inference_calls WHERE julianday(created_at) >= julianday('now') - 1").fetchone()[0]
         user_day=con.execute("SELECT COUNT(*) FROM inference_calls WHERE user_id=? AND julianday(created_at) >= julianday('now') - 1",(uid,)).fetchone()[0]
         recent=con.execute("SELECT COUNT(*) FROM inference_calls WHERE user_id=? AND julianday(created_at) >= julianday('now') - (? / 86400.0)",(uid,cooldown)).fetchone()[0]
-        duplicate=con.execute("SELECT COUNT(*) FROM inference_calls WHERE user_id=? AND image_sha256=? AND status='ok'",(uid,digest)).fetchone()[0]
-        if duplicate: raise ValueError('This image was already analysed; use the saved record')
         if (daily_cap>0 and global_day>=daily_cap) or (user_cap>0 and user_day>=user_cap): raise ValueError('Daily inference budget reached')
         if cooldown>0 and recent: raise ValueError('Wait before making another model request')
         call=con.execute('INSERT INTO inference_calls(user_id,image_sha256,provider,status) VALUES(?,?,?,?)',

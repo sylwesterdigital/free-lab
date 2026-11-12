@@ -1,12 +1,12 @@
 {
-  "version": "0.9.7",
-  "title": "Extract Roundel & Camera Preview Hotfix \u00b7 v0.9.7",
-  "datetime": "2026-11-12 20:24 UTC",
+  "version": "0.9.8",
+  "title": "Reliable Capture & Extract \u00b7 v0.9.8",
+  "datetime": "2026-11-12 20:40 UTC",
   "changes": [
-    "Move the live Quest camera preview above the microphone, capture eye, and Extract roundels, instead of covering the right-hand Extract control.",
-    "Keep all three roundels in a fixed arrangement. Extract is dimmed before a source photograph is available, then turns green and stays clickable.",
-    "Hide the live preview when a photo is captured; the capture image and extraction action remain independent.",
-    "Preserve previously saved images, cloud objects, experimental modes, accounts, API keys, and request quotas.",
-    "Add a geometric regression test to prevent live camera pixels from obstructing the extraction roundel again."
+    "Remove all live-camera preview surfaces from immersive XR; the Quest passthrough already shows the room.",
+    "On capture save failure, clear temporary SAVING state and report the actual backend error; successful saves activate both Extract controls.",
+    "Keep Extract directly on the source image and in the right-side roundel; no additional menu required.",
+    "Remove default daily-request, per-profile, cooldown, duplicate-image, and 50-capture restrictions from the application. Limits are opt-in by server setting.",
+    "Preserve all saved captures, profiles, API credentials and other XR experiments."
   ]
 }

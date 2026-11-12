@@ -178,7 +178,7 @@ def ensure_environment():
     text=('FREE_LAB_DATA_DIR=/var/lib/free-lab\nFREE_LAB_DB=/var/lib/free-lab/free-lab.sqlite3\n'
           'FREE_LAB_HTTPS=1\nFREE_LAB_SESSION_KEY='+session+'\n'
           'META_MODEL=muse-ember-1.0\nMODEL_API_KEY=\n'
-          'FREE_LAB_DAILY_LIMIT=24\nFREE_LAB_USER_DAILY_LIMIT=8\n')
+          'FREE_LAB_ENFORCE_INFERENCE_LIMITS=0\nFREE_LAB_DAILY_LIMIT=0\nFREE_LAB_USER_DAILY_LIMIT=0\nFREE_LAB_COOLDOWN_SECONDS=0\n')
     fd=os.open(ENV,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
     with os.fdopen(fd,'w') as f:f.write(text)
 

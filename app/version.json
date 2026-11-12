@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.9.7",
-  "description": "XR camera preview repositioned above all three controls; Extract always visible and dimmed until a source image exists"
+  "version": "0.9.8",
+  "description": "Remove XR camera preview, repair capture save state, and make arbitrary inference and storage quotas opt-in"
 }
