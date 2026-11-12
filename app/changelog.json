@@ -1,15 +1,12 @@
 {
-  "version": "0.9.0",
-  "title": "Single-Menu XR, 3D Mascot & Gesture Feedback \u00b7 v0.9.0",
-  "datetime": "2026-11-12 06:30 UTC",
+  "version": "0.9.1",
+  "title": "XR Image Controls & Quiet Gestures \u00b7 v0.9.1",
+  "datetime": "2026-11-12 07:00 UTC",
   "changes": [
-    "Source-image EXTRACT button now has a correct top-left XR hit target; image X hides, image \u00b7\u00b7\u00b7 opens exactly one vertical context menu.",
-    "Context menu offers Restore (paid single click), Prompt (Quest keyboard / Enter to send), Voice and 3D; redundant Mix, Folder and Bin floating bars removed.",
-    "Optional 3D shaded WebGL mascot, 2D sprite or Off; animated blinking/emotions with pointer-side tracking and bounded simulated idle bounce.",
-    "Local debounced hand-joint classifier for OK, thumbs up/down, pointing, forward, fist, open palm and two-hand heart; spoken feedback opt-in.",
-    "Voice status floats near line of sight, with red listening indicator, transcription dots and recognized text; restores speech results in the XR scene.",
-    "3D jobs use Meshy opt-in confirmation and existing stored job status, then continue polling without holding the XR render loop.",
-    "Watcher v0.9.0 in this ZIP: ANSI green success/red error, blank lines between releases and silent archiving of old ZIPs.",
-    "No physical Quest test or real model charges performed; preserve profiles, private objects, vault and budget configurations."
+    "Fixed source image EXTRACT, \u00b7\u00b7\u00b7 and \u00d7 controls by giving button actions precedence over incidental controller rotation during press/release.",
+    "Precise XR button hit regions use the actual image card canvas dimensions, including portrait and landscape captures.",
+    "Removed flashing head-locked gesture notifications; gestures now produce short, rate-limited speech and a small label beside the mascot.",
+    "No change to the real microphone listening indicator, data store, model limits, or release watcher.",
+    "Regression tests exercise XR hit-region mapping, latched button actions and rotated hand/controller input without paid calls."
   ]
 }

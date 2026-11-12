@@ -26,6 +26,6 @@ class WebXRBootTests(unittest.TestCase):
         self.assertIn('location /assets/',install.NGINX)
         self.assertIn('try_files $uri =404;',install.NGINX)
     def test_release_includes_041_version(self):
-        self.assertEqual(__import__('json').loads((APP/'version.json').read_text())['version'],'0.9.0')
+        self.assertEqual(__import__('json').loads((APP/'version.json').read_text())['version'],'0.9.1')
 
 if __name__=='__main__':unittest.main()

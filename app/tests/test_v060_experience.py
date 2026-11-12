@@ -50,7 +50,7 @@ class SpatialInteractionTests(unittest.TestCase):
         self.assertIn("arrival:[[392",SOUND)
         self.assertIn('hapticActuators',XR)
         self.assertIn("window.FreeLabSound?.play('enter')",APP)
-        self.assertIn('sound.js?v=0.9.0',HTML)
+        self.assertIn('sound.js?v=0.9.1',HTML)
     def test_prompt_improve_preserves_source(self):
         self.assertIn("case 'refine':return restoreSelected()",XR)
         self.assertIn('return applyPrompt()',XR)

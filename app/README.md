@@ -55,3 +55,7 @@ Official references: https://developers.meta.com/vr/documentation/web/webxr-keyb
 - Configurable **3D / 2D / Off** XR mascot. The 3D version consists of shaded meshes in native WebGL, not the landing Three.js asset. Gesture classification uses tracked WebXR joint geometry and can be wrong; it is not an ML pose model. The idle bounce is in a virtual volume, NOT physical room-wall detection.
 - No environment-depth occlusion. Current Quest WebXR support must be feature-detected; hand tracking does not imply depth sensing.
 - The watcher is included as v0.9.0 and self-installs after a successful release. Restart the currently running watcher once to see its new colored and silent-idle terminal behavior.
+
+## v0.9.1 — reliable XR image controls and mascot gesture feedback
+
+Press/release gestures on image-card Extract / … / × are latched at press time and cannot turn into a move/rotate action. Hitboxes follow the 600-pixel texture layout and the actual height of each image. Gesture classification now causes only a brief speech label at the mascot and optional speech synthesis, with cooldowns; dictation status continues to work normally. The watcher is unchanged from 0.9.0.

@@ -15,11 +15,11 @@ class XRMenuTests(unittest.TestCase):
         self.assertNotIn('case \'folder\':return changeObject',XR)
         self.assertNotIn("['contextbar','3dbar']",XR)
     def test_source_extract_and_image_options_hitboxes(self):
-        self.assertIn("if(h.card.kind==='source'&&h.x<-.14)return 'extract'",XR)
-        self.assertIn("if(h.x>.22)return 'imagemenu'",XR)
-        self.assertIn("if(h.x>.37)return 'imageclose'",XR)
+        self.assertIn("if(card.kind==='source'&&px>=27&&px<=225)return 'extract'",XR)
+        self.assertIn("if(px>=442&&px<=512)return 'imagemenu'",XR)
+        self.assertIn("if(px>=510&&px<=582)return 'imageclose'",XR)
         self.assertIn('const draggable=!held.id',XR)
-        self.assertIn('c.buttonBand=.5-86/h',XR)
+        self.assertIn('c.canvasHeight=h',XR)
     def test_restore_is_direct_and_image_edit_preserves_parent(self):
         self.assertIn("case 'refine':return restoreSelected()",XR)
         self.assertIn('return applyPrompt();',XR)
@@ -38,11 +38,11 @@ class XRMenuTests(unittest.TestCase):
         self.assertIn('function pollGestures(',XR)
         self.assertIn('mascotMode()',XR)
         self.assertIn('id="pref-mascotMode"',HTML)
-        self.assertIn('gestures.js?v=0.9.0',HTML)
+        self.assertIn('gestures.js?v=0.9.1',HTML)
     def test_watchers_are_colored_and_silent(self):
         if not WATCH:
             # Ubuntu ships application files, not the macOS release watcher.
-            self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.9.0')
+            self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.9.1')
             return
         self.assertIn("VERSION='0.9.0'",WATCH)
         self.assertIn("'PASS':'\\033[1;32m'",WATCH)
@@ -72,10 +72,10 @@ const win={};const code=fs.readFileSync('./frontend/assets/xr.js','utf8').replac
  'window.FreeLabXR={start,isRunning:()=>!!session};',
  'window.FreeLabXR={start,isRunning:()=>!!session,hit:buttonFromHit};');
 vm.runInNewContext(code,{window:win,performance:{now:()=>0},console});
-const hit=win.FreeLabXR.hit,card={kind:'source',buttonBand:.40};
-assert(hit({card,x:-.30,y:.45})==='extract','Extract should be top-left');
-assert(hit({card,x:.28,y:.45})==='imagemenu','Menu should be top-right');
-assert(hit({card,x:.41,y:.45})==='imageclose','Close should be top-right');
+const hit=win.FreeLabXR.hit,card={kind:'source',canvasHeight:420};
+assert(hit({card,x:-.30,y:.38})==='extract','Extract should be top-left');
+assert(hit({card,x:.28,y:.38})==='imagemenu','Menu should be top-right');
+assert(hit({card,x:.41,y:.38})==='imageclose','Close should be top-right');
 assert(!hit({card,x:-.30,y:.10}),'Photo body must not trigger extract');
 console.log('Node XR hitboxes and gestures passed');
 '''

@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.9.0",
-  "description": "Single XR image menu, local gesture feedback, volumetric mascot and safe queued 3D actions"
+  "version": "0.9.1",
+  "description": "XR image action tap fix and mascot-only gesture feedback"
 }

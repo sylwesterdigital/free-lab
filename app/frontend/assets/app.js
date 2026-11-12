@@ -1,4 +1,4 @@
-/* FREELAB Spatial Cloud 0.9.0 — camera and model calls explicitly opt-in. */
+/* FREELAB Spatial Cloud 0.9.1 — camera and model calls explicitly opt-in. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
 const state={user:null,config:null,objects:[],tab:'mine',stream:null,micStream:null,snapshot:null,snapshotOrigin:null,xr:null,sessionKeys:new Map()};
