@@ -12,7 +12,7 @@ INDEX=(ROOT/'frontend/index.html').read_text()
 
 class SpatialWorkbench(unittest.TestCase):
     def test_one_image_popover_single_small_context(self):
-        self.assertIn('size:[.2925,rows*.0711]', XR)
+        self.assertIn('size:[.2925,rows*.068]', XR)
         self.assertIn("const sourceTools=[['describe'", XR)
         self.assertIn("'segment','✳'", XR)
         for label in ("segment:'EXTRACT'", "describe:'DESCRIBE'", "refine:'REFINE'", "voice:'VOICE'", "'3d':'3D'"):

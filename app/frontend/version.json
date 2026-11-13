@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.9",
-  "description": "Persistent X-button lab selector and thrown-frame mascot collision"
+  "version": "0.10.11",
+  "description": "Spatial shape sorter, private collaborative rooms, gallery and cinema browsing, API scopes"
 }

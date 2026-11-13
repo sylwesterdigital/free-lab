@@ -70,13 +70,13 @@ class SpatialXRTests(unittest.TestCase):
         self.assertIn('quatMul(quatY(-rootYaw),lookingQuat',XR)
         self.assertIn('Math.atan2(d[1],Math.hypot(d[0],d[2]))',XR)
     def test_darkroom_keeps_xr_session(self):
-        self.assertIn('function enterDarkroom()',XR)
+        self.assertIn('function enterDarkroom(',XR)
         self.assertIn("case 'darkroomexit':return closeDarkroom()",XR)
         self.assertIn("return 'darkroom'",XR)
         self.assertIn('gl.clearColor(0,0,0,1)',XR)
         self.assertIn('function renderCinema(frame,pose)',XR)
         self.assertIn("'cinema-floor'",XR)
-        body=XR.split('function enterDarkroom(){',1)[1].split('function closeSelectedCard()',1)[0]
+        body=XR.split('function enterDarkroom(',1)[1].split('function renderCinema',1)[0]
         self.assertNotIn('session.end()',body)
     def test_status_and_mascot_speech(self):
         self.assertIn('function typeStatus(t)',XR)

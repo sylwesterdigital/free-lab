@@ -148,3 +148,73 @@ Press **X on the left controller** to open the experiment selector; it stays vis
 
 ## SAM 3.1 transparent cutouts (v0.10.9)
 XR EXTRACT uses Muse recognition plus one SAM 3.1 box-prompt request to produce masked PNG child objects. Further explicit SAM segmentation also saves transparent PNG descendants. This is an additional paid Meta Model API request, not a simulated or client-side rectangle crop. The official `meta-sam-parser==0.2.0` decoder is installed with Python dependencies. The server preserves historic JPEG crop records. Meta live model calls and physical Quest 3 rendering must be verified after deployment.
+
+
+## XR Personalization and spatial trees (v0.10.10)
+
+In immersive Quest XR, the **CONFIG** cog sits immediately before EXIT on the pink-text toolbar.
+The window can be grabbed and moved independently like LOG. It saves local browser
+preferences: Current/Dark/Night/Liquid theme, random contrast-safe palette and font,
+window borders and backgrounds, mascot visibility, experiment menu, SAM mask-versus-rectangle,
+voice (microphone, descriptive speech and voice prompts) and one of six processing visualizations.
+Disabling masks changes future saved child images only; existing PNG cutouts remain untouched.
+The setting does not change inference permission, billing or saved objects.
+
+Image families remain persisted in SQLite without a depth limit. Choosing OPEN BRANCH
+shows the selected image and its children, with the actual ancestor image thumbnails
+stepping away in depth; tap an ancestor to return. Page controls exist only when there
+are more than seven direct children, to bound GPU texture usage. No fake PARENT image.
+The LIB icon displays the number of historical source captures. The entire 2D panel
+orientation checks the viewer's position to avoid mirrored labels.
+
+Not tested on Quest hardware in the build environment.
+
+
+## Spatial shape sorter, private rooms (v0.10.11)
+
+### Experiments
+
+Press X on the Quest 3 left controller, select SHAPES with the left stick and press its trigger.
+Draw rectangle frames using both index fingers and thumbs. To start a triangular frame,
+touch left thumb and index tip to any right-hand fingertip, then separate the 3 tips to
+form a real triangle in world space; hold briefly or let go after stretching.
+Two floating target volumes render as glowing outline triangular and rectangular prisms.
+Grab a frame near an edge with thumb/index pinch and carry it to the target. The target
+accepts only its matching shape. Frame geometry stays on-device; no model request.
+
+### Shared room access and privacy
+
+Every entry into XR asks Private or Public; Private is the default. Your signed-in account
+owns a persistent room. **Public only exposes the live room to other signed-in profiles**:
+viewers must explicitly join it. Private rooms require a specific invitation followed by
+acceptance. Use ROOMS on the desktop to invite or spectate. Room-state traffic at most once
+a second contains only a headset xyz location and bounded object/capture identifiers and
+world-space xyz positions; camera video, audio, API keys and prompts are never transmitted
+as room state. Individual image URLs are served only to joined attendees and only while
+published as a room object. Other profile objects remain private.
+
+The desktop spectator is a local canvas perspective renderer with wireframe room bounds,
+grey floor grid, simulated ambient stars and perspective image cards. Drag to orbit, mouse
+wheel to zoom. This is a polling-based read-only spatial audience; it does NOT replicate
+Quest's raw passthrough imagery or provide bidirectional avatar controls.
+
+### 3D provider scopes
+
+Admin settings: choose a provider and toggle sharing. Every provider defaults to admin-only;
+Shared grants authenticated profiles the ability to use the encrypted server key without
+reading it. Previously saved vault entries remain intact. Aholo model tasks retain their
+status and only report success if an actual GLB output exists. Aholo task failures can
+still occur at the upstream provider due to its service, credits, or remote image fetching.
+An Aholo key being present in the vault does not prove generation will succeed. The new
+error path includes the provider task id and any available provider failure detail.
+
+### Galleries
+
+Open the desktop Collection to enter a full-window overview and click an object photo
+for a large image viewer. Prev/Next and swipe/keyboard navigation browse source capture
+and descendants; the filmstrip follows the selection. The headset cinema has left/right
+browsing controls, keeping the immersive black room visible. Window headers are sticky.
+
+No inference work is performed without the existing explicit user action; no API keys are
+included. Hardware Quest operation, real-world hand tracking and live Aholo tasks must be
+checked on the target system; unit tests do not establish those properties.

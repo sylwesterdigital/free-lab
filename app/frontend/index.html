@@ -1,15 +1,16 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.9">
+<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.11">
 <title>FREELAB — Step into the spatial world</title>
-<link rel="stylesheet" href="/assets/style.css?v=0.10.9">
+<link rel="stylesheet" href="/assets/style.css?v=0.10.11">
 </head><body>
 <div id="app" class="app-shell">
 <header class="header" aria-label="Site navigation">
   <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span>FREELAB</span><span class="brand-tag">SPATIAL STUDIO / 008</span></a>
   <nav class="header-right" aria-label="Workspace">
     <span class="live-pill"><span class="server-dot" id="connectionDot"></span><span id="healthStatus">Connecting</span></span>
+    <button id="roomButton" class="nav-pill" type="button">Rooms</button>
     <button id="toggleLibrary" class="nav-pill" aria-expanded="false" aria-controls="workspace">Collection <span id="objectCount">0</span></button>
     <button class="nav-avatar" id="profileButton" title="Profiles and model providers" aria-label="Account and model settings">◌</button>
   </nav>
@@ -34,7 +35,7 @@
     </nav>
     <aside class="scene-caption"><span class="caption-index">01 / SPATIAL COLLECTOR</span><p>Capture. Bloom.<br>Collect.</p><span class="caption-muted">Capture → recognize → collect in 3D.</span></aside>
     <span id="modelStatus" class="visually-hidden">Models ready on demand</span>
-    <div class="stage-bottom"><span>LIVE EXPERIMENT / 0.10.9</span><span class="stage-line"></span><span>BUILT FOR CURIOSITY</span></div>
+    <div class="stage-bottom"><span>LIVE EXPERIMENT / 0.10.11</span><span class="stage-line"></span><span>BUILT FOR CURIOSITY</span></div>
   </section>
   <section id="workspace" class="workspace workspace-drawer hidden" aria-label="Private inventory">
     <div class="workspace-head"><div><p class="eyebrow">YOUR PERSONAL ARCHIVE</p><h2>Found in your world <span id="objectCounter" class="muted-count">00</span></h2></div><div class="workspace-actions"><div class="tabs"><button class="tab active" data-list="mine">Private</button><button class="tab" data-list="public">Public</button><button class="tab" data-list="bin">Bin</button></div><button id="closeLibrary" class="round-btn" aria-label="Close collection">×</button></div></div>
@@ -45,6 +46,16 @@
 <footer class="footer"><span>FREELAB LABORATORY © 2026</span><span>PRIVATE BY DEFAULT · YOUR SPACE, YOUR RULES</span><button id="showChangelog" class="link-btn">DEV LOG ↗</button></footer>
 </div>
 
+<div id="roomChooser" class="modal hidden" data-visibility="private"><div class="modal-card room-chooser">
+<div class="modal-title"><h2>Start your spatial room</h2><button id="roomCancel" class="round-btn">×</button></div>
+<p>Who can join this XR session?</p><div class="room-choice"><button id="roomPrivate" class="secondary-btn">Private · invited guests</button><button id="roomPublic" class="secondary-btn">Public · server profiles</button></div>
+<p class="small-muted">Private is the default. People cannot view your images until they join your room. You can invite specific signed-in profiles later.</p>
+<button id="roomConfirm" class="primary-btn">Enter XR and start room</button></div></div>
+<div id="desktopGallery" class="hidden" role="dialog" aria-label="Image gallery"><header><strong id="galleryTitle">Gallery</strong><button id="galleryClose" aria-label="Close">×</button></header>
+<div class="gallery-stage"><button id="galleryPrev" aria-label="Previous image">‹</button><img id="galleryImage" alt="Selected collection image"><button id="galleryNext" aria-label="Next image">›</button></div><p id="galleryDetail"></p><div id="galleryFilmstrip"></div></div>
+<div id="roomsPanel" class="rooms-modal hidden" role="dialog" aria-label="Spatial rooms"><header><h2>Shared spatial rooms</h2><button id="roomsClose">×</button></header>
+<div id="roomLobby"><p class="small-muted">Only signed-in users can join. Private rooms require an invitation.</p><div id="roomList"></div><h3>Invite to your room</h3><div id="roomInviteList"></div></div>
+<div id="roomViewer" class="hidden"><div class="room-viewer-head"><span id="roomState">Connecting…</span><button id="roomLeave">← All rooms</button></div><canvas id="roomCanvas" aria-label="Live wireframe room and image placements"></canvas></div></div>
 <div id="xrPromptEditor" class="xr-prompt-editor hidden" role="dialog" aria-label="Edit the selected image with AI">
   <div class="xr-prompt-content">
     <div class="xr-prompt-heading"><div><span class="tiny-label" id="xrPromptTarget">SELECTED PHOTO</span><h2>What should change?</h2></div><button type="button" id="xrPromptClose" aria-label="Close prompt">×</button></div>
@@ -64,7 +75,7 @@
   <label for="pref-frameHoldSeconds">SPATIAL FRAME DETACH TIMER
   <select id="pref-frameHoldSeconds" aria-label="Seconds to hold frame before detaching"><option value="1.5">1.5 seconds</option><option value="3" selected>3 seconds</option><option value="5">5 seconds</option></select>
   </label>
-  <p class="small-muted">Press X on the left controller to open the experiment menu. Move the left joystick to choose, then press the left trigger to activate. Press X again to cancel. Draw a frame by joining the two index fingertips and two thumb tips; stretch, hold and release it into the room.</p>
+  <p class="small-muted">Press X on the left controller to open the experiment menu. Move the left joystick to choose, then press the left trigger to activate. Press X again to cancel. In SHAPES mode, make triangles using two tips on one hand and one opposite-hand finger; carry shapes into matching glowing bins. Draw a frame by joining the two index fingertips and two thumb tips; stretch, hold and release it into the room.</p>
   <label><input type="checkbox" id="pref-spoken"> Speak descriptions and gesture updates (optional)</label>
   <label for="pref-speechEngine">MASCOT VOICE ENGINE<select id="pref-speechEngine"><option value="browser">Browser / system speech (no additional TTS bill)</option><option value="elevenlabs">ElevenLabs (billed on each speech request)</option></select></label>
   <label for="pref-speechVoiceId">ELEVENLABS VOICE<select id="pref-speechVoiceId"><option value="">Choose a voice</option></select></label>
@@ -74,6 +85,7 @@
   <p class="small-muted">Voice command transcription uses Meta and may incur usage charges. Voice responses use device speech when supported. These switches stay in this browser.</p>
   <button type="button" class="secondary-btn" id="armXRMicSettings" onclick="document.getElementById('armXRMic').click()">Enable microphone for XR</button>
 </div><div id="adminTools" class="hidden"><hr><p class="eyebrow">ADMIN / MODEL CONNECTIONS</p><h3>Private API vault</h3><p class="small-muted">API keys are encrypted in the server database. The encryption key stays on Ubuntu outside the Git repository. Saved keys are never returned to the browser.</p><div id="providerList" class="provider-list"></div>
+<section id="apiScopeConfig"><p class="eyebrow">API KEY ACCESS</p><p class="small-muted">Private: admin only. Shared: all signed-in profiles may use this vault provider; keys are never exposed.</p><label for="apiShared" class="api-scope-row">Share selected provider with all users <input id="apiShared" type="checkbox" role="switch"></label><p id="apiScopeResult" class="small-muted"></p></section>
 <div class="usage-meter" id="usageSummary">Loading local budget…</div>
 <div class="provider-result" role="group" aria-label="3D generation provider" style="margin:18px 0 16px">
  <label for="preferred3D" class="tiny-label">3D GENERATION PROVIDER (NO SILENT FALLBACK)</label>
@@ -99,15 +111,18 @@
 <div id="scanConsent" class="modal hidden"><div class="modal-card"><p class="eyebrow">COST CONFIRMATION</p><h2>Enable periodic scans?</h2><p class="small-muted">One JPEG every 20 seconds can consume a paid Meta Muse API request. This is disabled by default and stops when the page becomes hidden. It counts against FREE LAB's daily request quotas, which are not dollar limits.</p><div class="provider-actions"><button id="cancelScan" class="secondary-btn">Cancel</button><button id="confirmScan" class="primary-btn">Start paid scan</button></div></div></div>
 <div id="changelog" class="modal hidden"><div class="modal-card changelog-card"><div class="modal-title"><div><p class="eyebrow">WHAT'S NEW / DEVELOPMENT LOG</p><h2 id="logTitle">Release notes</h2><p id="logDate" class="small-muted"></p></div><button class="round-btn" id="dismissChangelog" aria-label="Close development log">×</button></div><ul id="logItems"></ul><button class="primary-btn" id="continueChangelog">Start exploring ↗</button></div></div>
 <div id="toast" class="toast hidden" role="status"></div>
-<script src="/assets/sound.js?v=0.10.9" defer></script>
-<script src="/assets/gestures.js?v=0.10.9" defer></script>
-<script src="/assets/strand-geometry.js?v=0.10.9" defer></script>
-<script src="/assets/string-lab.js?v=0.10.9" defer></script>
-<script src="/assets/finger-lab.js?v=0.10.9" defer></script>
-<script src="/assets/frame-lab.js?v=0.10.9" defer></script>
-<script src="/assets/lab-selector.js?v=0.10.9" defer></script>
-<script src="/assets/frame-games.js?v=0.10.9" defer></script>
-<script src="/assets/cloud-tree.js?v=0.10.9" defer></script>
-<script src="/assets/app.js?v=0.10.9" defer></script><script src="/assets/xr.js?v=0.10.9" defer></script>
-<script src="/assets/scene.mjs?v=0.10.9" type="module"></script>
+<script src="/assets/sound.js?v=0.10.11" defer></script>
+<script src="/assets/gestures.js?v=0.10.11" defer></script>
+<script src="/assets/strand-geometry.js?v=0.10.11" defer></script>
+<script src="/assets/string-lab.js?v=0.10.11" defer></script>
+<script src="/assets/finger-lab.js?v=0.10.11" defer></script>
+<script src="/assets/frame-lab.js?v=0.10.11" defer></script>
+<script src="/assets/lab-selector.js?v=0.10.11" defer></script>
+<script src="/assets/frame-games.js?v=0.10.11" defer></script>
+<script src="/assets/shape-sort.js?v=0.10.11" defer></script>
+<script src="/assets/rooms.js?v=0.10.11" defer></script>
+<script src="/assets/cloud-tree.js?v=0.10.11" defer></script>
+<script src="/assets/xr-ui.js?v=0.10.11" defer></script>
+<script src="/assets/app.js?v=0.10.11" defer></script><script src="/assets/xr.js?v=0.10.11" defer></script>
+<script src="/assets/scene.mjs?v=0.10.11" type="module"></script>
 </body></html>

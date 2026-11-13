@@ -7,7 +7,7 @@ APP=(ROOT/'frontend/assets/app.js').read_text()
 BACKEND=(ROOT/'backend/app.py').read_text()
 class XR092(unittest.TestCase):
  def test_three_independent_world_roundels(self):
-  for term in ('voiceButton=makeRoundel','extractButton=makeRoundel',"if(h.card.kind==='voiceroundel')return 'voice'", "if(h.card.kind==='extractroundel')return 'extract'", "if(h.card.kind==='voiceok')return 'confirmvoice'", "if(h.card.kind==='voicecancel')return 'cancelvoice'"):
+  for term in ('voiceButton=makeRoundel','extractButton=makeRoundel',"if(h.card.kind==='voiceroundel')return uiSettings.voice!==false?'voice':null", "if(h.card.kind==='extractroundel')return 'extract'", "if(h.card.kind==='voiceok')return 'confirmvoice'", "if(h.card.kind==='voicecancel')return 'cancelvoice'"):
    self.assertIn(term,XR)
   self.assertIn("cards.some(c=>c.kind==='source'&&c.visible)",XR)
   self.assertIn("'voiceroundel','extractroundel','voiceok','voicecancel','diagnostics'",XR)

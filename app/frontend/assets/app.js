@@ -35,9 +35,27 @@ async function api(path,opts={}){
 async function refresh(){try{const h=await api('/health');$('healthStatus').textContent=h.ok?'System online':'Offline';$('connectionDot').classList.toggle('good',h.ok);state.config=await api('/config');const enabled=state.config.inference_enabled||Boolean(sessionMeta());$('modelStatus').textContent=(enabled?'AI ready · on demand':'AI offline · manual mode');$('modelStatus').previousElementSibling.classList.toggle('good',enabled);}
  catch(e){$('healthStatus').textContent='Disconnected';}}
 async function loadObjects(){const path=state.tab==='mine'?'/objects':'/public';const data=await api(path);state.objects=state.tab==='public'?data.objects:data.objects.filter(x=>state.tab==='bin'?x.shelf==='bin':x.shelf!=='bin');renderObjects();}
+let galleryItems=[],galleryIndex=0;
+async function openGallery(objectId=null){
+ const source=(await api('/captures')).captures;
+ const objects=(await api('/objects')).objects.filter(o=>o.has_image&&o.shelf!=='bin');
+ galleryItems=[];
+ for(const cap of source){galleryItems.push({id:'capture:'+cap.id,label:'Capture '+cap.id,url:cap.image_url,detail:'Source photograph'});
+  for(const obj of objects.filter(o=>o.capture_id===cap.id))galleryItems.push({id:'object:'+obj.id,label:obj.label,url:'/api/objects/'+obj.id+'/image',detail:'Generation '+(obj.parent_object_id?'child':'first')+' · '+obj.operation});}
+ for(const obj of objects.filter(o=>!o.capture_id))galleryItems.push({id:'object:'+obj.id,label:obj.label,url:'/api/objects/'+obj.id+'/image',detail:'Legacy library'});
+ if(!galleryItems.length){notify('No saved images');return;}
+ const found=galleryItems.findIndex(x=>x.id==='object:'+objectId);galleryIndex=found<0?0:found;
+ $('desktopGallery').classList.remove('hidden');renderGallery();
+}
+function renderGallery(){const item=galleryItems[galleryIndex];if(!item)return;
+ $('galleryTitle').textContent=item.label+' · '+(galleryIndex+1)+' / '+galleryItems.length;
+ $('galleryImage').src=item.url;$('galleryDetail').textContent=item.detail;
+ const strip=$('galleryFilmstrip');strip.replaceChildren();galleryItems.forEach((v,i)=>{const b=document.createElement('button');b.title=v.label;b.className=i===galleryIndex?'selected':'';const img=document.createElement('img');img.loading='lazy';img.src=v.url;b.append(img);b.onclick=()=>{galleryIndex=i;renderGallery();};strip.append(b);});strip.children[galleryIndex]?.scrollIntoView({block:'nearest',inline:'center'});
+}
+function browseGallery(step){if(!galleryItems.length)return;galleryIndex=(galleryIndex+step+galleryItems.length)%galleryItems.length;renderGallery();}
 function renderObjects(){const box=$('items');box.replaceChildren();if(state.tab==='mine'){$('objectCount').textContent=String(state.objects.length);$('objectCounter').textContent=String(state.objects.length).padStart(2,'0');}
  if(!state.objects.length){const e=el('div','empty-state');e.append(el('span','', '◌'),el('strong','',state.tab==='bin'?'Your bin is empty':state.tab==='mine'?'Nothing collected yet':'No public objects yet'),el('p','',state.tab==='bin'?'Objects moved to the virtual bin stay private until permanently deleted.':state.tab==='mine'?'Upload a snapshot, enable camera, or create an entry manually.':'Objects appear here only when their owners publish them.'));box.append(e);return;}
- for(const o of state.objects){const card=el('article','object-card');let img;if(o.has_image){img=el('img','object-photo');img.loading='lazy';img.alt='Collected object';img.src=state.tab==='mine'?'/api/objects/'+o.id+'/image':'/api/objects/'+o.id+'/image';}else img=el('div','object-placeholder','◈');card.append(img);
+ for(const o of state.objects){const card=el('article','object-card');let img;if(o.has_image){img=el('img','object-photo');img.loading='lazy';img.alt='Collected object';img.src=state.tab==='mine'?'/api/objects/'+o.id+'/image':'/api/objects/'+o.id+'/image';}else img=el('div','object-placeholder','◈');card.append(img);if(o.has_image){img.classList.add('gallery-launch');img.title='Open full-window gallery';img.onclick=()=>openGallery(o.id).catch(e=>notify(e.message));}
  const b=el('div','object-body'),meta=el('div','object-meta');meta.append(el('span','',o.provider==='manual'?'MANUAL':o.provider.toUpperCase()),el('span','',o.visibility.toUpperCase()));b.append(meta,el('h3','',o.label),el('p','',o.description||'Recognized spatial object'));
  if(state.tab==='mine'||state.tab==='bin'){const acts=el('div','object-actions');if(state.tab==='mine')for(const [name,mode] of [['Private','private'],['Public','public'],['Share link','link']]){const btn=el('button','tiny-btn',name);btn.onclick=()=>changeVisibility(o.id,mode);acts.append(btn);}if(state.tab==='mine'){
  const folder=el('button','tiny-btn',o.folder||'Unsorted');folder.title='Cycle collection folder';folder.onclick=()=>cycleFolder(o);acts.append(folder);
@@ -100,6 +118,7 @@ async function loadProviderList(){if(state.user?.role!=='admin')return;
 }
 function currentProvider(){return $('providerChoice').value;}
 function formKey(){return $('providerKey').value.trim()||state.sessionKeys.get(currentProvider())||'';}
+async function loadProviderScope(){if(state.user?.role!=='admin')return;try{const r=await api('/admin/provider-scopes');$('apiShared').checked=Boolean(r.scopes[currentProvider()]);$('apiScopeResult').textContent=$('apiShared').checked?'Shared with all profiles':'Private to administrator';}catch(e){$('apiScopeResult').textContent=e.message;}}
 async function testProvider(){const provider=currentProvider(),key=formKey();$('providerResult').textContent='Checking authenticated read-only provider endpoint; no generation…';$('testProvider').disabled=true;
  try{const r=await api('/admin/providers/'+provider+'/check',{method:'POST',body:JSON.stringify(key?{api_key:key}:{})});let text=r.verified?'AUTHENTICATED':'NOT VERIFIED';if(r.message)text+=' · '+r.message;if(r.http_status)text+=' · HTTP '+r.http_status;if(r.models_visible!==undefined)text+=' · '+r.models_visible+' model(s) visible';if(r.meta_models?.length)text+=' · '+r.meta_models.join(', ');if(r.account)text+=' · '+r.account;if(r.balance)text+=' · credits '+JSON.stringify(r.balance);text+=' · No generation/inference request submitted.';$('providerResult').textContent=text;}
  catch(e){$('providerResult').textContent=e.message;}finally{$('testProvider').disabled=false;}}
@@ -121,22 +140,22 @@ function selectTab(tab){state.tab=tab;document.querySelectorAll('.tab').forEach(
 function presentLog(force=false){if(!state.user)return;fetch('/changelog.json',{cache:'no-store'}).then(r=>r.json()).then(log=>{const key='free-lab-log:'+state.user.id+':'+log.version;if(!force&&localStorage.getItem(key))return;
  $('logTitle').textContent=log.title;$('logDate').textContent=log.datetime;$('logItems').replaceChildren(...log.changes.map(x=>el('li','',x)));$('changelog').classList.remove('hidden');$('changelog').dataset.key=key;}).catch(()=>{});}
 function dismissLog(){const key=$('changelog').dataset.key;if(key)localStorage.setItem(key,'seen');$('changelog').classList.add('hidden');}
-async function afterAuth(user){state.user=user;$('main').classList.remove('hidden');$('loginView').classList.add('hidden');$('profileSummary').textContent=user.display_name+' · @'+user.username+' · '+user.role;$('adminTools').classList.toggle('hidden',user.role!=='admin');await refresh();await loadObjects();presentLog();if(user.role==='admin')await loadProviderList().catch(e=>notify(e.message));}
+async function afterAuth(user){state.user=user;$('main').classList.remove('hidden');$('loginView').classList.add('hidden');$('profileSummary').textContent=user.display_name+' · @'+user.username+' · '+user.role;$('adminTools').classList.toggle('hidden',user.role!=='admin');await refresh();await loadObjects();presentLog();if(user.role==='admin'){await loadProviderList().catch(e=>notify(e.message));await loadProviderScope();}}
 async function init(){
  wirePromptEditor();
  $('loginForm').onsubmit=async e=>{e.preventDefault();$('loginError').textContent='';try{const data=await api('/login',{method:'POST',body:JSON.stringify({username:$('username').value,password:$('password').value})});$('password').value='';await afterAuth(data.user);}catch(error){$('loginError').textContent=error.message;}};
  const m=await api('/me').catch(()=>({user:null}));if(m.user)await afterAuth(m.user);else{await refresh();$('loginView').classList.remove('hidden');}
- $('enterXR').onclick=async()=>{window.FreeLabSound?.unlock();window.FreeLabSound?.play('enter');try{if(!state.user)throw Error('Sign in before entering XR');await window.FreeLabXR.start();}catch(e){notify(e.message)}};
+ $('enterXR').onclick=()=>{window.FreeLabSound?.unlock();window.FreeLabSound?.play('enter');if(!state.user)return notify('Sign in before entering XR');window.FreeLabRooms.chooseXR();};
  $('toggleLibrary').onclick=()=>setLibrary($('workspace').classList.contains('hidden'));$('refresh3DJobs').onclick=refresh3DJobs;
- $('closeLibrary').onclick=()=>setLibrary(false);
- document.querySelectorAll('.provider-option').forEach(btn=>btn.onclick=()=>{$('providerChoice').value=btn.dataset.provider;document.querySelectorAll('.provider-option').forEach(b=>b.classList.toggle('selected',b===btn));$('providerResult').textContent='Provider: '+btn.textContent+'. Test without generation or save a credential.';});
+ $('closeLibrary').onclick=()=>setLibrary(false);$('galleryClose').onclick=()=>$('desktopGallery').classList.add('hidden');$('galleryPrev').onclick=()=>browseGallery(-1);$('galleryNext').onclick=()=>browseGallery(1);let swipeX=null;$('galleryImage').addEventListener('pointerdown',e=>swipeX=e.clientX);$('galleryImage').addEventListener('pointerup',e=>{if(swipeX!==null&&Math.abs(e.clientX-swipeX)>45)browseGallery(e.clientX<swipeX?1:-1);swipeX=null;});document.addEventListener('keydown',e=>{if($('desktopGallery').classList.contains('hidden'))return;if(e.key==='Escape')$('galleryClose').click();else if(e.key==='ArrowLeft')browseGallery(-1);else if(e.key==='ArrowRight')browseGallery(1);});
+ document.querySelectorAll('.provider-option').forEach(btn=>btn.onclick=()=>{$('providerChoice').value=btn.dataset.provider;document.querySelectorAll('.provider-option').forEach(b=>b.classList.toggle('selected',b===btn));$('providerResult').textContent='Provider: '+btn.textContent+'. Test without generation or save a credential.';loadProviderScope();});
  document.querySelectorAll('.model-option').forEach(btn=>btn.onclick=()=>{$('modelChoice').value=btn.dataset.model;document.querySelectorAll('.model-option').forEach(b=>b.classList.toggle('selected',b===btn));});
  $('saveUploadCloud')?.addEventListener('click',async()=>{const button=$('saveUploadCloud');button.disabled=true;
   try{if(!state.snapshot)throw Error('Upload an image first');const result=await api('/captures',{method:'POST',body:JSON.stringify({image:state.snapshot})});
    notify('Image saved to Spatial Library · open LIB in XR to explore it');state.snapshotOrigin='upload';}
   catch(e){notify('Cannot save imported image · '+e.message);}finally{button.disabled=false;}});
  const preferred3D=$('preferred3D');if(preferred3D){get3DPreference().then(p=>preferred3D.value=p.provider).catch(()=>{});preferred3D.onchange=async()=>{try{const pref=await save3DPreference(preferred3D.value);notify('3D provider: '+pref.provider+'. No automatic fallback.');}catch(e){notify(e.message);}};}
- $('providerForm').onsubmit=saveProvider;$('testProvider').onclick=testProvider;$('clearSessionKey').onclick=async()=>{state.sessionKeys.delete(currentProvider());$('providerKey').value='';await loadProviderList();await refresh();notify('Tab-only key cleared');};$('segment').onclick=()=>segmentSnapshot();$('toggleScan').onclick=toggleScan;$('cancelScan').onclick=()=>$('scanConsent').classList.add('hidden');$('confirmScan').onclick=startScanConfirmed;document.addEventListener('visibilitychange',()=>{if(document.hidden)stopScan()});
+ $('apiShared').onchange=async()=>{try{const provider=currentProvider();const shared=$('apiShared').checked;await api('/admin/provider-scopes/'+provider,{method:'PUT',body:JSON.stringify({shared})});$('apiScopeResult').textContent=shared?'All signed-in profiles may now use '+provider:'Only admin may use '+provider;}catch(e){$('apiScopeResult').textContent=e.message;$('apiShared').checked=!$('apiShared').checked;}};$('providerForm').onsubmit=saveProvider;$('testProvider').onclick=testProvider;$('clearSessionKey').onclick=async()=>{state.sessionKeys.delete(currentProvider());$('providerKey').value='';await loadProviderList();await refresh();notify('Tab-only key cleared');};$('segment').onclick=()=>segmentSnapshot();$('toggleScan').onclick=toggleScan;$('cancelScan').onclick=()=>$('scanConsent').classList.add('hidden');$('confirmScan').onclick=startScanConfirmed;document.addEventListener('visibilitychange',()=>{if(document.hidden)stopScan()});
  $('armXRMic')?.addEventListener('click',async()=>{try{const result=await armMicrophone();notify(result)}catch(e){notify('Mic permission: '+e.message)}});
  for(const name of ['spoken','troll']){const el=$('pref-'+name);if(el){el.checked=pref(name);el.onchange=()=>setPref(name,el.checked);}}
  const engine=$('pref-speechEngine');if(engine){engine.value=pref('speechEngine');engine.onchange=()=>setPref('speechEngine',engine.value);}
@@ -186,9 +205,9 @@ async function refresh3DJobs(){
   }
  }catch(e){panel.append(el('p','small-muted','3D jobs unavailable · '+e.message));}
 }
-async function recognizeXR(cid,objectId=null){
+async function recognizeXR(cid,objectId=null,cutouts=true){
  if(!objectId&&!state.snapshot)throw Error('Capture an image first');
- const payload={recognize:true,cutouts:true,capture_id:cid,model:$('modelChoice').value};
+ const payload={recognize:true,cutouts:Boolean(cutouts),capture_id:cid,model:$('modelChoice').value};
  if(objectId)payload.object_id=objectId;else payload.image=state.snapshot;
  if(sessionMeta())payload.session_api_key=sessionMeta();
  const result=await api('/capture',{method:'POST',body:JSON.stringify(payload)});
@@ -196,9 +215,9 @@ async function recognizeXR(cid,objectId=null){
  if(state.user?.role==='admin')loadUsage().catch(()=>{});
  return {items:state.objects.filter(x=>result.ids.includes(x.id)),detections:result.objects,usage:result.usage,cutouts:result.cutouts_saved||0,crops:result.rectangular_crops||0};
 }
-async function segmentXR(cid,noun,objectId=null){
+async function segmentXR(cid,noun,objectId=null,cutouts=true){
  if(!objectId&&!state.snapshot)throw Error('Capture an image first');
- const payload={prompt:noun,save:true,capture_id:cid};
+ const payload={prompt:noun,save:true,cutouts:Boolean(cutouts),capture_id:cid};
  if(objectId)payload.object_id=objectId;else payload.image=state.snapshot;
  if(sessionMeta())payload.session_api_key=sessionMeta();
  const result=await api('/segment',{method:'POST',body:JSON.stringify(payload)});
@@ -251,7 +270,7 @@ function micReady(){return Boolean(state.micStream?.getAudioTracks()?.some(t=>t.
 let recorder=null;
 function speakBrowser(value){try{if(!('speechSynthesis' in window))return;window.speechSynthesis.cancel();const utter=new SpeechSynthesisUtterance(value.slice(0,500));utter.volume=.55;utter.rate=1.09;window.speechSynthesis.speak(utter);}catch(e){traceEvent('System voice: '+e.message,'warn');}}
 function speakUpdate(value){
- if(!pref('spoken'))return;const phrase=String(value).slice(0,500);
+ if(!pref('spoken')||window.FreeLabXRUI?.read?.().voice===false)return;const phrase=String(value).slice(0,500);
  if(pref('speechEngine')!=='elevenlabs'||!pref('speechVoiceId'))return speakBrowser(phrase);
  // ElevenLabs generates billed speech ONLY after it was explicitly enabled in Settings.
  fetch('/api/media/speak',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Free-Lab':'1'},
@@ -347,6 +366,6 @@ function wirePromptEditor(){
  };
 }
 
-window.FreeLab={startWavPrompt,currentRecording,describeXR,modelXRPreview,get3DPreference,save3DPreference,list3DJobs,loadElevenVoices,createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
-document.addEventListener('DOMContentLoaded',()=>{init().catch(e=>notify('Initialization failed: '+e.message));const bloom=$('featureBloom');if(bloom){setTimeout(()=>window.FreeLabSound?.play('arrival'),3000);bloom.querySelectorAll('.feature-seed').forEach(button=>{button.addEventListener('mouseenter',()=>window.FreeLabSound?.hover());button.addEventListener('focus',()=>window.FreeLabSound?.hover());});}});
+window.FreeLab={api,startWavPrompt,currentRecording,describeXR,modelXRPreview,get3DPreference,save3DPreference,list3DJobs,loadElevenVoices,createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
+document.addEventListener('DOMContentLoaded',()=>{window.FreeLabRooms?.init?.();init().catch(e=>notify('Initialization failed: '+e.message));const bloom=$('featureBloom');if(bloom){setTimeout(()=>window.FreeLabSound?.play('arrival'),3000);bloom.querySelectorAll('.feature-seed').forEach(button=>{button.addEventListener('mouseenter',()=>window.FreeLabSound?.hover());button.addEventListener('focus',()=>window.FreeLabSound?.hover());});}});
 })();

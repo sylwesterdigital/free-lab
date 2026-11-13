@@ -28,7 +28,7 @@ class CinemaTests(unittest.TestCase):
   b=XR.split('function baseFor(c){',1)[1].split('function',1)[0]
   for name in ('darkroom','darkroomexit','cinema-floor'):
    self.assertIn("'"+name+"'",b)
-  src=XR.split('function enterDarkroom(){',1)[1].split('function renderCinema',1)[0]
+  src=XR.split('function enterDarkroom(',1)[1].split('function renderCinema',1)[0]
   self.assertIn('target.data?.image',src)
   self.assertIn('img.onload',src)
   self.assertIn('gl.deleteTexture(reference.front)',src)
@@ -56,8 +56,8 @@ class CinemaTests(unittest.TestCase):
   self.assertIn('mascotReactionTarget=handGesturePositions[side]',XR)
 
  def test_release_version(self):
-  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.9')
-  self.assertIn('xr.js?v=0.10.9',INDEX)
+  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.11')
+  self.assertIn('xr.js?v=0.10.11',INDEX)
 
 class VisionTests(unittest.TestCase):
  def test_explicit_description_refresh_instead_of_stale_dialogue(self):

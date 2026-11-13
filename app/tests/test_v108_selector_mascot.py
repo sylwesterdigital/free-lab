@@ -16,9 +16,9 @@ let v=selector.update(s(true,false,0));if(v.event!=='open')throw Error('X should
 for(let i=0;i<4;i++){v=selector.update(s(false,false,0));if(!v.open)throw Error('X release should NOT close');}
 v=selector.update(s(false,false,1));if(v.index!==1||v.event!=='step')throw Error('stick step');
 selector.update(s(false,false,0));v=selector.update(s(false,false,1));if(v.index!==2)throw Error('second step');
-v=selector.update(s(false,true,0));if(v.event!=='select'||v.open||v.mode!=='cubes')throw Error('trigger apply');
+v=selector.update(s(false,true,0));if(v.event!=='select'||v.open||v.mode!=='chain')throw Error('trigger apply');
 selector.update(s(false,false,0));v=selector.update(s(true,false,0));if(!v.open)throw Error('X reopen');
-selector.update(s(false,false,0));v=selector.update(s(true,false,0));if(v.event!=='cancel'||v.open||v.mode!=='cubes')throw Error('X cancel leaves active mode untouched');
+selector.update(s(false,false,0));v=selector.update(s(true,false,0));if(v.event!=='cancel'||v.open||v.mode!=='chain')throw Error('X cancel leaves active mode untouched');
 ''')
  def test_swept_thrown_frame_single_mascot_impact(self):
   self.node(r'''const fs=require('fs'),vm=require('vm'),w={};vm.runInNewContext(fs.readFileSync('frontend/assets/frame-games.js','utf8'),{window:w});

@@ -3,7 +3,7 @@
  * Inputs are edge-triggered to prevent held buttons from repeating actions.
  */
 (()=>{'use strict';
-const MODES=Object.freeze(['frames','chain','cubes','throw','five','thumbs','off']);
+const MODES=Object.freeze(['frames','sort','chain','cubes','throw','five','thumbs','off']);
 function controller(sources){for(const s of sources||[]){
  if(s.handedness==='left'&&!s.hand&&s.gamepad?.mapping==='xr-standard'&&s.gamepad.buttons?.[4])return s;
 }return null;}

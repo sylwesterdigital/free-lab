@@ -108,7 +108,7 @@ def segment_jpeg(jpeg,prompt,api_key,*,object_boxes=None):
         {'type':'input_text','text':text},{'type':'input_image','image_url':data}]}],
         'stream':True,'store':False,'metadata':{'mask_encoding':'one_bit'}}
     req=urllib.request.Request('https://api.meta.ai/v1/responses',data=json.dumps(payload).encode(),method='POST',
-      headers={'Authorization':'Bearer '+api_key,'Content-Type':'application/json','Accept':'text/event-stream','User-Agent':'FREELAB/0.10.9'})
+      headers={'Authorization':'Bearer '+api_key,'Content-Type':'application/json','Accept':'text/event-stream','User-Agent':'FREELAB/0.10.10'})
     try:
         with urllib.request.urlopen(req,timeout=43) as response:
             output_text,usage=_stream_text(response)
@@ -166,3 +166,19 @@ def jpeg_for_model(raw,limit=450_000):
             mem=io.BytesIO();canvas.save(mem,format='JPEG',quality=quality,optimize=True)
             if 100<len(mem.getvalue())<=limit:return mem.getvalue()
     raise ValueError('Cannot prepare image within SAM input limit')
+
+
+def rectangle_jpeg(source_image,region,max_side=960):
+    """Opt-in rectangular crop from the same SAM detection, preserving original photos."""
+    src=ImageOps.exif_transpose(source_image).convert('RGBA')
+    x1,y1,x2,y2=region['box']
+    w,h=region.get('image_size') or src.size
+    if not all(isinstance(v,int) for v in (x1,y1,x2,y2,w,h)) or not (0<=x1<x2<=w and 0<=y1<y2<=h):
+        raise ValueError('Invalid region bounds')
+    a,b,c,d=round(x1*src.width/w),round(y1*src.height/h),round(x2*src.width/w),round(y2*src.height/h)
+    if c-a<3 or d-b<3:raise ValueError('Region too small')
+    crop=src.crop((a,b,c,d))
+    bg=Image.new('RGB',crop.size,(216,222,218));bg.paste(crop,mask=crop.getchannel('A'))
+    bg.thumbnail((max_side,max_side),Image.Resampling.LANCZOS)
+    output=io.BytesIO();bg.save(output,format='JPEG',quality=83,optimize=True)
+    return output.getvalue()

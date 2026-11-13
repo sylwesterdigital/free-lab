@@ -60,6 +60,20 @@ CREATE INDEX IF NOT EXISTS image_dialogue_owner ON image_dialogue(owner_id,captu
 CREATE TABLE IF NOT EXISTS provider_secrets (
  provider TEXT PRIMARY KEY, ciphertext BLOB NOT NULL, updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS provider_scopes (provider TEXT PRIMARY KEY, shared INTEGER NOT NULL DEFAULT 0 CHECK(shared IN (0,1)));
+CREATE TABLE IF NOT EXISTS live_rooms (
+ id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+ visibility TEXT NOT NULL DEFAULT 'private' CHECK(visibility IN ('private','public')),
+ active INTEGER NOT NULL DEFAULT 0, state_json TEXT NOT NULL DEFAULT '{}',
+ updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE TABLE IF NOT EXISTS room_members (
+ room_id INTEGER NOT NULL REFERENCES live_rooms(id) ON DELETE CASCADE,
+ user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ accepted INTEGER NOT NULL DEFAULT 0 CHECK(accepted IN (0,1)),
+ PRIMARY KEY(room_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS room_members_user ON room_members(user_id,room_id);
 CREATE TABLE IF NOT EXISTS auth_attempts (fingerprint TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')));
 CREATE INDEX IF NOT EXISTS auth_attempts_recent ON auth_attempts(fingerprint,created_at);
 '''

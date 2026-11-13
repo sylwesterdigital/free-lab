@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.9",
-  "description": "Real SAM 3.1 alpha-mask cutouts and recursive PNG image support"
+  "version": "0.10.11",
+  "description": "Spatial shape sorter, private collaborative rooms, gallery and cinema browsing, API scopes"
 }

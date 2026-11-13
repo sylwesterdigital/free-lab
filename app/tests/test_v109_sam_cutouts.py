@@ -78,8 +78,8 @@ class TestSamCutouts109(unittest.TestCase):
   self.assertIn("regions=result.pop('_regions',[])",back)
   self.assertIn('cutout_png(photo,region)',back)
   self.assertIn('object_boxes=prompt_boxes',back)
-  self.assertIn('cutouts:true',ui)
-  self.assertIn("if(!cutout||back)rrect",xr)
+  self.assertIn('cutouts:Boolean(cutouts)',ui)
+  self.assertIn("if(!cutout||back)panelSkin",xr)
   self.assertIn('if(color.a<.012)discard',xr)
   self.assertIn('meta-sam-parser==0.2.0',(ROOT/'requirements.txt').read_text())
 

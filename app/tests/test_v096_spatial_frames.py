@@ -61,8 +61,8 @@ vm.runInNewContext(fs.readFileSync('frontend/assets/lab-selector.js','utf8'),{wi
 const S=new w.FreeLabLabSelector.Selector();
 function inp(xButton,trigger,x){return [{handedness:'left',gamepad:{mapping:'xr-standard',buttons:[{pressed:trigger},{},{},{pressed:false},{pressed:xButton}],axes:[0,0,x,0]}}]}
 let u=S.update(inp(true,false,0));if(!u.open||u.event!=='open'||u.index!==0)throw Error('X opens menu');
-u=S.update(inp(false,false,-.9));if(u.index!==6||u.event!=='step'||!u.open)throw Error('L stick wraps and menu stays open');
-u=S.update(inp(false,false,-.9));if(u.index!==6)throw Error('held stick must not auto-repeat');
+u=S.update(inp(false,false,-.9));if(u.index!==7||u.event!=='step'||!u.open)throw Error('L stick wraps and menu stays open');
+u=S.update(inp(false,false,-.9));if(u.index!==7)throw Error('held stick must not auto-repeat');
 S.update(inp(false,false,0));u=S.update(inp(false,false,1));if(u.index!==0)throw Error('neutral re-arms the stick');
 u=S.update(inp(false,false,0));if(!u.open)throw Error('releasing X must not dismiss menu');
 u=S.update(inp(false,true,0));if(u.open||u.mode!=='frames'||u.event!=='select')throw Error('trigger confirms');
@@ -78,8 +78,8 @@ if(w.FreeLabLabSelector.input([{handedness:'right',gamepad:{mapping:'xr-standard
                       "labMenu.q=quatY(cameraYaw(pose))",'for(const f of frameLab.frames)',
                       "window.FreeLab?.pref?.('frameHoldSeconds')",'gl.TRIANGLE_STRIP'):
             self.assertIn(token,XR)
-        self.assertIn('lab-selector.js?v=0.10.9',PAGE)
-        self.assertIn('frame-lab.js?v=0.10.9',PAGE)
+        self.assertIn('lab-selector.js?v=0.10.11',PAGE)
+        self.assertIn('frame-lab.js?v=0.10.11',PAGE)
         self.assertIn('id="pref-frameHoldSeconds"',PAGE)
         for name in ('frame-lab.js','lab-selector.js'):
             self.assertNotIn('fetch(', (ROOT/'frontend/assets'/name).read_text())

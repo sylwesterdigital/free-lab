@@ -72,12 +72,12 @@ def health():
     try:g.con.execute('SELECT 1').fetchone();ok=True
     except sqlite3.Error:ok=False
     return jsonify(ok=ok,version=VERSION,storage='sqlite',model=os.getenv('META_MODEL','muse-ember-1.0'),
-      inference_enabled=bool(keyvault.get_meta_key(g.con)))
+      inference_enabled=bool(provider_key('meta')))
 
 @app.get('/api/config')
 def config():
     return jsonify(version=VERSION,model=os.getenv('META_MODEL','muse-ember-1.0'),
-      inference_enabled=bool(keyvault.get_meta_key(g.con)),max_snapshots_per_day=application_inference_limits()['daily_cap'])
+      inference_enabled=bool(provider_key('meta')),max_snapshots_per_day=application_inference_limits()['daily_cap'])
 
 @app.get('/api/me')
 def me():
@@ -148,18 +148,42 @@ def check_provider(provider):
     result=provider_checks.check(provider,key)
     return jsonify(result)
 
+def provider_key(provider):
+    """Admin vault keys are private by default. Shared scope requires admin opt-in."""
+    if not g.user:return None
+    if g.user['role']!='admin':
+        record=g.con.execute('SELECT shared FROM provider_scopes WHERE provider=?',(provider,)).fetchone()
+        if not record or record['shared']!=1:return None
+    return keyvault.get_meta_key(g.con) if provider=='meta' else keyvault.get_key(g.con,provider)
+
+@app.get('/api/admin/provider-scopes')
+@require_admin
+def provider_scopes():
+    rows=g.con.execute('SELECT provider,shared FROM provider_scopes').fetchall()
+    return jsonify(scopes={r['provider']:bool(r['shared']) for r in rows})
+
+@app.put('/api/admin/provider-scopes/<provider>')
+@require_admin
+def update_provider_scope(provider):
+    if provider not in keyvault.PROVIDERS:abort(404)
+    v=body()
+    if type(v.get('shared')) is not bool:return jsonify(error='Shared must be true or false'),400
+    with g.con:
+        g.con.execute('INSERT INTO provider_scopes(provider,shared) VALUES(?,?) ON CONFLICT(provider) DO UPDATE SET shared=excluded.shared',(provider,int(v['shared'])))
+    return jsonify(provider=provider,shared=v['shared'])
+
 def preferred_3d_provider():
     r=g.con.execute('SELECT model_3d FROM profile_settings WHERE user_id=?',(g.user['id'],)).fetchone()
     value=r['model_3d'] if r else 'auto'
     if value=='auto':
-        return 'aholo' if keyvault.get_key(g.con,'aholo') else 'meshy'
+        return 'aholo' if provider_key('aholo') else 'meshy'
     return value
 
 @app.route('/api/preferences/3d',methods=['GET','PUT'])
 @require_user
 def model_3d_preference():
     if request.method=='GET':
-        return jsonify(provider=preferred_3d_provider(),available={k:bool(keyvault.get_key(g.con,k)) for k in ('aholo','meshy')})
+        return jsonify(provider=preferred_3d_provider(),available={k:bool(provider_key(k)) for k in ('aholo','meshy')})
     v=body();value=v.get('provider')
     if value not in ('auto','aholo','meshy'):return jsonify(error='Choose Aholo or Meshy'),400
     with g.con:
@@ -186,7 +210,7 @@ def request_meta_key(v):
         if not g.user or g.user['role']!='admin' or not isinstance(temp,str) or not 12<=len(temp)<=4096:
             abort(403)
         return temp
-    return keyvault.get_meta_key(g.con)
+    return provider_key('meta')
 
 @app.post('/api/segment')
 @require_user
@@ -235,21 +259,23 @@ def segment_image():
             if photo.width*photo.height>12_000_000:
                 raise ValueError('Image resolution exceeds safe segmentation size')
             for region in regions[:8]:
-                try:content=sam.cutout_png(photo,region)
+                masked=v.get('cutouts') is not False
+                try:content=sam.cutout_png(photo,region) if masked else sam.rectangle_jpeg(photo,region)
                 except ValueError:continue
-                name=secrets.token_hex(16)+'.png';out=IMAGE_DIR/name
+                name=secrets.token_hex(16)+('.png' if masked else '.jpg');out=IMAGE_DIR/name
                 out.write_bytes(content)
                 try:
                     with g.con:
                         oid=g.con.execute('''INSERT INTO objects(owner_id,label,description,provider,image_name,sha256,capture_id,parent_object_id,operation)
                           VALUES(?,?,?,?,?,?,?,?,?)''',
-                        (g.user['id'],prompt,'Transparent SAM 3.1 object cutout',
-                         'sam-3.1-mask',name,hashlib.sha256(content).hexdigest(),cid,parent_id,'segmentation')).lastrowid
+                        (g.user['id'],prompt,'SAM 3.1 cutout' if masked else 'SAM 3.1 rectangular crop',
+                         'sam-3.1-mask' if masked else 'sam-3.1-box',name,hashlib.sha256(content).hexdigest(),cid,parent_id,'segmentation')).lastrowid
                     result['saved_ids'].append(oid)
                 except Exception:
                     out.unlink(missing_ok=True)
                     raise
-        result['cutouts_saved']=len(result['saved_ids'])
+        result['cutouts_saved']=len(result['saved_ids']) if v.get('cutouts') is not False else 0
+        result['rectangular_crops']=len(result['saved_ids']) if v.get('cutouts') is False else 0
         return jsonify(result)
     except (RuntimeError,ValueError) as e:
         db.finish_inference(g.con,call,'error')
@@ -588,9 +614,9 @@ def admin_diagnostics():
 @app.get('/api/media/capabilities')
 @require_user
 def media_capabilities():
-    return jsonify(image_edit={'meta':{'model':'muse-image-1.0','available':bool(keyvault.get_meta_key(g.con))}},
-                   speech={'meta':{'model':'muse-voice-transcribe-1.0','available':bool(keyvault.get_meta_key(g.con))}},
-                   video={},three_d={p:{'available':bool(keyvault.get_key(g.con,p)),'async':True} for p in ('aholo','meshy')},message='3D provider preference selects Aholo or Meshy; no silent fallback.')
+    return jsonify(image_edit={'meta':{'model':'muse-image-1.0','available':bool(provider_key('meta'))}},
+                   speech={'meta':{'model':'muse-voice-transcribe-1.0','available':bool(provider_key('meta'))}},
+                   video={},three_d={p:{'available':bool(provider_key(p)),'async':True} for p in ('aholo','meshy')},message='3D provider preference selects Aholo or Meshy; no silent fallback.')
 
 def job_3d_dict(row):
     return {'id':row['id'],'capture_id':row['capture_id'],'object_id':row['object_id'],
@@ -638,8 +664,8 @@ def media_3d_start():
         obj=g.con.execute('SELECT image_name FROM objects WHERE id=? AND capture_id=? AND owner_id=? AND shelf!=?',(oid,cid,g.user['id'],'bin')).fetchone()
         if not obj or not obj['image_name']:abort(404)
         name=obj['image_name']
-    key=keyvault.get_key(g.con,provider)
-    if not key:return jsonify(error=f'{provider.upper()} API NOT CONFIGURED. Add its key in Admin → Model Connections.'),503
+    key=provider_key(provider)
+    if not key:return jsonify(error=f'{provider.upper()} is not configured or not shared with this profile. Check Admin → API scope.'),503
     raw=sam.jpeg_for_model((IMAGE_DIR/name).read_bytes())
     digest=hashlib.sha256(raw+secrets.token_bytes(16)+provider.encode()).hexdigest()
     limits=application_inference_limits()
@@ -664,7 +690,7 @@ def media_3d_status(jid):
     if not row:abort(404)
     # The read-only status call never creates an additional billable task.
     if row['status'] in ('PENDING','IN_PROGRESS','UNKNOWN') or (row['status']=='SUCCEEDED' and request.args.get('refresh')=='1'):
-        key=keyvault.get_key(g.con,row['provider'])
+        key=provider_key(row['provider'])
         if not key:return jsonify(error=row['provider'].upper()+' key missing: cannot poll task'),503
         try:info=(aholo3d.status(row['provider_task'],key) if row['provider']=='aholo' else meshy3d.status(row['provider_task'],key))
         except (RuntimeError,ValueError) as e:return jsonify(error=str(e)),502
@@ -814,7 +840,7 @@ def media_describe():
 @require_user
 def media_voices():
     """Optional read-only ElevenLabs voice listing; never triggers generation."""
-    key=keyvault.get_key(g.con,'elevenlabs')
+    key=provider_key('elevenlabs')
     if not key:return jsonify(voices=[],notice='ElevenLabs API key not configured')
     req=urllib.request.Request('https://api.elevenlabs.io/v2/voices?page_size=30',
          headers={'xi-api-key':key,'Accept':'application/json','User-Agent':'FREELAB/0.10'})
@@ -834,7 +860,7 @@ def media_speak():
         return jsonify(error='Speech text must be 1-500 characters'),400
     if not isinstance(voice,str) or not re.fullmatch(r'[A-Za-z0-9_-]{12,64}',voice):
         return jsonify(error='Choose a valid ElevenLabs voice from Settings'),400
-    key=keyvault.get_key(g.con,'elevenlabs')
+    key=provider_key('elevenlabs')
     if not key:return jsonify(error='ElevenLabs key not configured'),503
     url='https://api.elevenlabs.io/v1/text-to-speech/'+voice+'?output_format=mp3_44100_128'
     data=json.dumps({'text':phrase.strip(),'model_id':'eleven_flash_v2_5'}).encode()
@@ -880,6 +906,122 @@ def too_large(e):return jsonify(error='Request body is too large'),413
 def forbidden(e):return jsonify(error='Forbidden'),403
 @app.errorhandler(404)
 def not_found(e):return jsonify(error='Not found'),404
+
+# --- Collaborative room transport: authenticated, opt-in, bounded, polling based ---
+def _room_access(room_id,require_join=True):
+    r=g.con.execute('SELECT * FROM live_rooms WHERE id=?',(room_id,)).fetchone()
+    if not r:return None
+    if r['owner_id']==g.user['id']:return r
+    joined=g.con.execute('SELECT accepted FROM room_members WHERE room_id=? AND user_id=?',(room_id,g.user['id'])).fetchone()
+    if joined and joined['accepted']==1:return r
+    if not require_join and (r['visibility']=='public' or joined):return r
+    return None
+
+def _room_dict(r):
+    return {'id':r['id'],'owner_id':r['owner_id'],'visibility':r['visibility'],
+            'active':bool(r['active']),'updated_at':r['updated_at']}
+
+@app.get('/api/rooms')
+@require_user
+def list_rooms():
+    rows=g.con.execute('''SELECT r.*,u.display_name AS owner_name,
+     m.accepted AS invited FROM live_rooms r JOIN users u ON u.id=r.owner_id
+     LEFT JOIN room_members m ON m.room_id=r.id AND m.user_id=?
+     WHERE r.owner_id=? OR r.visibility='public' OR m.user_id=?
+     ORDER BY r.active DESC,r.updated_at DESC LIMIT 100''',(g.user['id'],g.user['id'],g.user['id'])).fetchall()
+    return jsonify(rooms=[{**_room_dict(r),'owner':r['owner_name'],
+      'joined':r['owner_id']==g.user['id'] or r['invited']==1,
+      'invited':r['invited']==0} for r in rows])
+
+@app.get('/api/rooms/users')
+@require_user
+def room_users():
+    rows=g.con.execute('SELECT id,display_name,username FROM users WHERE id!=? ORDER BY display_name LIMIT 100',(g.user['id'],)).fetchall()
+    return jsonify(users=[dict(r) for r in rows])
+
+@app.route('/api/rooms/mine',methods=['GET','PUT'])
+@require_user
+def own_room():
+    if request.method=='PUT':
+        v=body();visibility=v.get('visibility')
+        if visibility not in ('private','public'):return jsonify(error='Choose public or private'),400
+        with g.con:
+            g.con.execute('''INSERT INTO live_rooms(owner_id,visibility,active) VALUES(?,?,1)
+                 ON CONFLICT(owner_id) DO UPDATE SET visibility=excluded.visibility,active=1''',(g.user['id'],visibility))
+    r=g.con.execute('SELECT * FROM live_rooms WHERE owner_id=?',(g.user['id'],)).fetchone()
+    return jsonify(room=_room_dict(r) if r else None)
+
+@app.post('/api/rooms/mine/invite')
+@require_user
+def invite_to_room():
+    v=body();other=v.get('user_id')
+    if type(other) is not int or other==g.user['id']:return jsonify(error='Select another profile'),400
+    if not g.con.execute('SELECT 1 FROM users WHERE id=?',(other,)).fetchone():abort(404)
+    r=g.con.execute('SELECT id FROM live_rooms WHERE owner_id=?',(g.user['id'],)).fetchone()
+    if not r:return jsonify(error='Start your room first'),409
+    with g.con:g.con.execute('''INSERT INTO room_members(room_id,user_id,accepted) VALUES(?,?,0)
+     ON CONFLICT(room_id,user_id) DO UPDATE SET accepted=0''',(r['id'],other))
+    return jsonify(invited=True,room_id=r['id'])
+
+@app.post('/api/rooms/<int:rid>/join')
+@require_user
+def join_room(rid):
+    r=_room_access(rid,require_join=False)
+    if not r:abort(404)
+    if r['owner_id']!=g.user['id']:
+        with g.con:g.con.execute('''INSERT INTO room_members(room_id,user_id,accepted) VALUES(?,?,1)
+            ON CONFLICT(room_id,user_id) DO UPDATE SET accepted=1''',(rid,g.user['id']))
+    return jsonify(joined=True,room_id=rid)
+
+@app.put('/api/rooms/mine/state')
+@require_user
+def update_room_state():
+    v=body();active=v.get('active')
+    if type(active) is not bool:return jsonify(error='active must be boolean'),400
+    cards=v.get('cards',[]);pose=v.get('pose',[])
+    if not isinstance(cards,list) or len(cards)>72 or not isinstance(pose,list) or len(pose)!=3:return jsonify(error='Invalid room state'),400
+    def coords(q):return isinstance(q,list) and len(q)==3 and all(type(x) in (float,int) and abs(x)<100 for x in q)
+    if not coords(pose):return jsonify(error='Invalid headset position'),400
+    clean=[]
+    for c in cards:
+        if not isinstance(c,dict) or not coords(c.get('p')):return jsonify(error='Invalid card position'),400
+        kind=c.get('kind');ident=c.get('id')
+        if kind not in ('object','capture') or type(ident) is not int or ident<1:return jsonify(error='Invalid card identity'),400
+        if kind=='object':owned=g.con.execute('SELECT 1 FROM objects WHERE id=? AND owner_id=? AND shelf!=?',(ident,g.user['id'],'bin')).fetchone()
+        else:owned=g.con.execute('SELECT 1 FROM captures WHERE id=? AND owner_id=? AND hidden=0',(ident,g.user['id'])).fetchone()
+        if not owned:abort(403)
+        clean.append({'id':ident,'kind':kind,'p':[round(float(x),3) for x in c['p']]})
+    r=g.con.execute('SELECT id FROM live_rooms WHERE owner_id=?',(g.user['id'],)).fetchone()
+    if not r:return jsonify(error='Create a room before updating'),409
+    payload=json.dumps({'pose':pose,'cards':clean},separators=(',',':'))
+    with g.con:g.con.execute('''UPDATE live_rooms SET state_json=?,active=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?''',(payload,int(active),r['id']))
+    return jsonify(ok=True)
+
+@app.get('/api/rooms/<int:rid>/state')
+@require_user
+def read_room_state(rid):
+    r=_room_access(rid)
+    if not r:abort(404)
+    try:scene=json.loads(r['state_json'])
+    except (ValueError,TypeError):scene={}
+    # Do not leak private images to non-members; media endpoint applies the same gate.
+    return jsonify(room=_room_dict(r),scene=scene)
+
+@app.get('/api/rooms/<int:rid>/media/<kind>/<int:item_id>')
+@require_user
+def room_media(rid,kind,item_id):
+    r=_room_access(rid)
+    if not r:abort(404)
+    try:published=json.loads(r['state_json']).get('cards',[])
+    except (ValueError,TypeError,AttributeError):published=[]
+    if not any(c.get('kind')==kind and c.get('id')==item_id for c in published if isinstance(c,dict)):abort(404)
+    if kind=='object':item=g.con.execute('SELECT image_name FROM objects WHERE id=? AND owner_id=? AND shelf!=?',(item_id,r['owner_id'],'bin')).fetchone()
+    elif kind=='capture':item=g.con.execute('SELECT image_name FROM captures WHERE id=? AND owner_id=? AND hidden=0',(item_id,r['owner_id'])).fetchone()
+    else:abort(404)
+    if not item or not item['image_name']:abort(404)
+    path=(IMAGE_DIR/item['image_name']).resolve()
+    if not path.is_relative_to(IMAGE_DIR) or not path.is_file():abort(404)
+    return send_file(path,mimetype='image/png' if path.suffix.lower()=='.png' else 'image/jpeg',max_age=0)
 
 if __name__=='__main__':
     app.run(host='127.0.0.1',port=int(os.getenv('PORT','18765')),debug=False)
