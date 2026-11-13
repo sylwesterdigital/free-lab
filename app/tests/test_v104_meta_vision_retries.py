@@ -1,4 +1,4 @@
-"""v0.10.5: provider 503 handling without keys, billing or live network."""
+"""v0.10.6: provider 503 handling without keys, billing or live network."""
 import io,json,unittest,urllib.error
 from pathlib import Path
 from unittest.mock import patch

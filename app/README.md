@@ -125,5 +125,16 @@ Status fades without typewriter audio or independent drift. Spatial experimental
 - Mascot: head-first directional swimming, open-palm approach, fist/forward escape and two-ray avoidance. Gesture recognition remains experimental.
 - No watcher changes or application request quotas.
 
-### v0.10.5 Meta image descriptions
+### v0.10.6 Meta image descriptions
 DESCRIBE uses `POST /v1/responses` with a private JPEG as a `user` `input_image` data URL and a concise `input_text` instruction. Responses `output` message text is parsed and usage retained; reasoning items are not displayed. Meta 503 retries remain bounded, with provider error code and request ID exposed without image data or secrets. This integration is locally mocked and must be tested with actual credentials on Ubuntu.
+
+## Recursive image tree (v0.10.6)
+
+Every saved capture is the root of a tree. Extract, SAM segmentation, and Muse Image edits
+can use any saved child object at any depth. Parent relationships are stored as `parent_object_id`
+within the same private capture. The XR scene displays **seven direct children per page**
+to protect Quest rendering; that number is **not a storage, inference, or tree-depth limit**.
+Open an object menu (`··· → OPEN BRANCH`) to see that object's children; use the
+`PARENT`, `PREVIOUS`, and `NEXT` spatial cards to navigate without making AI calls.
+
+Nested operations bill according to the selected model; browsing an existing tree does not.

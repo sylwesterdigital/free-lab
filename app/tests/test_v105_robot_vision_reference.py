@@ -1,4 +1,4 @@
-"""FREE LAB v0.10.5 — vision request format compared with robot observation sample.
+"""FREE LAB v0.10.6 — vision request format compared with robot observation sample.
 All tests are offline; never contact the paid model endpoint.
 """
 import io,json,unittest,urllib.error

@@ -263,10 +263,10 @@ def segment_image():
 @app.get('/api/captures')
 @require_user
 def capture_clouds():
-    rows=g.con.execute('SELECT * FROM captures WHERE owner_id=? ORDER BY id DESC LIMIT 500',(g.user['id'],)).fetchall()
+    rows=g.con.execute('SELECT * FROM captures WHERE owner_id=? ORDER BY id DESC',(g.user['id'],)).fetchall()
     result=[]
     for row in rows:
-        items=g.con.execute('SELECT * FROM objects WHERE owner_id=? AND capture_id=? ORDER BY id LIMIT 80',(g.user['id'],row['id'])).fetchall()
+        items=g.con.execute('SELECT * FROM objects WHERE owner_id=? AND capture_id=? ORDER BY id',(g.user['id'],row['id'])).fetchall()
         result.append({'id':row['id'],'image_url':f'/api/captures/{row["id"]}/image',
            'created_at':row['created_at'],'collapsed':bool(row['collapsed']),'hidden':bool(row['hidden']),
            'spatial':json.loads(row['spatial_json'] or '{}'),'description':row['description'],'objects':[item_dict(obj) for obj in items]})

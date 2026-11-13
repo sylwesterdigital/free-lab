@@ -93,6 +93,8 @@ def init(path):
             ('parent_object_id','INTEGER REFERENCES objects(id) ON DELETE SET NULL'),
             ('operation',"TEXT NOT NULL DEFAULT ''")):
             if name not in fields:con.execute('ALTER TABLE objects ADD COLUMN '+name+' '+definition)
+        # Efficient arbitrary-depth tree lookup; every node keeps its stable parent ID.
+        con.execute('CREATE INDEX IF NOT EXISTS objects_capture_parent ON objects(owner_id,capture_id,parent_object_id,id)')
 
 def hash_password(password, salt=None):
     salt=salt or secrets.token_bytes(16)

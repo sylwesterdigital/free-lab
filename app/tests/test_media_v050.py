@@ -69,7 +69,7 @@ class UIContractTests(unittest.TestCase):
         self.assertIn('function toggleFollow()',s)
         self.assertIn('source frame',s.lower())
         start=s.index('async function runExtract()')
-        end=s.index('async function runSam()',start)
+        end=s.index('async function extractParts()',start)
         self.assertIn('bloomChildren(found)',s[start:end])
         self.assertNotIn('showCloud(',s[start:end])
     def test_prompt_requires_explicit_apply(self):

@@ -1,4 +1,4 @@
-/* FREELAB 0.10.5 — spatial media workbench, draggable diagnostics, voice meter, bounded 3D previews.
+/* FREELAB 0.10.6 — spatial media workbench, draggable diagnostics, voice meter, bounded 3D previews.
    Minimal WebGL WebXR renderer: real camera input only, no fake passthrough pixels.
    World-positioned photos, yaw-upright follow toolbar, image derivatives, spatial grab.
    Flat grey floating controls, double-sided, draggable spatial cards.
@@ -8,6 +8,7 @@ let gl,canvas,program,lineProgram,quad,rayBuffer,refSpace,session,root,poseReady
 let pending3dJobs=[],galleryPage=0,darkroom=null,darkBackdrop=null,darkClose=null,darkFloor=null,descriptionContext=null,descriptionQuestionMode=false,frameTouch=null,frameErase=null,lastMascotQuip=0,statusBorn=0,jobProvider='auto';
 let meshUniforms=null;
 let toolbar=null,editbar=null,statusCard=null,cloud=null,clouds=[],cards=[],zones=[],selected=null,held=null;
+let branchFocusId=null,branchPage=0; // Parent-based tree browsing, no fixed generation/depth limit.
 let imageMenuOpen=false,voiceBadge=null,voicePhase='idle',voiceMessage='',voiceUntil=0,voicePending=null,voiceOk=null,voiceCancel=null,voiceResultStamp=0;
 let mascotProgram=null,mascotBuffer=null,mascotVertexCount=0,mascotMood='curious',mascotMoodUntil=0,mascotVelocity=[.25,.22,.19],lastMascotTick=0,mascotSpeechBorn=0;
 let gestureDebounce=new Map(),lastGesturePoll=0,gestureDisplay='',lastGestureAnnouncement=-100000;
@@ -26,7 +27,14 @@ const tools=[['gallery','▣'],['follow','◎'],['debug','≡'],['exit','×']];
 const sourceTools=[['describe','☷'],['segment','✳'],['refine','✦'],['prompt','✎'],['voice','♫'],['3d','⬡'],['closemenu','×']];
 const objectTools=[['describe','☷'],['segment','✳'],['refine','✦'],['prompt','✎'],['voice','♫'],['3d','⬡'],['closemenu','×']];
 function currentTools(){return tools;}
-function imageTools(){return selected?.kind==='source'?sourceTools:objectTools;}
+function imageTools(){
+ const base=selected?.kind==='source'?sourceTools:objectTools;
+ if(!cloud||!selected)return base;
+ const extras=[];
+ if(selected.kind==='object')extras.push(['branch','↗']);
+ if(branchFocusId!==null)extras.push(['parent','↶']);
+ return [...base.slice(0,-1),...extras,base[base.length-1]];
+}
 function cue(name,src){window.FreeLabSound?.play(name);if(src)haptic(src,name==='hover'?.16:.35,name==='hover'?23:55);}
 function haptic(src,strength=.25,ms=35){try{const gamepad=src?.gamepad;const a=gamepad?.hapticActuators?.[0];if(a?.pulse){a.pulse(strength,ms).catch?.(()=>{});}else gamepad?.vibrationActuator?.playEffect?.('dual-rumble',{duration:ms,strongMagnitude:strength,weakMagnitude:strength*.7})?.catch?.(()=>{});}catch{}}
 
@@ -213,7 +221,7 @@ function toolbarTexture(kind){
  const w=context?300:540,h=context?names.length*76+24:116;
  const [c,ctx]=canvas2d(w,h);rrect(ctx,0,0,w,h,context?32:54,'#363d39');
  const labels={gallery:'LIB',follow:followMode?'PIN':'FOLLOW',debug:'LOG',exit:'EXIT',
-  segment:'EXTRACT',describe:'DESCRIBE',refine:'REFINE',prompt:'PROMPT',voice:'VOICE', '3d':'3D',closemenu:'CLOSE',submit3d:'CONFIRM 3D · paid',cancel3d:'CANCEL'};
+  segment:'EXTRACT',describe:'DESCRIBE',refine:'REFINE',prompt:'PROMPT',voice:'VOICE', '3d':'3D',branch:'OPEN BRANCH',parent:'PARENT',closemenu:'CLOSE',submit3d:'CONFIRM 3D · paid',cancel3d:'CANCEL'};
  if(context){names.forEach(([id,glyph],idx)=>{const y=18+idx*76,active=pointerHover===id;
    if(active)rrect(ctx,10,y,w-20,69,21,'#52695b');
    text(ctx,glyph,42,y+44,36,active?'#d0ffdc':'#f4f7f4',550,'center');
@@ -829,6 +837,8 @@ async function grabEnd(src,frame){if(held?.second?.src===src){held.second=null;r
  else if(h.card.kind==='diagnostics'){setStatus('LOG positioned in space · use top + / − to resize',6000);}
  else if(h.card.kind==='gallery'){await showCloud(h.card.data.id);}
  else if(h.card.kind==='gallerynav'){await openGallery(galleryPage+h.card.data.direction);}
+ else if(h.card.kind==='branchpage'){await flipBranchPage(h.card.data.direction);}
+ else if(h.card.kind==='branchback'){await upBranch();}
  else if(h.card.kind==='bincloud'){try{await window.FreeLab.updateXRCloud(h.card.data.id,{hidden:false});await openBin();setStatus('Capture restored · open it from LIB');}catch(e){setStatus('Restore failed: '+e.message);}}
  else if(h.card.kind==='binitem'){try{await window.FreeLab.updateXRObject(h.card.data.id,{shelf:'collection'});await openBin();setStatus('Object restored from Bin');}catch(e){setStatus(e.message);}}
 }
@@ -1042,19 +1052,55 @@ function faceCloudCards(pose,t){
  }
 }
 function sourceCard(data){return addCard('source','source',{label:data.legacy?'LEGACY ARCHIVE':'CAPTURE  '+String(data.id).padStart(2,'0'),subtitle:data.legacy?'OLDER SAVED OBJECTS · NOT A ROOM FRAME':'SOURCE FRAME  ·  PRIVATE',image:data.image||data.image_url,description:'Captured real pixels, not the WebXR passthrough compositor'},[0,.07,0],[.88,.63]);}
-async function showCloud(id){if(latestPose){root=viewerAnchor(latestPose,-.03,1.42);rootYaw=cameraYaw(latestPose);}closePrompt();const next=clouds.find(c=>c.id===id);if(!next){setStatus('Capture not found');return;}clearCards();mode='capture';cloud={...next,offset:['x','y','z'].map(k=>Number(next.spatial?.[k])||0)};
+function activeBranchView(){return window.FreeLabCloudTree.view(cloud?.objects||[],branchFocusId,branchPage);}
+function branchNavigation(view){
+ for(let i=cards.length-1;i>=0;i--)if(['branchpage','branchback'].includes(cards[i].kind)){
+  const card=cards.splice(i,1)[0];for(const t of card.resources||[])gl?.deleteTexture(t);
+ }
+ // Next/previous and parent are independent spatial targets. They never charge inference.
+ if(view.focusId!==null){const c=addCard('branchback','branchback',
+  {label:'← PARENT',subtitle:'ONE LEVEL UP'},[-.54,-.44,.22],[.22,.17]);c.animScale=1;}
+ if(view.page>0){const c=addCard('branchprev','branchpage',
+  {label:'← PREVIOUS',subtitle:'PAGE '+view.page},[-.19,-.49,.22],[.20,.15]);c.data.direction=-1;c.animScale=1;}
+ if(view.page<view.pages-1){const c=addCard('branchnext','branchpage',
+  {label:'NEXT →',subtitle:'PAGE '+(view.page+2)},[.19,-.49,.22],[.20,.15]);c.data.direction=1;c.animScale=1;}
+}
+async function showCloud(id,focusId=null,page=0){if(latestPose){root=viewerAnchor(latestPose,-.03,1.42);rootYaw=cameraYaw(latestPose);}closePrompt();const next=clouds.find(c=>c.id===id);if(!next){setStatus('Capture not found');return;}clearCards();mode='capture';cloud={...next,offset:['x','y','z'].map(k=>Number(next.spatial?.[k])||0)};
+ const tree=window.FreeLabCloudTree.view(next.objects,focusId,page);
+ branchFocusId=tree.focusId;branchPage=tree.page;
  if(next.hidden&&id>0){next.hidden=false;window.FreeLab.updateXRCloud(id,{hidden:false}).catch(()=>{});}
- const src=sourceCard(next);if(['qx','qy','qz','qw'].every(k=>typeof next.spatial?.[k]==='number'))src.q=quatNorm([next.spatial.qx,next.spatial.qy,next.spatial.qz,next.spatial.qw]);src.animScale=.08;animate(src,src.pos,0,660);
- const visible=next.objects.filter(o=>o.shelf!=='bin').slice(0,MAX_CLOUD);
- visible.forEach((o,i)=>{const target=spatialLoc(o,i,visible.length),card=addCard('item'+o.id,'object',{
+ const src=sourceCard(next);if(['qx','qy','qz','qw'].every(k=>typeof next.spatial?.[k]==='number'))src.q=quatNorm([next.spatial.qx,next.spatial.qy,next.spatial.qz,next.spatial.qw]);
+ if(tree.focus){src.pos=[-.68,-.40,-.12];src.scale=.55;}
+ src.animScale=.08;animate(src,src.pos,0,560);
+ if(tree.focus){const focus=tree.focus;
+   const focusCard=addCard('item'+focus.id,'object',{...focus,image:focus.has_image?'/api/objects/'+focus.id+'/image':null,
+     subtitle:'BRANCH '+tree.chain.length+' · '+tree.totalChildren+' CHILDREN'},[0,.07,.035],[.37,.40]);
+   focusCard.scale=1.8;focusCard.animScale=.08;animate(focusCard,focusCard.pos,30,540);
+ }
+ tree.children.forEach((o,i)=>{const target=spatialLoc(o,i,tree.children.length),card=addCard('item'+o.id,'object',{
    ...o,image:o.has_image?'/api/objects/'+o.id+'/image':null,subtitle:o.operation==='image_edit'?'AI VARIATION · PRIVATE':o.provider==='sam-3.1-box'?'REFINED REGION · PRIVATE':'EXTRACTED · PRIVATE'},[0,.07,.09],[.3,.35]);card.pos=[0,.07,.09];card.animScale=.06;card.original=target;card.scale=clamp(o.spatial?.scale||1,.45,3);card.rot=o.spatial?.rotation||0;card.q=['qx','qy','qz','qw'].every(k=>typeof o.spatial?.[k]==='number')?quatNorm([o.spatial.qx,o.spatial.qy,o.spatial.qz,o.spatial.qw]):quatY(card.rot);animate(card,target,i*55,1050);});
+ branchNavigation(tree);
  if(next.collapsed&&id>0){next.collapsed=false;window.FreeLab.updateXRCloud(id,{collapsed:false}).catch(()=>{});}
- selected=null;updateEditbar();setStatus(`${next.objects.length} saved object(s)  •  pinch/trigger to move`,5000);
+ selected=null;updateEditbar();setStatus(`TREE · ${next.objects.length} images · depth ${tree.chain.length} · ${tree.totalChildren} direct children · page ${tree.page+1}/${tree.pages}`,8500);
  // Reuse the saved JPEG for additional explicit Muse/SAM operations.
  if(id>0)await window.FreeLab.useXRFrame?.(next.image||next.image_url).catch(e=>setStatus(e.message));
 }
+async function openBranch(id){if(!cloud?.id)return;
+ const node=cloud.objects.find(o=>o.id===id&&o.shelf!=='bin');if(!node)return setStatus('Branch not found');
+ await showCloud(cloud.id,node.id,0);
+ setStatus('BRANCH · '+node.label+' · select EXTRACT or REFINE to grow this tree',8200);
+}
+async function upBranch(){if(!cloud?.id||branchFocusId===null)return;
+ const node=cloud.objects.find(o=>o.id===branchFocusId);
+ await showCloud(cloud.id,node?.parent_object_id??null,0);
+}
+async function flipBranchPage(direction){if(!cloud?.id)return;
+ const view=activeBranchView();const page=clamp(view.page+direction,0,view.pages-1);
+ if(page!==view.page)await showCloud(cloud.id,branchFocusId,page);
+}
+
 function spatialLoc(o,i,n){const pos=ringPosition(i,n);if(o.spatial&&typeof o.spatial.x==='number')return [o.spatial.x,o.spatial.y,o.spatial.z];return pos;}
-async function openGallery(page=galleryPage){if(latestPose){root=viewerAnchor(latestPose,-.03,1.42);rootYaw=cameraYaw(latestPose);}mode='gallery';selected=null;updateEditbar();clearCards();cloud=null;
+async function openGallery(page=galleryPage){if(latestPose){root=viewerAnchor(latestPose,-.03,1.42);rootYaw=cameraYaw(latestPose);}mode='gallery';selected=null;updateEditbar();clearCards();cloud=null;branchFocusId=null;branchPage=0;
  try{clouds=await window.FreeLab.listXRClouds();}catch(e){setStatus(e.message);return;}
  const available=clouds.filter(x=>!x.hidden);galleryPage=clamp(page,0,Math.max(0,Math.ceil(available.length/8)-1));const previews=available.slice(galleryPage*8,galleryPage*8+8);for(let i=0;i<previews.length;i++){const c=previews[i],col=i%4,row=Math.floor(i/4);addCard('gallery'+c.id,'gallery',{id:c.id,image:c.image_url,label:'CAPTURE '+c.id,subtitle:c.objects.length+' OBJECT(S)'},[(col-1.5)*.38,.21-row*.43,-.05],[.31,.35]);}
  for(const direction of [-1,1]){if(direction<0&&galleryPage===0||direction>0&&(galleryPage+1)*8>=available.length)continue;
@@ -1065,9 +1111,9 @@ async function binSource(){if(!selected||selected.kind!=='source'||!cloud?.id)re
   setStatus('Capture stored in hidden Bin · reopen from BIN to restore',10000);
   const entry=clouds.find(c=>c.id===id);if(entry)entry.hidden=true;
   const destination=[0,.07,.01];cards.forEach((c,i)=>animate(c,destination,i*30,650,true));
-  setTimeout(()=>{if(cloud?.id===id){clearCards();cloud=null;selected=null;updateEditbar();}},950);
+  setTimeout(()=>{if(cloud?.id===id){clearCards();cloud=null;branchFocusId=null;branchPage=0;selected=null;updateEditbar();}},950);
  }catch(e){setStatus('Could not bin capture: '+e.message);}}
-async function openBin(){mode='bin';selected=null;updateEditbar();clearCards();cloud=null;
+async function openBin(){mode='bin';selected=null;updateEditbar();clearCards();cloud=null;branchFocusId=null;branchPage=0;
  try{clouds=await window.FreeLab.listXRClouds();}catch(e){setStatus(e.message);return;}
  const hidden=clouds.filter(x=>x.hidden).slice(0,5);const binned=clouds.flatMap(x=>x.objects).filter(x=>x.shelf==='bin').slice(0,MAX_CLOUD-hidden.length);
  const sources=[...hidden.map(c=>({kind:'bincloud',data:{id:c.id,image:c.image_url,label:'HIDDEN CAPTURE '+c.id,subtitle:'SELECT TO RESTORE'}})),
@@ -1109,7 +1155,7 @@ async function makeCapture(){
    try{decoded=new Image();decoded.src=item.image;await decoded.decode();}catch{decoded=null;}
    // Commit only after server confirmation, with one uninterrupted bloom.
    if(latestPose){root=viewerAnchor(latestPose,-.03,1.42);rootYaw=cameraYaw(latestPose);}
-   clearCards();cloud={...data,offset:[0,0,0]};clouds.unshift(data);mode='capture';
+   clearCards();cloud={...data,offset:[0,0,0]};clouds.unshift(data);branchFocusId=null;branchPage=0;mode='capture';
    const card=sourceCard({...data,decodedImage:decoded});
    card.animScale=.01;animate(card,card.pos,0,980);
    selected=null;updateEditbar();setEyeState('ready',1500);cue('ready');
@@ -1132,9 +1178,14 @@ async function makeCapture(){
 
 function bloomChildren(items,parent=null){if(!cloud||!items?.length)return;
  const original=parent||cards.find(c=>c.kind==='source');const origin=original?[...original.pos]:[0,0,0];
- const existing=cards.filter(c=>c.kind==='object').length;
- items.slice(0,Math.max(0,MAX_CLOUD-existing)).forEach((o,i)=>{
-  const target=parent?vadd(origin,[(i%3-1)*.38,.45+Math.floor(i/3)*.43,.18+.02*i]):spatialLoc(o,existing+i,existing+items.length);
+ const view=activeBranchView();
+ const parentId=parent?.data?.id??null;
+ if(parentId!==view.focusId)return; // Saved in the correct branch, open it to view children.
+ const existing=cards.filter(c=>c.kind==='object'&&c.data?.id!==view.focusId).length;
+ const permitted=new Set(view.children.map(o=>o.id));
+ items.filter(o=>permitted.has(o.id)).forEach((o,i)=>{
+  if(cards.some(c=>c.id==='item'+o.id))return;
+  const target=parent?vadd(origin,[(i%3-1)*.38,.45+Math.floor(i/3)*.43,.18+.02*i]):spatialLoc(o,existing+i,Math.max(1,view.children.length));
   const card=addCard('item'+o.id,'object',{...o,image:o.has_image?'/api/objects/'+o.id+'/image':null,
     subtitle:o.operation==='image_edit'?'AI VARIATION · PRIVATE':o.provider==='sam-3.1-box'?'SEGMENTED REGION · PRIVATE':'EXTRACTED OBJECT · PRIVATE'},origin,[.3,.35]);
   card.animScale=.04;card.original=target;animate(card,target,i*110,900);launchParticles(origin);
@@ -1146,7 +1197,7 @@ async function runExtract(){if(!extractionAvailable())return setStatus('Capture 
  try{const result=await window.FreeLab.recognizeXR(cloud.id);
   const found=result.items||[];if(!found.length)window.FreeLab?.traceEvent?.('Extract response contained no recognized object items','warn');cloud.objects=[...cloud.objects,...found];
   const persisted=clouds.find(x=>x.id===cloud.id);if(persisted)persisted.objects=cloud.objects;
-  bloomChildren(found);cue('bloom');mascotMood=found.length?'happy':'confused';mascotMoodUntil=performance.now()+3200;
+  bloomChildren(found);if(found.length&&activeBranchView().pages>1)branchNavigation(activeBranchView());cue('bloom');mascotMood=found.length?'happy':'confused';mascotMoodUntil=performance.now()+3200;
   let quote=found.length?`Found ${found.length} objects`:'No objects found';
   if(found.length&&window.FreeLab?.pref?.('troll')){const jokes=['Your room has been officially inspected by a very small expert.','That is a surprisingly respectable collection of stuff.','Found objects! None of them offered me a snack.'];quote+=' . '+jokes[Math.floor(Math.random()*jokes.length)];}
   window.FreeLab?.speakUpdate?.(quote);setStatus(found.length?`${found.length} objects bloomed from your photo`:'No clear objects found · check LOG for API details',8500);
@@ -1159,7 +1210,7 @@ async function extractParts(){
  try{const result=await window.FreeLab.recognizeXR(cloud.id,id);
   const items=result.items||[];cloud.objects.push(...items);
   const existing=clouds.find(c=>c.id===cloud.id);if(existing)existing.objects=cloud.objects;
-  bloomChildren(items,parent);cue('bloom');
+  await showCloud(cloud.id,id,window.FreeLabCloudTree.pageOfChild(cloud.objects,id,items[0]?.id));cue('bloom');
   window.FreeLab?.speakUpdate?.(`Found ${items.length} parts`);
   setStatus(items.length?`${items.length} new image(s) bloomed from ${parent.data.label}`:'No additional identifiable parts',10000);
  }catch(e){setStatus('Extract parts failed · '+e.message,14000);window.FreeLab?.traceEvent?.('NESTED EXTRACTION FAILED · '+e.message,'error');}
@@ -1254,7 +1305,11 @@ async function applyPrompt(){if(!promptContext)return openPrompt();if(busy)retur
  if(!promptText.trim())return setStatus('Speak or Type your instruction before Apply');
  const context=promptContext;busy=true;inferenceCard=context.card;inferenceStarted=performance.now();setStatus('GENERATING · original image stays in the room',24000);
  try{const o=await window.FreeLab.promptXR(context.captureId,context.objectId,promptText);
-  if(cloud&&cloud.id===context.captureId){cloud.objects.push(o);bloomChildren([o],context.card);cue('bloom');}else{const destination=clouds.find(c=>c.id===context.captureId);if(destination)destination.objects.push(o);setStatus('Created image saved · open its source capture in LIB',9000);}
+  if(cloud&&cloud.id===context.captureId){cloud.objects.push(o);
+   const parentId=context.objectId??null;
+   if(branchFocusId!==parentId||!activeBranchView().children.some(x=>x.id===o.id))
+    await showCloud(cloud.id,parentId,window.FreeLabCloudTree.pageOfChild(cloud.objects,parentId,o.id));
+   else bloomChildren([o],context.card);cue('bloom');}else{const destination=clouds.find(c=>c.id===context.captureId);if(destination)destination.objects.push(o);setStatus('Created image saved · open its source capture in LIB',9000);}
   setStatus('New AI image saved as a child · one image charged',10000);mixBucket=[];closePrompt();
  }catch(e){setStatus('Image edit failed · '+e.message,13000);}finally{busy=false;inferenceCard=null;}}
 async function keyboardPrompt(){if(!promptContext)return openPrompt();
@@ -1284,7 +1339,7 @@ async function collapse(){if(!cloud)return openGallery();if(cloud.collapsed){awa
  const inv=inverse(root);const local=inv?point(inv,libWorld):[0,-.38,0];const dest=vsub(local,cloud.offset||[0,0,0]);
  cards.forEach((c,i)=>{animate(c,dest,i*32,1020,true);});launchParticles(dest);cue('bloom');window.FreeLab?.speakUpdate?.('Stored in your library');
  if(cloud.id>0)window.FreeLab.updateXRCloud(cloud.id,{collapsed:true}).catch(e=>setStatus(e.message));setStatus('Saved in LIBRARY · reopen any time without inference charges',7500);
- setTimeout(()=>{if(cloud?.collapsed){clearCards();cloud=null;selected=null;updateEditbar();}},1350);}
+ setTimeout(()=>{if(cloud?.collapsed){clearCards();cloud=null;branchFocusId=null;branchPage=0;selected=null;updateEditbar();}},1350);}
 async function submit3d(){if(!meshConfirm||busy)return;const target=meshConfirm;
  meshJobOrigin=target.origin;closeImageMenu();busy=true;setStatus('3D SUBMITTING · selected provider · one confirmed billable job',11000);
  try{const job=await window.FreeLab.createXR3D(target.captureId,target.objectId);meshyJob=job.id;pending3dJobs.push({id:job.id,provider:job.provider,origin:target.origin});meshyPollAt=0;
@@ -1430,6 +1485,7 @@ async function action(id){const t=performance.now();if(t-lastAction<200)return;l
  case 'darkroom':return enterDarkroom();case 'darkroomexit':return closeDarkroom();
  case 'imagemenu':return toggleImageMenu(selected);case 'imageclose':return selected?.kind==='source'?collapse():closeSelectedCard();
  case 'debug':debugShowing=!debugShowing;if(debugShowing){serverPoll=0;loadServerDiagnostic();}return setStatus(debugShowing?'LOG OPEN · API errors and server request status':'LOG CLOSED',6500);
+ case 'branch':return selected?.kind==='object'?openBranch(selected.data.id):null;case 'parent':return upBranch();
  case 'prompt':return openPrompt();case 'segment':return selected?.kind==='source'?runExtract():extractParts();case 'refine':return restoreSelected();case 'apply':return applyPrompt();
  case 'follow':return toggleFollow();case 'gallery':galleryPage=0;return openGallery(0);
  case 'exit':held=null;return darkroom?closeDarkroom():session?.end();}}

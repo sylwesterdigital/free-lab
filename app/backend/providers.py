@@ -169,6 +169,6 @@ def describe(jpeg: bytes, api_key: str, model: str = 'muse-spark-1.3', question:
         ]}]
     }
     req=urllib.request.Request(RESPONSES_URL,data=json.dumps(payload).encode('utf-8'),method='POST',
-        headers={'Authorization':'Bearer '+api_key,'Content-Type':'application/json','User-Agent':'FREELAB-Describe/0.10.5'})
+        headers={'Authorization':'Bearer '+api_key,'Content-Type':'application/json','User-Agent':'FREELAB-Describe/0.10.6'})
     result=_vision_request(req)
     return _response_text(result),result.get('usage',{})

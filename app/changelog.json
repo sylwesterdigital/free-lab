@@ -1,11 +1,11 @@
 {
-  "version": "0.10.5",
-  "title": "Meta Vision Responses Adapter \u00b7 v0.10.5",
+  "version": "0.10.6",
+  "title": "Recursive Image Trees · v0.10.6",
   "datetime": "2026-11-13 UTC",
   "changes": [
-    "DESCRIBE now sends the private JPEG plus a concise text question via Meta Responses input_image/input_text, matching the proven robot-perception request style.",
-    "Low reasoning effort for routine image description; no change to Extract, SAM, Muse Image, stored keys or model routing.",
-    "Handle Responses typed output safely, ignoring internal reasoning and returning visible image descriptions with usage tokens.",
-    "Preserve provider request IDs and 503 handling, with no keys, prompts or private camera bytes in diagnostics."
+    "Any extracted, segmented, or AI-refined image can be the source of another operation; no fixed tree-depth limit.",
+    "Branch navigation shows each node's direct children, with next/previous pages and parent navigation without AI charges.",
+    "Remove silent 80-object and 500-capture API truncation, preserving existing private image ancestry.",
+    "Keep only seven direct children rendered per view for Quest performance; all additional siblings remain available on later pages."
   ]
 }
