@@ -64,7 +64,7 @@ def identify(jpeg, model=None, api_key=None):
         raise RuntimeError('Meta API returned an incompatible object response') from e
 
 
-def describe(jpeg: bytes, api_key: str, model: str = 'muse-ember-1.0', question: str = '', history=None):
+def describe(jpeg: bytes, api_key: str, model: str = 'muse-spark-1.3', question: str = '', history=None):
     """Describe the actual image only. A paid, user-initiated vision request."""
     if model not in MODEL_IDS: raise ValueError('Unsupported Meta vision model')
     if not api_key: raise RuntimeError('Meta API key not configured')

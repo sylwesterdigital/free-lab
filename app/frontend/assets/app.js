@@ -304,7 +304,7 @@ function startWavPrompt(){
 }
 async function recordWavPrompt(durationMs=12000){const rec=startWavPrompt();await new Promise(resolve=>setTimeout(resolve,Math.max(1000,Math.min(durationMs,90000))));return rec.stop();}
 function currentRecording(){return recorder;}
-async function describeXR(cid,oid=null,question=''){const payload={capture_id:cid,object_id:oid,question};if(sessionMeta())payload.session_api_key=sessionMeta();return api('/media/describe',{method:'POST',body:JSON.stringify(payload)});}
+async function describeXR(cid,oid=null,question='',refresh=false){const payload={capture_id:cid,object_id:oid,question,refresh};if(sessionMeta())payload.session_api_key=sessionMeta();return api('/media/describe',{method:'POST',body:JSON.stringify(payload)});}
 async function modelXRPreview(id){return api('/media/3d/'+id+'/preview');}
 async function get3DPreference(){return api('/preferences/3d');}
 async function save3DPreference(provider){return api('/preferences/3d',{method:'PUT',body:JSON.stringify({provider})});}

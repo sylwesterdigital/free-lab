@@ -1,4 +1,4 @@
-"""v0.10.2 no-network regressions: XR presentation + hand-attached geometry."""
+"""v0.10.3 no-network regressions: XR presentation + hand-attached geometry."""
 import json
 import subprocess
 import unittest
@@ -11,9 +11,9 @@ INDEX=(ROOT/'frontend/index.html').read_text()
 
 class MotionPolishTests(unittest.TestCase):
     def test_release_marker_and_cache_busting(self):
-        self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.2')
-        self.assertIn('xr.js?v=0.10.2',INDEX)
-        self.assertIn('frame-lab.js?v=0.10.2',INDEX)
+        self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.3')
+        self.assertIn('xr.js?v=0.10.3',INDEX)
+        self.assertIn('frame-lab.js?v=0.10.3',INDEX)
 
     def test_static_status_has_single_transform_and_alpha_fade(self):
         set_status=XR.split('function setStatus(',1)[1].split('function refreshToolbar(',1)[0]
@@ -28,7 +28,7 @@ class MotionPolishTests(unittest.TestCase):
 
     def test_flight_orientation_and_speech_bubble(self):
         self.assertIn('mascotPointer.flightQ=quatSlerp',XR)
-        self.assertIn('quatZ(roll+turnAccent)',XR)
+        self.assertIn('quatFromTo([0,1,0],norm(velocity))',XR)
         self.assertIn("size:[.45,.13]",XR)
         self.assertIn('const fadeIn=250,fadeOut=520',XR)
         self.assertIn('const eased=opening*opening*(3-2*opening)',XR)

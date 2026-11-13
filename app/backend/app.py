@@ -765,7 +765,7 @@ def media_describe():
         with g.con:
             g.con.execute('INSERT INTO image_dialogue(owner_id,capture_id,object_id,question,answer) VALUES(?,?,?,?,?)',(g.user['id'],cid,oid,question,answer))
         db.finish_inference(g.con,call,'ok',usage)
-        return jsonify(description=answer,cached=False,history=history+[{'question':question,'answer':answer}],usage=usage,capture_id=cid,object_id=oid)
+        return jsonify(description=answer,cached=False,model='muse-spark-1.3',history=history+[{'question':question,'answer':answer}],usage=usage,capture_id=cid,object_id=oid)
     except (OSError,ValueError,RuntimeError) as e:
         db.finish_inference(g.con,call,'error');return jsonify(error=str(e)),502
 

@@ -15,7 +15,7 @@ def request_api(method,url,key,payload=None):
     if url!=CREATE and not (url.startswith(STATUS+'?taskid=') and url[len(STATUS+'?taskid='):].isdigit()):
         raise ValueError('Unexpected Aholo endpoint')
     body=json.dumps(payload).encode() if payload is not None else None
-    req=urllib.request.Request(url,method=method,data=body,headers={'Authorization':key,'Content-Type':'application/json','Accept':'application/json','User-Agent':'FREELAB-Aholo/0.10.2'})
+    req=urllib.request.Request(url,method=method,data=body,headers={'Authorization':key,'Content-Type':'application/json','Accept':'application/json','User-Agent':'FREELAB-Aholo/0.10.3'})
     try:
         with urllib.request.build_opener(NoRedirect).open(req,timeout=35) as resp:raw=resp.read(128_001)
         if len(raw)>128_000:raise RuntimeError('Aholo response exceeded size limit')

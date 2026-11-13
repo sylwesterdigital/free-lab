@@ -115,3 +115,12 @@ For images outside Quest, upload via the camera panel and use **Save photo to Sp
 ## v0.10.2 · spatial interaction refinement
 
 Status fades without typewriter audio or independent drift. Spatial experimental frames rotate with a grabbing hand using wrist orientation and a fixed index-fingertip contact offset. The mascot banks into travel and displays a larger, animated speech bubble. No watcher, backend, or quota changes.
+
+
+## v0.10.3 — immersive cinema and interaction reliability
+
+- Cinema: opaque black WebXR stereo frame, image at approximately 2.35 m, head-aligned pitch/yaw, large X exit, subtle simulated glossy floor. No loss of the immersive session.
+- Clear status: short, muted green, one line beneath camera hint. Microphone silence says “No speech” once.
+- Vision: DESCRIBE always makes an explicit Meta Spark image-analysis call, stores the result privately and shows actual error diagnostics if it fails. **This action is billable.**
+- Mascot: head-first directional swimming, open-palm approach, fist/forward escape and two-ray avoidance. Gesture recognition remains experimental.
+- No watcher changes or application request quotas.

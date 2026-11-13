@@ -1,13 +1,14 @@
 {
-  "version": "0.10.2",
-  "title": "XR Motion and Communication Polish · v0.10.2",
-  "datetime": "2026-11-13 02:16 UTC",
+  "version": "0.10.3",
+  "title": "Immersive Cinema and Clear XR Feedback · v0.10.3",
+  "datetime": "2026-11-13 UTC",
   "changes": [
-    "Status notifications are now muted-green, slightly smaller, and fade in quickly/fade out slowly without typed characters or typing sounds.",
-    "XR status text inherits the same smoothed eye transform rather than drifting on a separate follow clock.",
-    "Hand-grabbed experimental frames preserve a fingertip contact offset and rotate with the tracked wrist orientation in full 3D.",
-    "Mascot flight banking and pitching follow travel direction, with a gently damped orientation and occasional subtle pirouette.",
-    "Mascot speech bubbles are larger, wrap readable text, and open/close with a restrained scale-and-opacity animation.",
-    "No backend changes, new spending limits or watcher changes."
+    "Cinema now replaces the entire passthrough renderer with a fully opaque black stereo backdrop; a large, camera-aligned image and an accessible white Exit control are the only controls visible.",
+    "The selected original image is loaded into the cinema at preserved aspect ratio. A faint simulated reflective floor is displayed; the normal spatial cards and mascot are hidden until Exit.",
+    "Camera and action notices use one compact muted-green line below the pink camera hint. A silent microphone transcript shows only No speech once.",
+    "DESCRIBE forces an explicit Meta vision request when selected, reports provider errors in its bubble and in LOG, and no longer leaves a permanent Analyzing placeholder on failure.",
+    "Image-action menu angular size remains controlled when photos are brought close to the headset.",
+    "Mascot aligns its head along its actual 3D flight direction and reacts to two pointing rays, an open palm, a fist, and forward gestures.",
+    "No watcher modifications, arbitrary quotas, or automatically initiated paid requests."
   ]
 }

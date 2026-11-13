@@ -1,4 +1,4 @@
-"""FREE LAB 0.10.2: self-contained, no-network media/XR regressions."""
+"""FREE LAB 0.10.3: self-contained, no-network media/XR regressions."""
 import json, struct, sqlite3, tempfile, unittest
 from pathlib import Path
 from unittest.mock import patch
