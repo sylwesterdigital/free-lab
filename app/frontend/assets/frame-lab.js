@@ -39,6 +39,21 @@ function separated(left,right){
  if(!valid(left?.thumb)||!valid(left?.index)||!valid(right?.thumb)||!valid(right?.index))return false;
  return distance(left.thumb,right.thumb)>RELEASE_METRES&&distance(left.index,right.index)>RELEASE_METRES;
 }
+// Keep the fingertip contact point fixed while applying full hand orientation.
+// Wrist joint quaternions are WebXR local-floor orientations [x,y,z,w].
+function transformGrab(corners,startIndex,currentIndex,startQuaternion,currentQuaternion){
+ const normalized=q=>{const d=Math.hypot(...q)||1;return q.map(n=>n/d);};
+ const rotate=(q,v)=>{const [x,y,z,w]=q;
+  const tx=2*(y*v[2]-z*v[1]),ty=2*(z*v[0]-x*v[2]),tz=2*(x*v[1]-y*v[0]);
+  return [v[0]+w*tx+y*tz-z*ty,v[1]+w*ty+z*tx-x*tz,v[2]+w*tz+x*ty-y*tx];};
+ let q=[0,0,0,1];
+ if(Array.isArray(startQuaternion)&&Array.isArray(currentQuaternion)){
+  const a=normalized(startQuaternion),b=normalized(currentQuaternion);
+  const [x,y,z,w]=b,[X,Y,Z,W]=[-a[0],-a[1],-a[2],a[3]];
+  q=normalized([w*X+x*W+y*Z-z*Y,w*Y-x*Z+y*W+z*X,w*Z+x*Y-y*X+z*W,w*W-x*X-y*Y-z*Z]);
+ }
+ return corners.map(p=>add(currentIndex,rotate(q,sub(p,startIndex))));
+}
 class Experiment{
  constructor(){this.enabled=false;this.holdSeconds=3;this.frames=[];this.nextId=1;this.reset();}
  reset(){this.mode='idle';this.touchSince=null;this.stretchSince=null;this.armed=false;this.current=null;this.progress=0;}
@@ -75,5 +90,5 @@ class Experiment{
   return {enabled:true,mode:this.mode,event,frames:this.frames,live:this.current,progress:this.progress,holdSeconds:this.holdSeconds};
  }
 }
-window.FreeLabFrameLab={Experiment,JOINTS,rectangle,contact,separated};
+window.FreeLabFrameLab={Experiment,JOINTS,rectangle,contact,separated,transformGrab};
 })();

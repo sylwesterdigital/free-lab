@@ -1,4 +1,4 @@
-"""v0.10.1: no-network release regression checks for critical provider and XR paths."""
+"""v0.10.2: no-network release regression checks for critical provider and XR paths."""
 import json, tempfile, unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -76,10 +76,10 @@ class SpatialXRTests(unittest.TestCase):
         self.assertIn("'cinema-curtain'",XR)
         body=XR.split('function enterDarkroom(){',1)[1].split('function closeSelectedCard()',1)[0]
         self.assertNotIn('session.end()',body)
-    def test_typed_status_and_mascot_speech(self):
+    def test_status_and_mascot_speech(self):
         self.assertIn('function typeStatus(t)',XR)
-        self.assertIn("FreeLabSound?.play?.('type')",XR)
-        self.assertIn('Math.exp(-dt*1.45)',XR)
+        self.assertNotIn("FreeLabSound?.play?.('type')",XR)
+        self.assertIn('mascotPointer.flightQ=quatSlerp',XR)
         self.assertIn("speakUpdate?.('Welcome to FreeLab!",XR)
     def test_old_library_pages_and_frame_touch(self):
         self.assertIn('galleryPage*8',XR)

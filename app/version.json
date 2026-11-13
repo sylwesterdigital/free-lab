@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.1",
-  "description": "Spatial hotfix: real Meta image conversation, Aholo 3D routing, XR darkroom, saved library paging, readable scene panels and experimental frame touch"
+  "version": "0.10.2",
+  "description": "XR motion polish: fade-only status, rotatable experimental frames, directional mascot and legible speech bubble"
 }

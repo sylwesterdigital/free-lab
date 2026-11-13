@@ -1,19 +1,13 @@
 {
-  "version": "0.10.1",
-  "title": "Spatial Reliability & Image Conversations · v0.10.1",
-  "datetime": "2026-11-13 01:08 UTC",
+  "version": "0.10.2",
+  "title": "XR Motion and Communication Polish · v0.10.2",
+  "datetime": "2026-11-13 02:16 UTC",
   "changes": [
-    "Fixed DESCRIBE: actual Meta vision analysis of the selected private JPEG; previous refine prompt no longer masquerades as a description.",
-    "Added image-specific multi-turn Meta questions with a compact bubble, native keyboard/voice input, private dialogue history and explicit paid calls.",
-    "Added selected 3D-provider preference; Aholo Lux3D now submits and polls actual tasks, instead of silently invoking Meshy.",
-    "Aholo image submission uses an expiring signed source URL (two hours) only after paid confirmation; no automatic fallback.",
-    "Restored all older private capture sessions through paged XR Library navigation; 3D job polling resumes after XR restart.",
-    "Added closable cinema/darkroom image preview directly in XR, no extra network request.",
-    "Adjusted image orientation to camera elevation, and independently placed LOG to the camera viewing pitch.",
-    "Status updates appear with a medium-fast typewriter reveal and very soft WebAudio typing sounds.",
-    "Slowed the 3D mascot to curved floating paths with optional, periodic browser/ElevenLabs speech and subtle expression changes.",
-    "Added pinch relocation and sustained little-fingertip deletion of hand-created experimental frames.",
-    "Experimental-mode exit cleans input capture without deleting collections; exits are no longer tied to a successful render frame.",
-    "No new storage, model or daily usage quotas. Existing watcher unchanged."
+    "Status notifications are now muted-green, slightly smaller, and fade in quickly/fade out slowly without typed characters or typing sounds.",
+    "XR status text inherits the same smoothed eye transform rather than drifting on a separate follow clock.",
+    "Hand-grabbed experimental frames preserve a fingertip contact offset and rotate with the tracked wrist orientation in full 3D.",
+    "Mascot flight banking and pitching follow travel direction, with a gently damped orientation and occasional subtle pirouette.",
+    "Mascot speech bubbles are larger, wrap readable text, and open/close with a restrained scale-and-opacity animation.",
+    "No backend changes, new spending limits or watcher changes."
   ]
 }

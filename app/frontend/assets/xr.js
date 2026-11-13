@@ -1,15 +1,15 @@
-/* FREELAB 0.10.1 — spatial media workbench, draggable diagnostics, voice meter, bounded 3D previews.
+/* FREELAB 0.10.2 — spatial media workbench, draggable diagnostics, voice meter, bounded 3D previews.
    Minimal WebGL WebXR renderer: real camera input only, no fake passthrough pixels.
    World-positioned photos, yaw-upright follow toolbar, image derivatives, spatial grab.
    Flat grey floating controls, double-sided, draggable spatial cards.
 */
 (()=>{'use strict';
 let gl,canvas,program,lineProgram,quad,rayBuffer,refSpace,session,root,poseReady=false;
-let pending3dJobs=[],galleryPage=0,darkroom=null,darkBackdrop=null,darkClose=null,descriptionContext=null,descriptionQuestionMode=false,frameTouch=null,frameErase=null,lastMascotQuip=0,statusTyped=0,statusTypedAt=0,jobProvider='auto';
+let pending3dJobs=[],galleryPage=0,darkroom=null,darkBackdrop=null,darkClose=null,descriptionContext=null,descriptionQuestionMode=false,frameTouch=null,frameErase=null,lastMascotQuip=0,statusBorn=0,jobProvider='auto';
 let meshUniforms=null;
 let toolbar=null,editbar=null,statusCard=null,cloud=null,clouds=[],cards=[],zones=[],selected=null,held=null;
 let imageMenuOpen=false,voiceBadge=null,voicePhase='idle',voiceMessage='',voiceUntil=0,voicePending=null,voiceOk=null,voiceCancel=null,voiceResultStamp=0;
-let mascotProgram=null,mascotBuffer=null,mascotVertexCount=0,mascotMood='curious',mascotMoodUntil=0,mascotVelocity=[.25,.22,.19],lastMascotTick=0;
+let mascotProgram=null,mascotBuffer=null,mascotVertexCount=0,mascotMood='curious',mascotMoodUntil=0,mascotVelocity=[.25,.22,.19],lastMascotTick=0,mascotSpeechBorn=0;
 let gestureDebounce=new Map(),lastGesturePoll=0,gestureDisplay='',lastGestureAnnouncement=-100000;
 let mascotSpeech=null,mascotSpeechUntil=0,gestureSpeechTimes=new Map();
 let pointerHover=null,lastFrame=0,lastUi=0,lastAction=0,latestPose=null,nextPaidAt=0,busy=false,mode='capture',statusText='Capture your space',statusUntil=0;
@@ -33,7 +33,7 @@ function haptic(src,strength=.25,ms=35){try{const gamepad=src?.gamepad;const a=g
 const promptTools=[['voice','◎'],['apply','↗'],['cancel','×']];
 const threeDTools=[['submit3d','⬡'],['cancel3d','×']];
 const V=`attribute vec3 aPos;attribute vec2 aUV;uniform mat4 uMVP;varying vec2 vUV;void main(){vUV=aUV;gl_Position=uMVP*vec4(aPos,1.);}`;
-const F=`precision mediump float;varying vec2 vUV;uniform sampler2D uTex;uniform bool uFlip;void main(){vec2 uv=vec2(uFlip?1.-vUV.x:vUV.x,vUV.y);gl_FragColor=texture2D(uTex,uv);}`;
+const F=`precision mediump float;varying vec2 vUV;uniform sampler2D uTex;uniform bool uFlip;uniform float uOpacity;void main(){vec2 uv=vec2(uFlip?1.-vUV.x:vUV.x,vUV.y);gl_FragColor=texture2D(uTex,uv)*uOpacity;}`;
 const LV=`attribute vec3 aPos;uniform mat4 uVP;uniform float uSize;void main(){gl_Position=uVP*vec4(aPos,1.);gl_PointSize=uSize;}`;
 const LF=`precision mediump float;uniform vec4 uColor;uniform bool uPoint;void main(){if(uPoint&&length(gl_PointCoord-vec2(.5))>.5)discard;gl_FragColor=uColor;}`;
 const MV=`attribute vec3 aPos;attribute vec3 aNormal;uniform mat4 uMVP;uniform mat4 uModel;varying vec3 vNormal;void main(){vNormal=normalize(mat3(uModel)*aNormal);gl_Position=uMVP*vec4(aPos,1.);}`;
@@ -50,6 +50,7 @@ function quatMul(a,b){const [x,y,z,w]=a,[X,Y,Z,W]=b;return [w*X+x*W+y*Z-z*Y,w*Y-
 function quatInv(a){return [-a[0],-a[1],-a[2],a[3]];}
 function quatY(yaw){return [0,Math.sin(yaw/2),0,Math.cos(yaw/2)];}
 function quatX(angle){return [Math.sin(angle/2),0,0,Math.cos(angle/2)];}
+function quatZ(angle){return [0,0,Math.sin(angle/2),Math.cos(angle/2)];}
 // Normal points precisely from the card toward the viewer: above-eye cards pitch down,
 // below-eye cards pitch up. A short easing step avoids abrupt rotations.
 function lookingQuat(pos,viewer){const d=vsub(viewer,pos),yaw=Math.atan2(d[0],d[2]),pitch=-Math.atan2(d[1],Math.hypot(d[0],d[2]));return quatNorm(quatMul(quatY(yaw),quatX(pitch)));}
@@ -109,7 +110,7 @@ function mascotEmotion(type,ms=3300){mascotMood=type;mascotMoodUntil=performance
 function drawMascot3D(vp,t){if(!mascotPointer?.visible||mascotMode()!=='3d'||!mascotProgram)return;
  const m=mascotPointer,now=t/1000,bounce=Math.sin(now*3)*.007,smile=mascotMood==='happy';
  const blink=mascotMood==='sleepy'? .18: Math.pow(Math.max(0,Math.sin(now*.43)),44)*.86;
- const yaw=cameraYaw(latestPose)+Math.sin(now*.33)*.13+Math.pow(Math.max(0,Math.sin(now*.09)),18)*Math.sin(now*7)*.4,base=matmul(translate(m.pos[0],m.pos[1]+bounce,m.pos[2]),matmul(rotateY(yaw),scale(.53,.53,.53)));
+ const base=matmul(translate(m.pos[0],m.pos[1]+bounce,m.pos[2]),matmul(quatMatrix(m.flightQ||quatY(cameraYaw(latestPose))),scale(.53,.53,.53)));
  gl.useProgram(mascotProgram);gl.bindBuffer(gl.ARRAY_BUFFER,mascotBuffer);
  const loc=gl.getAttribLocation(mascotProgram,'aPos'),norm=gl.getAttribLocation(mascotProgram,'aNormal');
  gl.enableVertexAttribArray(loc);gl.enableVertexAttribArray(norm);gl.vertexAttribPointer(loc,3,gl.FLOAT,false,24,0);gl.vertexAttribPointer(norm,3,gl.FLOAT,false,24,12);
@@ -376,13 +377,13 @@ async function descriptionAskKeyboard(){if(!descriptionContext)return;descriptio
 }
 function zoneTexture(icon,labelName){const [c,ctx]=canvas2d(200,200);rrect(ctx,0,0,200,200,96,'#414a45');text(ctx,icon,100,121,95,'#eefcf0',450,'center');text(ctx,labelName,100,172,20,'#c3d5c8',580,'center');return texture(c);}
 function statusTexture(value){
- const [c,ctx]=canvas2d(940,180);ctx.clearRect(0,0,c.width,c.height);
+ const [c,ctx]=canvas2d(940,170);ctx.clearRect(0,0,c.width,c.height);
  const parts=String(value).replace(/ · /g,'  ·  ').split(/\s+/);const rows=[];let row='';
- ctx.font='bold 28px system-ui';for(const part of parts){const next=row?row+' '+part:part;
+ ctx.font='600 25px system-ui';for(const part of parts){const next=row?row+' '+part:part;
   if(ctx.measureText(next).width>890&&row){rows.push(row);row=part;}else row=next;}if(row)rows.push(row);
- ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=7;ctx.lineJoin='round';ctx.strokeStyle='#070b09';
- ctx.fillStyle=/ERROR|FAILED|UNAVAILABLE|NOT CONFIGURED|HTTP 4|HTTP 5/.test(value)?'#ffb3a5':'#e7ffe7';
- for(let i=0;i<Math.min(3,rows.length);i++){const y=54+i*40;ctx.strokeText(rows[i],470,y);ctx.fillText(rows[i],470,y);}return texture(c);}
+ ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=4;ctx.lineJoin='round';ctx.strokeStyle='rgba(5,13,9,.80)';
+ ctx.fillStyle=/ERROR|FAILED|UNAVAILABLE|NOT CONFIGURED|HTTP 4|HTTP 5/.test(value)?'#e6b1a6':'#bfd4c5';
+ for(let i=0;i<Math.min(3,rows.length);i++){const y=51+i*39;ctx.strokeText(rows[i],470,y);ctx.fillText(rows[i],470,y);}return texture(c);}
 function addCard(id,kind,data,loc,size){let c;
  const front=cardTexture(data.image||null,data.label||'',data.subtitle||'',false,(w,h)=>{if(c){c.size=cardDimensions(w,h,kind);c.canvasHeight=h;c.buttonBand=.5-86/h;}},kind==='source'&&data.saved!==false,data.decodedImage||null);
  const back=cardTexture(null,data.label||'',`FOLDER: ${data.folder||'Unsorted'}. ${data.description||'Object from your personal space'}`,true);
@@ -595,11 +596,20 @@ function pollPlacedFrameTouch(frame,t){if(!frameLab?.frames?.length||!session||!
   if(frameTouch?.src===src){if(!pinch){frameTouch=null;continue;}
    const df=frameLab.frames.find(x=>x.id===frameTouch.id);
    if(!df){frameTouch=null;continue;}
-   const delta=vsub(index,frameTouch.last);
-   if(length(delta)<.12)df.corners=df.corners.map(c=>vadd(c,delta));
-   frameTouch.last=index;continue;
+   const wrist=src.hand.get('wrist');let orientation=null;
+   try{const q=frame.getJointPose(wrist,refSpace)?.transform.orientation;
+    if(q)orientation=[q.x,q.y,q.z,q.w];}catch{}
+   // Transform from the original contact point: position AND roll/pitch/yaw stay
+   // physically attached to the hand instead of following translation alone.
+   df.corners=window.FreeLabFrameLab.transformGrab(
+    frameTouch.corners,frameTouch.index,index,frameTouch.orientation,orientation);
+   continue;
   }
-  if(pinch&&frameLab.enabled&&!frameTouch){const nearest=frameNearestEdge(index);if(nearest){frameTouch={src,id:nearest.frame.id,last:index};cue('grab',src);setStatus('FRAME HELD · pinch and move to relocate; release to leave in space',6200);continue;}}
+  if(pinch&&frameLab.enabled&&!frameTouch){const nearest=frameNearestEdge(index);if(nearest){
+   let orientation=null;try{const q=frame.getJointPose(src.hand.get('wrist'),refSpace)?.transform.orientation;
+    if(q)orientation=[q.x,q.y,q.z,q.w];}catch{}
+   frameTouch={src,id:nearest.frame.id,corners:nearest.frame.corners.map(c=>[...c]),index:[...index],orientation};
+   cue('grab',src);setStatus('FRAME HELD · move and rotate your hand; release to leave in space',6200);continue;}}
   if(!pinch&&pinky&&frameLab.enabled){const hit=frameNearestEdge(pinky);
    if(hit&&hit.dist<.035){if(!frameErase||frameErase.id!==hit.frame.id)frameErase={id:hit.frame.id,since:t};
     else if(t-frameErase.since>650){frameLab.frames=frameLab.frames.filter(f=>f.id!==hit.frame.id);frameErase=null;cue('paper',src);setStatus('SPATIAL FRAME REMOVED · little finger held at edge',5800);}
@@ -622,16 +632,16 @@ function drawSpatialFrames(vp,t,pose){if(!frameLab)return;
   if(p>0){const a=c[0],b=c[1],s=vadd(a,vmul(vsub(b,a),p));strandRibbon(vp,[a,s],.022,[1,.91,.35],.96,eye);}
  }
 }
-function setStatus(value,ms=6000){statusText=String(value);statusUntil=performance.now()+ms;statusTyped=0;statusTypedAt=0;
- if(gl&&poseReady){const tex=statusTexture('');if(statusCard?.front)gl.deleteTexture(statusCard.front);
-  statusCard={id:'spatial-status',kind:'status',size:[.93,.18],pos:statusCard?.pos||[0,0,0],q:latestPose?quatY(cameraYaw(latestPose)):[0,0,0,1],scale:1,visible:true,front:tex,back:tex};}
+function setStatus(value,ms=6000){statusText=String(value);statusBorn=performance.now();statusUntil=statusBorn+ms;
+ if(gl&&poseReady){const tex=statusTexture(statusText);if(statusCard?.front)gl.deleteTexture(statusCard.front);
+  statusCard={id:'spatial-status',kind:'status',size:[.87,.157],pos:statusCard?.pos||[0,0,0],q:latestPose?quatY(cameraYaw(latestPose)):[0,0,0,1],scale:1,visible:true,alpha:0,front:tex,back:tex};}
  window.FreeLab?.traceEvent?.('XR STATUS · '+statusText,/ERROR|FAILED|UNAVAILABLE|HTTP 4|HTTP 5/.test(statusText)?'error':'status');
  if(!session)window.FreeLab?.notify?.(statusText);}
-function typeStatus(t){if(!statusCard||t-statusTypedAt<72||!statusCard.visible)return;statusTypedAt=t;
- const old=statusTyped;statusTyped=Math.min(statusText.length,statusTyped+3);
- if(old===statusTyped)return;
- const tex=statusTexture(statusText.slice(0,statusTyped));if(statusCard.front)gl.deleteTexture(statusCard.front);statusCard.front=tex;statusCard.back=tex;
- if(statusTyped<statusText.length&&statusTyped%6<3)window.FreeLabSound?.play?.('type');
+// The text is static: only its alpha changes. Opening is quicker than the closing fade.
+function typeStatus(t){if(!statusCard)return;
+ const fadeIn=300,fadeOut=900,remaining=statusUntil-t;
+ statusCard.alpha=clamp(Math.min((t-statusBorn)/fadeIn,remaining/fadeOut),0,1)*.92;
+ statusCard.visible=remaining>0;
 }
 function refreshToolbar(){if(!toolbar||!gl)return;const newTexture=toolbarTexture('main');if(toolbar.front)gl.deleteTexture(toolbar.front);toolbar.front=newTexture;toolbar.back=newTexture;toolbar.resources=[newTexture];}
 
@@ -666,7 +676,11 @@ function syncTrackedUI(pose,t){
   const a=1-Math.exp(-Math.min(.08,(t-lastFrame||16)/1000)*3.1);
   captureEye.pos=blend(captureEye.pos,target,a);captureEye.q=quatY(yaw);syncRoundels(pose);
   if(cameraHint){cameraHint.pos=vadd(captureEye.pos,point(rotateY(yaw),[0,.125,0],0));cameraHint.q=quatY(yaw);}}
- if(statusCard){const target=point(poseForwardAnchor(pose,1.04,-.255),[0,0,0]);statusCard.pos=blend(statusCard.pos,target,.20);statusCard.q=quatY(yaw);statusCard.visible=t<statusUntil&&voicePhase==='idle';}
+ if(statusCard&&captureEye){
+  // Follow the same eased pose as the capture eye; never a second drifting velocity.
+  statusCard.pos=vadd(captureEye.pos,point(rotateY(yaw),[0,.226,0],0));
+  statusCard.q=captureEye.q;statusCard.visible=t<statusUntil&&voicePhase==='idle';
+ }
  // Diagnostics uses its own world-space pose, intentionally NOT bound to the toolbar or head.
  lastFrame=t;
 }
@@ -680,7 +694,7 @@ function cardModel(c){
 function cardBack(c){if(c.kind==='object'||c.kind==='source')return false;return quatMatrix(c.q||quatY(c.rot||0))[10]<0;}
 function drawCard(c,vp){if(!c.visible||!c.front||c.animScale===0)return;const tex=cardBack(c)?c.back:c.front;
  gl.useProgram(program);gl.bindBuffer(gl.ARRAY_BUFFER,quad);const loc=gl.getAttribLocation(program,'aPos'),uv=gl.getAttribLocation(program,'aUV');gl.enableVertexAttribArray(loc);gl.enableVertexAttribArray(uv);gl.vertexAttribPointer(loc,3,gl.FLOAT,false,20,0);gl.vertexAttribPointer(uv,2,gl.FLOAT,false,20,12);
- gl.uniformMatrix4fv(gl.getUniformLocation(program,'uMVP'),false,matmul(vp,cardModel(c)));gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);gl.uniform1i(gl.getUniformLocation(program,'uTex'),0);gl.uniform1i(gl.getUniformLocation(program,'uFlip'),cardBack(c)?1:0);gl.drawArrays(gl.TRIANGLES,0,6);}
+ gl.uniformMatrix4fv(gl.getUniformLocation(program,'uMVP'),false,matmul(vp,cardModel(c)));gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);gl.uniform1i(gl.getUniformLocation(program,'uTex'),0);gl.uniform1i(gl.getUniformLocation(program,'uFlip'),cardBack(c)?1:0);gl.uniform1f(gl.getUniformLocation(program,'uOpacity'),c.alpha===undefined?1:clamp(c.alpha,0,1));gl.drawArrays(gl.TRIANGLES,0,6);}
 function line(vp,vertices,color,points=false,size=6){if(!vertices.length)return;gl.useProgram(lineProgram);gl.bindBuffer(gl.ARRAY_BUFFER,rayBuffer);const loc=gl.getAttribLocation(lineProgram,'aPos');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,3,gl.FLOAT,false,0,0);gl.uniformMatrix4fv(gl.getUniformLocation(lineProgram,'uVP'),false,vp);gl.uniform4fv(gl.getUniformLocation(lineProgram,'uColor'),color);gl.uniform1i(gl.getUniformLocation(lineProgram,'uPoint'),points?1:0);gl.uniform1f(gl.getUniformLocation(lineProgram,'uSize'),size);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices.flat()),gl.DYNAMIC_DRAW);gl.drawArrays(points?gl.POINTS:gl.LINES,0,vertices.length);}
 function decoration(vp){if(!cloud||cloud.collapsed||cloud.hidden)return;const core=point(root,vadd([0,0,0],cloud.offset||[0,0,0]));const lines=[];
  for(const c of cards.filter(x=>x.kind==='object'&&x.visible&&x.animScale!==0)){const target=point(root,rootPos(c)),ctrl=vadd(vmul(vadd(core,target),.5),[0,.18,.05]),curve=[];for(let i=0;i<=12;i++){const t=i/12,u=1-t;curve.push(vadd(vadd(vmul(core,u*u),vmul(ctrl,2*t*u)),vmul(target,t*t)));}for(let i=1;i<curve.length;i++)lines.push(curve[i-1],curve[i]);}
@@ -867,19 +881,24 @@ function checkStableGesture(side,gesture,t){const prev=gestureDebounce.get(side)
  // Audio speaks from the mascot's reaction, not from a giant flashing eye-level banner.
  if(window.FreeLab?.pref?.('spoken'))window.FreeLab.speakUpdate?.(window.FreeLab?.pref?.('troll')?(funny[gesture]||gesture):gesture);
 }
-function mascotSpeechTexture(message){const [c,ctx]=canvas2d(460,85);
- ctx.clearRect(0,0,460,85);
- // Small unobtrusive label at the mascot; not the eye-following microphone HUD.
- rrect(ctx,2,8,456,67,33,'rgba(32,49,39,.90)');
- text(ctx,String(message).slice(0,28),230,53,30,'#e2ffe8',620,'center');
+function mascotSpeechTexture(message){
+ const [c,ctx]=canvas2d(760,220);ctx.clearRect(0,0,c.width,c.height);
+ // Legible speech bubble with a quiet tail toward the mascot.
+ rrect(ctx,12,10,736,164,40,'rgba(26,44,35,.96)');
+ ctx.beginPath();ctx.moveTo(350,164);ctx.lineTo(380,205);ctx.lineTo(410,164);ctx.fillStyle='rgba(26,44,35,.96)';ctx.fill();
+ const words=String(message||'').slice(0,125).split(/\s+/);const rows=[];let row='';
+ ctx.font='650 48px system-ui';for(const word of words){const next=row?row+' '+word:word;
+  if(ctx.measureText(next).width>666&&row){rows.push(row);row=word;}else row=next;}
+ if(row)rows.push(row);ctx.fillStyle='#e6ffea';ctx.textAlign='center';ctx.textBaseline='middle';
+ for(let i=0;i<Math.min(3,rows.length);i++)ctx.fillText(rows[i],380,52+i*48);
  return texture(c);
 }
-function mascotSay(message,ms=2800){
+function mascotSay(message,ms=3600){
  if(mascotSpeech?.front&&gl)gl.deleteTexture(mascotSpeech.front);
- mascotSpeech=null;mascotSpeechUntil=performance.now()+ms;
+ mascotSpeech=null;mascotSpeechBorn=performance.now();mascotSpeechUntil=mascotSpeechBorn+ms;
  if(mascotMode()==='none'||!gl)return;
  const tex=mascotSpeechTexture(message);
- mascotSpeech={id:'mascot-speech',kind:'pointer-mascot',size:[.245,.045],pos:[0,0,0],q:[0,0,0,1],scale:1,visible:true,front:tex,back:tex};
+ mascotSpeech={id:'mascot-speech',kind:'pointer-mascot',size:[.45,.13],pos:[0,0,0],q:[0,0,0,1],scale:1,alpha:0,visible:true,front:tex,back:tex};
 }
 function tickMascotSpeech(t){
  if(!mascotSpeech)return;
@@ -887,7 +906,12 @@ function tickMascotSpeech(t){
   if(mascotSpeech.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;return;
  }
  const yaw=cameraYaw(latestPose);
- mascotSpeech.pos=vadd(mascotPointer.pos,point(rotateY(yaw),[0,.148,.009],0));
+ const fadeIn=250,fadeOut=520;
+ const opening=clamp((t-mascotSpeechBorn)/fadeIn,0,1),closing=clamp((mascotSpeechUntil-t)/fadeOut,0,1);
+ const eased=opening*opening*(3-2*opening);
+ mascotSpeech.alpha=Math.min(eased,closing);
+ mascotSpeech.scale=.87+.13*eased;
+ mascotSpeech.pos=vadd(mascotPointer.pos,point(rotateY(yaw),[0,.225,.035],0));
  mascotSpeech.q=quatY(yaw);
 }
 function depthCapability(frame,view){if(depthChecked)return;depthChecked=true;
@@ -911,11 +935,13 @@ function updateMascot(frame,t){const mode=mascotMode();if(mode==='none'){if(masc
  if(!mascotPointer){const tex=mode==='2d'?mascotTexture():null;
   mascotPointer={id:'pointer-mascot',kind:'pointer-mascot',size:[.125,.16],pos:[0,0,0],q:[0,0,0,1],scale:1,visible:true,front:tex,back:tex};}
  const h=rayOne?pick(rayOne):null;
+ const previous=[...mascotPointer.pos];
  if(rayOne){const hit=vadd(rayOne.o,vmul(rayOne.d,Math.max(.20,(h?.dist||1.20)-.03)));
-  // Stay at the side of the point instead of masking the target being selected.
-  const offset=point(rotateY(cameraYaw(latestPose)),[.10,.075,0],0);const orbit=[Math.sin(t*.00065)*.072,Math.cos(t*.00085)*.052,Math.sin(t*.00043)*.068];
+  // Spiralling flight with lag and a gentle side-offset from the controller's hit.
+  const offset=point(rotateY(cameraYaw(latestPose)),[.10,.075,0],0);
+  const orbit=[Math.sin(t*.00042)*.068,Math.cos(t*.00057)*.048,Math.sin(t*.00036)*.059];
   const dest=vadd(hit,vadd(offset,orbit));
-  mascotPointer.pos=blend(mascotPointer.pos,dest,1-Math.exp(-dt*1.45));
+  mascotPointer.pos=blend(mascotPointer.pos,dest,1-Math.exp(-dt*1.05));
  }else{
   // Elastic idle bounce in a small virtual volume; not a claim of real-wall collision.
   const m=mascotPointer;const home=latestPose?point(poseForwardAnchor(latestPose,1.15,-.18),[0,0,0]):[0,1.1,-1.2];
@@ -923,7 +949,21 @@ function updateMascot(frame,t){const mode=mascotMode();if(mode==='none'){if(masc
    if(m.pos[i]>home[i]+bound){m.pos[i]=home[i]+bound;mascotVelocity[i]=-Math.abs(mascotVelocity[i]);}
    if(m.pos[i]<home[i]-bound){m.pos[i]=home[i]-bound;mascotVelocity[i]=Math.abs(mascotVelocity[i]);}}
  }
- mascotPointer.q=quatY(cameraYaw(latestPose));mascotPointer.visible=true;
+ // The creature banks into travel and pitches toward the direction of flight.
+ // When nearly stationary it returns to looking toward the viewer.
+ const travel=dt>0?vsub(mascotPointer.pos,previous):[0,0,0];
+ const velocity=vmul(travel,1/Math.max(dt,.001));
+ const flight=length(velocity),yaw=cameraYaw(latestPose);
+ const heading=flight>.015?Math.atan2(velocity[0],velocity[2]):yaw;
+ const difference=Math.atan2(Math.sin(heading-yaw),Math.cos(heading-yaw));
+ const turn=clamp(difference,-.9,.9)*Math.min(.65,flight*.38);
+ const pitch=clamp(-velocity[1]*.70,-.42,.42);
+ const roll=clamp(-velocity[0]*.66,-.50,.50);
+ // Occasional modest pirouette; no rapid continuous spinning.
+ const turnAccent=Math.pow(Math.max(0,Math.sin(t*.000071)),36)*.32*Math.sin(t*.004);
+ const targetQ=quatMul(quatMul(quatY(yaw+turn),quatX(pitch)),quatZ(roll+turnAccent));
+ mascotPointer.flightQ=quatSlerp(mascotPointer.flightQ||quatY(yaw),targetQ,1-Math.exp(-dt*3.2));
+ mascotPointer.q=quatY(yaw);mascotPointer.visible=true;
  if(t-lastMascotQuip>47000&&window.FreeLab?.pref?.('spoken')&&!busy&&voicePhase==='idle'){
   lastMascotQuip=t;const phrases=['I am orbiting your imagination.','New things to discover!','Even pixels need a little company.'];
   const msg=phrases[Math.floor(t/47000)%phrases.length];mascotSay(msg,3400);window.FreeLab?.speakUpdate?.(msg);window.FreeLabSound?.play('squeak');

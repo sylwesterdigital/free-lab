@@ -97,7 +97,7 @@ The immersive camera preview was removed. The eye requests permission when neede
 **Inference limits are disabled by default**. The installer no longer imposes 24/8 requests. On an existing server, old `FREE_LAB_DAILY_LIMIT` values are ignored unless `FREE_LAB_ENFORCE_INFERENCE_LIMITS=1` is explicitly configured. Optional `FREE_LAB_DAILY_LIMIT`, `FREE_LAB_USER_DAILY_LIMIT`, `FREE_LAB_COOLDOWN_SECONDS` may be configured by the operator. Provider-level spend and rate limits still apply. No dollar hard cap is claimed.
 
 
-## v0.10.1 · XR workbench
+## v0.10.2 · XR workbench
 
 The selected image provides one contextual popover: EXTRACT, DESCRIBE, REFINE, PROMPT, VOICE, 3D. The XR microphone is press-to-record / press-to-stop (up to 90 seconds for the server upload safety limit), with a live frequency ring and user-confirmed transcript. DESCRIBE explicitly calls Meta vision once and caches the private description for subsequent views. Sound preference defaults to browser speech; ElevenLabs TTS is strictly opt-in with an encrypted server-side API key.
 
@@ -105,9 +105,13 @@ The LOG window is moveable and resizable independently of the navigation. 3D gen
 
 For images outside Quest, upload via the camera panel and use **Save photo to Spatial Library**. Open LIB in XR to view the capture and use Extract. No new quotas are introduced.
 
-## v0.10.1 · XR scene and provider hotfix
+## v0.10.2 · XR scene and provider hotfix
 
 - 3D provider is explicitly selected per profile under Admin → Model Connections. Aholo Lux3D is preferred when an Aholo key exists; Meshy is not a silent fallback. Aholo uses a signed, two-hour-lifetime image URL sent to Aholo on the paid task. The full resulting GLB is available from the Library; geometry preview is best-effort.
 - DESCRIBE uses a paid Meta vision request on the actual image (not the image-refine prompt). Private follow-up conversations are stored in `image_dialogue`; editing metadata remains untouched.
 - In XR, Library pages include historic captures (within the existing 500-result server query); the client shows 8 per page. Darkroom, camera-pitch billboarding, slow mascot orbit and manual frame manipulation are local-only.
 - No new caps, no changes to the running ZIP watcher. Actual Quest Browser tracking and new Aholo generation need device/API testing.
+
+## v0.10.2 · spatial interaction refinement
+
+Status fades without typewriter audio or independent drift. Spatial experimental frames rotate with a grabbing hand using wrist orientation and a fixed index-fingertip contact offset. The mascot banks into travel and displays a larger, animated speech bubble. No watcher, backend, or quota changes.
