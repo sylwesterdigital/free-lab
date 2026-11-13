@@ -1,4 +1,4 @@
-"""v0.10.4: provider 503 handling without keys, billing or live network."""
+"""v0.10.5: provider 503 handling without keys, billing or live network."""
 import io,json,unittest,urllib.error
 from pathlib import Path
 from unittest.mock import patch
@@ -9,7 +9,7 @@ FRONT=(ROOT/'frontend/assets/app.js').read_text()
 SERVER=(ROOT/'backend/app.py').read_text()
 
 JPEG=b'\xff\xd8'+b'JPEG-MOCK'*3
-SUCCESS={'choices':[{'message':{'content':'The photograph shows a black ceramic bowl on a wooden table.'}}], 'usage':{'total_tokens':52}}
+SUCCESS={'status':'completed','output':[{'type':'message','role':'assistant','content':[{'type':'output_text','text':'The photograph shows a black ceramic bowl on a wooden table.'}]}], 'usage':{'total_tokens':52}}
 
 def error(status,code='service_overloaded',retry_after='0'):
     body=json.dumps({'error':{'type':'server_error','code':code,'message':'Internal server temporarily unavailable'}}).encode()
@@ -28,7 +28,7 @@ class MetaVisionRetryTests(unittest.TestCase):
     for call in request.call_args_list:
       payload=json.loads(call.args[0].data)
       self.assertEqual(payload['model'],'muse-spark-1.3')
-      self.assertEqual(payload['messages'][1]['content'][1]['type'],'image_url')
+      self.assertEqual(payload['input'][0]['content'][1]['type'],'input_image')
 
  def test_repeat_503_has_provider_code_no_secret_and_only_three_attempts(self):
     with patch.object(providers.urllib.request,'urlopen',side_effect=[error(503) for _ in range(3)]) as request:

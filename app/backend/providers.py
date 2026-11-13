@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64,json,os,re,time,urllib.error,urllib.request
 
 API_URL='https://api.meta.ai/v1/chat/completions'
+RESPONSES_URL='https://api.meta.ai/v1/responses'
 MODEL_IDS={'muse-ember-1.0','muse-spark-1.3','muse-spark-1.2','muse-spark-1.1'}
 
 class MetaVisionUnavailable(RuntimeError):
@@ -128,25 +129,46 @@ def identify(jpeg, model=None, api_key=None):
         raise RuntimeError('Meta API returned an incompatible object response') from e
 
 
+def _response_text(result):
+    """Extract user-visible text from Meta Responses, ignoring reasoning and tool items."""
+    if not isinstance(result,dict):
+        raise RuntimeError('Meta returned an invalid vision response')
+    if result.get('status') not in (None,'completed'):
+        raise RuntimeError('Meta vision response not completed: '+str(result['status'])[:40])
+    texts=[]
+    for item in result.get('output',[]):
+        if not isinstance(item,dict) or item.get('type')!='message' or item.get('role')!='assistant':
+            continue
+        for part in item.get('content',[]):
+            if isinstance(part,dict) and part.get('type')=='output_text' and isinstance(part.get('text'),str):
+                texts.append(part['text'])
+    value=' '.join(texts)
+    value=re.sub(r'[\x00-\x1f]+',' ',value).strip()[:1800]
+    if len(value)<12:
+        raise RuntimeError('Meta returned no readable description; retry image analysis')
+    return value
+
+
 def describe(jpeg: bytes, api_key: str, model: str = 'muse-spark-1.3', question: str = '', history=None):
-    """Describe the actual image only. A paid, user-initiated vision request."""
-    if model not in MODEL_IDS: raise ValueError('Unsupported Meta vision model')
-    if not api_key: raise RuntimeError('Meta API key not configured')
-    if not jpeg.startswith(b'\xff\xd8') or len(jpeg) > 2_000_000:
+    """Private image + text, Meta Responses API. No automatic model fallback."""
+    if model not in MODEL_IDS:raise ValueError('Unsupported Meta vision model')
+    if not api_key:raise RuntimeError('Meta API key not configured')
+    if not jpeg.startswith(b'\xff\xd8') or len(jpeg)>2_000_000:
         raise ValueError('Description requires an existing JPEG under 2 MB')
-    uri = 'data:image/jpeg;base64,' + base64.b64encode(jpeg).decode('ascii')
-    payload = {'model':model,'messages':[
-       {'role':'system','content':'Describe only what is clearly visible in the supplied image. Do not identify people or invent objects, unseen surfaces, depth data, room layout or locations. Focus on objects, colors, positions within the photograph and useful visual details. Use 2-4 concise sentences in English.'},
-       {'role':'user','content':[{'type':'text','text':(question.strip()[:500] if question else 'Describe what is actually visible in this image, including plausible ingredients, materials and any uncertainty. Do not describe editing instructions.')},{'type':'image_url','image_url':{'url':uri}}]}],
-       'max_completion_tokens':500,'store':False}
-    req=urllib.request.Request(API_URL,data=json.dumps(payload).encode('utf-8'),method='POST',
-        headers={'Authorization':'Bearer '+api_key,'Content-Type':'application/json','User-Agent':'FREELAB-Describe/0.10'})
+    uri='data:image/jpeg;base64,'+base64.b64encode(jpeg).decode('ascii')
+    prompt=(question or 'Describe what is actually visible in this photograph. Mention the main objects, their colours and relationships. For food, identify only visually plausible ingredients. State uncertainty briefly. Do not talk about image-editing instructions.').strip()[:900]
+    payload={
+        'model':model,
+        'store':False,
+        'reasoning':{'effort':'low'},
+        'max_output_tokens':1100,
+        'instructions':'You are a visual observer. Answer the user question about the attached image in 2-4 clear sentences, grounding every claim in visible evidence. Do not invent objects. If an earlier conversation is provided, it is context, not visual proof.',
+        'input':[{'type':'message','role':'user','content':[
+            {'type':'input_text','text':prompt},
+            {'type':'input_image','image_url':uri}
+        ]}]
+    }
+    req=urllib.request.Request(RESPONSES_URL,data=json.dumps(payload).encode('utf-8'),method='POST',
+        headers={'Authorization':'Bearer '+api_key,'Content-Type':'application/json','User-Agent':'FREELAB-Describe/0.10.5'})
     result=_vision_request(req)
-    try:
-        value=result['choices'][0]['message']['content']
-        if isinstance(value,list):value=' '.join(v.get('text','') for v in value if isinstance(v,dict))
-        value=re.sub(r'[\x00-\x1f]+',' ',value).strip()[:1800]
-        if len(value)<12:raise ValueError('Empty description')
-        return value,result.get('usage',{})
-    except (KeyError,ValueError,IndexError,TypeError) as e:
-        raise RuntimeError('Meta response had no usable description') from e
+    return _response_text(result),result.get('usage',{})

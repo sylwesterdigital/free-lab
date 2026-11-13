@@ -124,3 +124,6 @@ Status fades without typewriter audio or independent drift. Spatial experimental
 - Vision: DESCRIBE always makes an explicit Meta Spark image-analysis call, stores the result privately and shows actual error diagnostics if it fails. **This action is billable.**
 - Mascot: head-first directional swimming, open-palm approach, fist/forward escape and two-ray avoidance. Gesture recognition remains experimental.
 - No watcher changes or application request quotas.
+
+### v0.10.5 Meta image descriptions
+DESCRIBE uses `POST /v1/responses` with a private JPEG as a `user` `input_image` data URL and a concise `input_text` instruction. Responses `output` message text is parsed and usage retained; reasoning items are not displayed. Meta 503 retries remain bounded, with provider error code and request ID exposed without image data or secrets. This integration is locally mocked and must be tested with actual credentials on Ubuntu.

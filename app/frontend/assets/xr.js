@@ -1,4 +1,4 @@
-/* FREELAB 0.10.4 — spatial media workbench, draggable diagnostics, voice meter, bounded 3D previews.
+/* FREELAB 0.10.5 — spatial media workbench, draggable diagnostics, voice meter, bounded 3D previews.
    Minimal WebGL WebXR renderer: real camera input only, no fake passthrough pixels.
    World-positioned photos, yaw-upright follow toolbar, image derivatives, spatial grab.
    Flat grey floating controls, double-sided, draggable spatial cards.

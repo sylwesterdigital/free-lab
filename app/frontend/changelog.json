@@ -1,11 +1,11 @@
 {
-  "version": "0.10.4",
-  "title": "Reliable Meta Image Descriptions \u00b7 v0.10.4",
+  "version": "0.10.5",
+  "title": "Meta Vision Responses Adapter \u00b7 v0.10.5",
   "datetime": "2026-11-13 UTC",
   "changes": [
-    "DESCRIBE retries transient Meta vision 5xx errors with bounded backoff; explicit long Retry-After is shown rather than waiting a minute inside XR.",
-    "Meta provider error codes, request ID, status and number of attempts are returned safely; request bodies, API keys and private images are never logged.",
-    "When Meta is temporarily unavailable, the image description bubble offers RETRY without leaving XR or losing the selected image.",
-    "No silent alternate-model fallback, automatic image generation, new quotas or watcher modifications."
+    "DESCRIBE now sends the private JPEG plus a concise text question via Meta Responses input_image/input_text, matching the proven robot-perception request style.",
+    "Low reasoning effort for routine image description; no change to Extract, SAM, Muse Image, stored keys or model routing.",
+    "Handle Responses typed output safely, ignoring internal reasoning and returning visible image descriptions with usage tokens.",
+    "Preserve provider request IDs and 503 handling, with no keys, prompts or private camera bytes in diagnostics."
   ]
 }

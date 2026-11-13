@@ -1,4 +1,4 @@
-"""v0.10.4 no-network regressions: XR presentation + hand-attached geometry."""
+"""v0.10.5 no-network regressions: XR presentation + hand-attached geometry."""
 import json
 import subprocess
 import unittest
@@ -11,9 +11,9 @@ INDEX=(ROOT/'frontend/index.html').read_text()
 
 class MotionPolishTests(unittest.TestCase):
     def test_release_marker_and_cache_busting(self):
-        self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.4')
-        self.assertIn('xr.js?v=0.10.4',INDEX)
-        self.assertIn('frame-lab.js?v=0.10.4',INDEX)
+        self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.5')
+        self.assertIn('xr.js?v=0.10.5',INDEX)
+        self.assertIn('frame-lab.js?v=0.10.5',INDEX)
 
     def test_static_status_has_single_transform_and_alpha_fade(self):
         set_status=XR.split('function setStatus(',1)[1].split('function refreshToolbar(',1)[0]

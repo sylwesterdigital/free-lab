@@ -1,4 +1,4 @@
-"""v0.10.4: offline regression coverage of cinema compositing, status & Meta descriptions."""
+"""v0.10.5: offline regression coverage of cinema compositing, status & Meta descriptions."""
 import json, subprocess, unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -56,8 +56,8 @@ class CinemaTests(unittest.TestCase):
   self.assertIn('mascotReactionTarget=handGesturePositions[side]',XR)
 
  def test_release_version(self):
-  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.4')
-  self.assertIn('xr.js?v=0.10.4',INDEX)
+  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.5')
+  self.assertIn('xr.js?v=0.10.5',INDEX)
 
 class VisionTests(unittest.TestCase):
  def test_explicit_description_refresh_instead_of_stale_dialogue(self):
@@ -76,7 +76,7 @@ class VisionTests(unittest.TestCase):
   class Response:
    def __enter__(self):return self
    def __exit__(self,*args):return False
-  response={'choices':[{'message':{'content':'A blue ceramic cup is on a brown wooden desk.'}}], 'usage':{'total_tokens':22}}
+  response={'status':'completed','output':[{'type':'message','role':'assistant','content':[{'type':'output_text','text':'A blue ceramic cup is on a brown wooden desk.'}]}], 'usage':{'total_tokens':22}}
   with patch.object(providers.urllib.request,'urlopen') as openurl:
    openurl.return_value.__enter__.return_value=response
    # json.load will read directly from mocked response through unittest.mock
@@ -85,7 +85,7 @@ class VisionTests(unittest.TestCase):
    req=openurl.call_args.args[0]
    body=json.loads(req.data)
    self.assertEqual(body['model'],'muse-spark-1.3')
-   self.assertTrue(any(i.get('type')=='image_url' for i in body['messages'][1]['content']))
+   self.assertTrue(any(i.get('type')=='input_image' for i in body['input'][0]['content']))
    self.assertIn('blue ceramic cup',text)
    self.assertEqual(usage['total_tokens'],22)
 
