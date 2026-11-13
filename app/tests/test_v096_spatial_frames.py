@@ -61,12 +61,12 @@ vm.runInNewContext(fs.readFileSync('frontend/assets/lab-selector.js','utf8'),{wi
 const S=new w.FreeLabLabSelector.Selector();
 function inp(pressed,x){return [{handedness:'left',gamepad:{mapping:'xr-standard',buttons:[{},{},{},{pressed}],axes:[0,0,x,0]}}]}
 let u=S.update(inp(true,0));if(!u.open||u.event!=='open'||u.index!==0)throw Error('frames should be default from disabled mode');
-u=S.update(inp(true,-.8));if(u.index!==3||u.event!=='step')throw Error('wrap left to off');
-u=S.update(inp(true,-.8));if(u.index!==3)throw Error('held joystick must not auto-repeat');
-S.update(inp(true,0));u=S.update(inp(true,-.9));if(u.index!==2)throw Error('second left step after neutral');
-S.update(inp(true,0));u=S.update(inp(true,-.9));if(u.index!==1)throw Error('five strings selection');
-S.update(inp(true,0));u=S.update(inp(true,-.9));if(u.index!==0)throw Error('frames selection');
-u=S.update(inp(false,0));if(u.open||u.mode!=='frames'||u.event!=='select')throw Error('release should activate highlighted experiment');
+u=S.update(inp(true,-.8));if(u.index!==6||u.event!=='step')throw Error('wrap left to off');
+u=S.update(inp(true,-.8));if(u.index!==6)throw Error('held joystick must not auto-repeat');
+S.update(inp(true,0));u=S.update(inp(true,-.9));if(u.index!==5)throw Error('second left step after neutral');
+S.update(inp(true,0));u=S.update(inp(true,-.9));if(u.index!==4)throw Error('five strings selection');
+S.update(inp(true,0));u=S.update(inp(true,-.9));if(u.index!==3)throw Error('throw selection');
+u=S.update(inp(false,0));if(u.open||u.mode!=='throw'||u.event!=='select')throw Error('release should activate highlighted experiment');
 if(S.update([]).event!==null)throw Error('idle must not retrigger');
 if(w.FreeLabLabSelector.input([{handedness:'right',gamepad:{mapping:'xr-standard',buttons:[{},{},{},{pressed:true}],axes:[0,0,1,0]}}]).pressed)throw Error('right hand cannot open selector');
 ''')
@@ -78,8 +78,8 @@ if(w.FreeLabLabSelector.input([{handedness:'right',gamepad:{mapping:'xr-standard
                       "labMenu.q=quatY(cameraYaw(pose))",'for(const f of frameLab.frames)',
                       "window.FreeLab?.pref?.('frameHoldSeconds')",'gl.TRIANGLE_STRIP'):
             self.assertIn(token,XR)
-        self.assertIn('lab-selector.js?v=0.10.6',PAGE)
-        self.assertIn('frame-lab.js?v=0.10.6',PAGE)
+        self.assertIn('lab-selector.js?v=0.10.7',PAGE)
+        self.assertIn('frame-lab.js?v=0.10.7',PAGE)
         self.assertIn('id="pref-frameHoldSeconds"',PAGE)
         for name in ('frame-lab.js','lab-selector.js'):
             self.assertNotIn('fetch(', (ROOT/'frontend/assets'/name).read_text())

@@ -1,11 +1,11 @@
 {
-  "version": "0.10.6",
-  "title": "Recursive Image Trees · v0.10.6",
+  "version": "0.10.7",
+  "title": "Experimental Physics Games · v0.10.7",
   "datetime": "2026-11-13 UTC",
   "changes": [
-    "Any extracted, segmented, or AI-refined image can be the source of another operation; no fixed tree-depth limit.",
-    "Branch navigation shows each node's direct children, with next/previous pages and parent navigation without AI charges.",
-    "Remove silent 80-object and 500-capture API truncation, preserving existing private image ancestry.",
-    "Keep only seven direct children rendered per view for Quest performance; all additional siblings remain available on later pages."
+    "Three new local hand-frame games: overlapping frames link into swinging chains; drawn frames turn into falling cuboids; thrown frames fly and disappear.",
+    "Compact left-thumbstick selector exposes seven modes, retaining the original Frames, Five Strings and Thumbs experiments.",
+    "Physics uses a bounded built-in fixed-step box/hinge solver, not an unbundled Rapier/WASM dependency; no AI billing or extra app quotas.",
+    "Fixed mode cleanup so captures, extraction and Exit remain independent of experimental physics."
   ]
 }

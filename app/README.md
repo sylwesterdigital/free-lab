@@ -138,3 +138,7 @@ Open an object menu (`··· → OPEN BRANCH`) to see that object's children; us
 `PARENT`, `PREVIOUS`, and `NEXT` spatial cards to navigate without making AI calls.
 
 Nested operations bill according to the selected model; browsing an existing tree does not.
+
+
+## v0.10.7 Experimental Physics Games
+Hold the left controller thumbstick, tilt to select FRAME, CHAIN, CUBES, THROW, FIVE STRINGS, THUMBS, OFF; release to activate. Draw a frame by joining both pairs of thumb/index fingertips, opening it, and holding for the configured frame-detach interval. CHAIN links two placed frames when a grabbed frame intersects another; a pendulum/hinge constraint lets a child swing as the parent moves. CUBES converts each completed frame into a shaded cuboid that drops onto a local-floor-based plane and stacks against previously placed cuboids. THROW lets a grabbed frame fly using fingertip velocity; it fades and disappears after about 1.6 seconds. Games work offline without model inference. Physics is a small bounded built-in solver for this experiment (not the Rapier WASM engine), with limited axis-aligned box collisions, max 22 cuboids and no environment mesh collisions.

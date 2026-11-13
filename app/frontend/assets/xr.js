@@ -1,4 +1,4 @@
-/* FREELAB 0.10.6 — spatial media workbench, draggable diagnostics, voice meter, bounded 3D previews.
+/* FREELAB 0.10.7 — spatial media workbench, draggable diagnostics, voice meter, bounded 3D previews.
    Minimal WebGL WebXR renderer: real camera input only, no fake passthrough pixels.
    World-positioned photos, yaw-upright follow toolbar, image derivatives, spatial grab.
    Flat grey floating controls, double-sided, draggable spatial cards.
@@ -433,6 +433,7 @@ const STRAND_F=`precision mediump float;varying float vSide;uniform vec3 uColor;
 let strandProgram=null,strandBuffer=null,stringLab=null,stringLabState=null,rightStickDown=false,lastStringWarning=0;
 let fingerLab=null,fingerLabState=null,leftStickDown=false,lastFingerWarning=0;
 let frameLab=null,frameLabState=null,labSelector=null,labMenu=null,labMenuCanvas=null,labMenuIndex=-1,lastFrameWarning=0;
+let frameGames=null,frameGameCubeBuffer=null,lastFrameGameTick=0;
 function stringColor(t){const stops=[[0,[.18,1,.38]],[.36,[.66,1,.30]],[.58,[1,.93,.18]],[.78,[1,.49,.10]],[1,[1,.12,.10]]];
  for(let i=1;i<stops.length;i++)if(t<=stops[i][0]){const a=stops[i-1],b=stops[i],u=(t-a[0])/(b[0]-a[0]);return a[1].map((c,j)=>c+(b[1][j]-c)*u);}
  return stops[stops.length-1][1];}
@@ -551,29 +552,37 @@ function drawFingerLab(vp,t,pose){if(!fingerLab?.enabled||!fingerLabState?.enabl
 // the LEFT controller only while L3 is pressed. Tilt axis[2] left/right,
 // return to neutral between steps, RELEASE to apply. No extra screen toolbar.
 function experimentalMenuTexture(index){
- const [c,ctx]=canvas2d(512,116);rrect(ctx,0,0,512,116,56,'#29332f');
- const centers=[69,194,320,445];
- for(let i=0;i<4;i++){
-  const x=centers[i],active=i===index;
-  if(active)rrect(ctx,x-51,9,102,98,45,'#c5f3d2');
+ const modes=window.FreeLabLabSelector.MODES;
+ const [c,ctx]=canvas2d(600,136);rrect(ctx,0,0,600,136,64,'#29332f');
+ // Five visible choices; seven selectable modes. Compact and controller-adjacent.
+ for(let slot=0;slot<5;slot++){
+  const j=(index+slot-2+modes.length)%modes.length,mode=modes[j];
+  const x=60+slot*120,active=slot===2;
+  if(active)rrect(ctx,x-54,7,108,122,52,'#c5f3d2');
   const col=active?'#1c3227':'#e6f5e9';ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=6;ctx.lineCap='round';ctx.lineJoin='round';
-  if(i===0){ctx.strokeRect(x-25,37,50,35);ctx.beginPath();ctx.moveTo(x-12,37);ctx.lineTo(x-12,72);ctx.moveTo(x+12,37);ctx.lineTo(x+12,72);ctx.stroke();}
-  else if(i===1){for(let k=-2;k<=2;k++){ctx.beginPath();ctx.moveTo(x-28,54+k*9);ctx.lineTo(x+28,54+k*9);ctx.stroke();}}
-  else if(i===2){ctx.beginPath();ctx.moveTo(x-28,48);ctx.lineTo(x+28,48);ctx.moveTo(x-28,65);ctx.lineTo(x+28,65);ctx.stroke();}
-  else {ctx.beginPath();ctx.moveTo(x-19,38);ctx.lineTo(x+19,75);ctx.moveTo(x+19,38);ctx.lineTo(x-19,75);ctx.stroke();}
+  if(mode==='frames'||mode==='chain'||mode==='cubes'||mode==='throw'){
+   ctx.strokeRect(x-22,24,44,32);
+   if(mode==='chain'){ctx.beginPath();ctx.moveTo(x-30,46);ctx.lineTo(x-11,61);ctx.lineTo(x+11,61);ctx.lineTo(x+30,46);ctx.stroke();}
+   if(mode==='cubes'){ctx.strokeRect(x-12,16,43,30);ctx.beginPath();ctx.moveTo(x-22,24);ctx.lineTo(x-12,16);ctx.moveTo(x+22,24);ctx.lineTo(x+31,16);ctx.stroke();}
+   if(mode==='throw'){ctx.beginPath();ctx.moveTo(x+10,60);ctx.lineTo(x+34,35);ctx.lineTo(x+20,35);ctx.moveTo(x+34,35);ctx.lineTo(x+33,49);ctx.stroke();}
+  }else if(mode==='five'){for(let k=-2;k<=2;k++){ctx.beginPath();ctx.moveTo(x-22,39+k*7);ctx.lineTo(x+22,39+k*7);ctx.stroke();}}
+  else if(mode==='thumbs'){ctx.beginPath();ctx.moveTo(x-24,30);ctx.lineTo(x+24,30);ctx.moveTo(x-24,46);ctx.lineTo(x+24,46);ctx.stroke();}
+  else {ctx.beginPath();ctx.moveTo(x-16,24);ctx.lineTo(x+16,56);ctx.moveTo(x+16,24);ctx.lineTo(x-16,56);ctx.stroke();}
+  ctx.font=active?'700 21px system-ui':'600 19px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(({frames:'FRAME',chain:'CHAIN',cubes:'CUBES',throw:'THROW',five:'5 NOTE',thumbs:'THUMBS',off:'OFF'})[mode],x,95);
  }
  return texture(c);
 }
 function experimentalMode(mode){
- const name={frames:'SPATIAL FRAMES · join index tips and thumbs, then stretch',five:'FIVE-FINGER CHORD LAB · C D E F G',thumbs:'THUMB STRING LAB · stretch and snap',off:'EXPERIMENTS OFF'};
- // Mode changes stop audio but never delete the previously detached frames.
- stringLab?.setEnabled(mode==='thumbs');fingerLab?.setEnabled(mode==='five');frameLab?.setEnabled(mode==='frames');
+ const name={frames:'SPATIAL FRAMES · join index tips and thumbs, then stretch',chain:'CHAIN LAB · overlap a held frame with another to link',cubes:'CUBOID LAB · draw shapes that fall and stack',throw:'THROW LAB · grab a frame and release with a quick gesture',five:'FIVE-FINGER CHORD LAB · C D E F G',thumbs:'THUMB STRING LAB · stretch and snap',off:'EXPERIMENTS OFF'};
+ const drawing=['frames','chain','cubes','throw'].includes(mode);
+ stringLab?.setEnabled(mode==='thumbs');fingerLab?.setEnabled(mode==='five');frameLab?.setEnabled(drawing);frameGames?.setMode(mode);
  window.FreeLabSound?.stringStop?.();window.FreeLabSound?.fingersStopAll?.();
- if(mode==='frames')frameLab?.setHoldSeconds(window.FreeLab?.pref?.('frameHoldSeconds')||3);
+ if(drawing)frameLab?.setHoldSeconds(window.FreeLab?.pref?.('frameHoldSeconds')||3);
  if(mode!=='thumbs')stringLabState=null;
  if(mode!=='five')fingerLabState=null;
- if(mode!=='frames'){frameLabState=null;frameTouch=null;frameErase=null;}
- cue(mode==='off'?'release':'ready');setStatus(name[mode]||name.off,8000);
+ if(!drawing){frameLabState=null;frameTouch=null;frameErase=null;}
+ cue(mode==='off'?'release':'ready');setStatus(name[mode]||name.off,6000);
 }
 function pollLabSelector(frame,t,pose){if(!labSelector)return;
  const sel=labSelector.update(session.inputSources);
@@ -581,7 +590,7 @@ function pollLabSelector(frame,t,pose){if(!labSelector)return;
  if(!sel.open)return;
  if(sel.event==='step'){cue('hover',sel.source);}
  if(sel.event==='open'){window.FreeLabSound?.unlock?.();cue('pin',sel.source);}
- if(!labMenu){labMenu={id:'lab-selector',kind:'labmenu',size:[.325,.074],scale:1,visible:true,q:quatY(cameraYaw(pose)),pos:[0,0,0],front:null,back:null};}
+ if(!labMenu){labMenu={id:'lab-selector',kind:'labmenu',size:[.37,.085],scale:1,visible:true,q:quatY(cameraYaw(pose)),pos:[0,0,0],front:null,back:null};}
  if(sel.index!==labMenuIndex){if(labMenu.front)gl.deleteTexture(labMenu.front);labMenu.front=experimentalMenuTexture(sel.index);labMenu.back=labMenu.front;labMenuIndex=sel.index;}
  // The menu is close to the physical controller, not head-locked or card-locked.
  const device=sel.source,controllerPose=device&&(device.gripSpace?frame.getPose(device.gripSpace,refSpace):null);
@@ -607,7 +616,12 @@ function pollFrameLab(frame,t){if(!frameLab?.enabled)return;
  const tips=trackedHandCorners(frame);const state=frameLab.update({left:tips.left,right:tips.right,time:t});frameLabState=state;
  if(state.event==='attach'){cue('grab');setStatus(`FRAME LAB · stretch frame; hold for ${frameLab.holdSeconds} seconds`,6800);}
  if(state.event==='countdown')cue('pin');
- if(state.event==='place'){cue('bloom');setStatus(`FRAME PLACED · ${state.frames.length} room frame(s) · join fingertips to draw another`,6500);}
+ if(state.event==='place'){
+  const placed=state.frames[state.frames.length-1];const mode=labSelector?.mode||'frames';
+  const game=frameGames?.onFrame(placed,mode,t);
+  if(game?.removeFrame){frameLab.frames=frameLab.frames.filter(f=>f!==placed);cue('release');setStatus(`CUBOID DROPPED · ${frameGames.boxes.length} blocks`,3500);}
+  else{cue('bloom');setStatus(mode==='chain'?'FRAME READY · overlap another while holding it':mode==='throw'?'FRAME READY · grab then throw':`FRAME PLACED · ${state.frames.length} room frame(s)`,4500);}
+ }
  if(state.event==='lost')setStatus('FRAME TRACKING LOST · join tips again',5500);
  if(!tips.left.index&&t-lastFrameWarning>17000){lastFrameWarning=t;setStatus('FRAME LAB · enable both tracked hands (put controllers down)',6800);}
 }
@@ -628,7 +642,12 @@ function pollPlacedFrameTouch(frame,t){if(!frameLab?.frames?.length||!session||!
   const index=get('index-finger-tip'),thumb=get('thumb-tip'),pinky=get('pinky-finger-tip');
   if(!index||!thumb)continue;
   const pinch=length(vsub(index,thumb))<.036;
-  if(frameTouch?.src===src){if(!pinch){frameTouch=null;continue;}
+  if(frameTouch?.src===src){if(!pinch){
+   if(labSelector?.mode==='throw'){
+    const fired=frameGames?.launch(frameLab.frames,frameTouch.id,frameTouch.velocity||[0,0,0],t);
+    if(fired){cue('bloom',src);setStatus('FRAME LAUNCHED',2400);}
+   }
+   frameTouch=null;continue;}
    const df=frameLab.frames.find(x=>x.id===frameTouch.id);
    if(!df){frameTouch=null;continue;}
    const wrist=src.hand.get('wrist');let orientation=null;
@@ -638,12 +657,20 @@ function pollPlacedFrameTouch(frame,t){if(!frameLab?.frames?.length||!session||!
    // physically attached to the hand instead of following translation alone.
    df.corners=window.FreeLabFrameLab.transformGrab(
     frameTouch.corners,frameTouch.index,index,frameTouch.orientation,orientation);
+   const dt=(t-(frameTouch.lastT||t))/1000;
+   if(dt>.004&&dt<.16){const raw=vmul(vsub(index,frameTouch.lastIndex||index),1/dt);
+    frameTouch.velocity=blend(frameTouch.velocity||raw,raw,.45);}
+   frameTouch.lastIndex=[...index];frameTouch.lastT=t;
+   if(labSelector?.mode==='chain'){
+    const attached=frameGames?.linkOnOverlap(frameLab.frames,df.id);
+    if(attached){cue('pin',src);setStatus('CHAIN LINKED · release to swing',3200);}
+   }
    continue;
   }
   if(pinch&&frameLab.enabled&&!frameTouch){const nearest=frameNearestEdge(index);if(nearest){
    let orientation=null;try{const q=frame.getJointPose(src.hand.get('wrist'),refSpace)?.transform.orientation;
     if(q)orientation=[q.x,q.y,q.z,q.w];}catch{}
-   frameTouch={src,id:nearest.frame.id,corners:nearest.frame.corners.map(c=>[...c]),index:[...index],orientation};
+   frameTouch={src,id:nearest.frame.id,corners:nearest.frame.corners.map(c=>[...c]),index:[...index],orientation,lastIndex:[...index],lastT:t,velocity:[0,0,0]};
    cue('grab',src);setStatus('FRAME HELD · move and rotate your hand; release to leave in space',6200);continue;}}
   if(!pinch&&pinky&&frameLab.enabled){const hit=frameNearestEdge(pinky);
    if(hit&&hit.dist<.035){if(!frameErase||frameErase.id!==hit.frame.id)frameErase={id:hit.frame.id,since:t};
@@ -652,6 +679,44 @@ function pollPlacedFrameTouch(frame,t){if(!frameLab?.frames?.length||!session||!
   }
  }
 }
+// Lightweight, headset-budgeted rigid cuboids, generated from hand-drawn rectangles.
+// The solver runs independently of models/inference. Draw with the existing shaded mesh shader.
+function cubeGeometry(){
+ if(frameGameCubeBuffer)return;
+ const values=[];const faces=[
+  [[0,0,1],[[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]]],
+  [[0,0,-1],[[1,-1,-1],[-1,-1,-1],[-1,1,-1],[1,1,-1]]],
+  [[0,1,0],[[-1,1,1],[1,1,1],[1,1,-1],[-1,1,-1]]],
+  [[0,-1,0],[[-1,-1,-1],[1,-1,-1],[1,-1,1],[-1,-1,1]]],
+  [[1,0,0],[[1,-1,1],[1,-1,-1],[1,1,-1],[1,1,1]]],
+  [[-1,0,0],[[-1,-1,-1],[-1,-1,1],[-1,1,1],[-1,1,-1]]]
+ ];
+ for(const [n,vertices] of faces)for(const i of [0,1,2,0,2,3])values.push(...vertices[i].map(v=>v*.5),...n);
+ frameGameCubeBuffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,frameGameCubeBuffer);
+ gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(values),gl.STATIC_DRAW);
+}
+function drawFrameCubes(vp){if(!frameGames?.boxes?.length||!mascotProgram)return;
+ cubeGeometry();gl.useProgram(mascotProgram);gl.bindBuffer(gl.ARRAY_BUFFER,frameGameCubeBuffer);
+ const p=gl.getAttribLocation(mascotProgram,'aPos'),n=gl.getAttribLocation(mascotProgram,'aNormal');
+ gl.enableVertexAttribArray(p);gl.enableVertexAttribArray(n);
+ gl.vertexAttribPointer(p,3,gl.FLOAT,false,24,0);gl.vertexAttribPointer(n,3,gl.FLOAT,false,24,12);
+ for(const cube of frameGames.boxes){
+  const q=matmul(translate(...cube.center),scale(...cube.half.map(n=>n*2)));
+  gl.uniformMatrix4fv(gl.getUniformLocation(mascotProgram,'uModel'),false,q);
+  gl.uniformMatrix4fv(gl.getUniformLocation(mascotProgram,'uMVP'),false,matmul(vp,q));
+  gl.uniform4fv(gl.getUniformLocation(mascotProgram,'uColor'),[.32,.82,.62,.88]);
+  gl.drawArrays(gl.TRIANGLES,0,36);
+ }
+}
+function pollFrameGames(t,pose){if(!frameGames||!frameLab)return;
+ const headY=pose.transform.matrix[13];
+ // 'local-floor' yields real floor=0; otherwise a stable approximate floor.
+ const floorY=floorReference?0:(frameGames.floorY||headY-1.45);
+ if(!floorReference&&frameGames.floorY===0)frameGames.setFloor(floorY);
+ const state=frameGames.update(frameLab.frames,t,{floorY});
+ for(const event of state.events){if(event.event==='vanish'){cue('release');setStatus('FRAME POP',1600);}}
+}
+function frameCenter(f){return vmul(f.corners.reduce((a,p)=>vadd(a,p),[0,0,0]),.25);}
 function drawSpatialFrames(vp,t,pose){if(!frameLab)return;
  const h=pose.transform.matrix,eye=[h[12],h[13],h[14]];
  const draw=(corners,color,opacity,width)=>{
@@ -660,7 +725,15 @@ function drawSpatialFrames(vp,t,pose){if(!frameLab)return;
  };
  // Detached frames are always fixed in local-floor reference space, even
  // while other experiments are enabled or the headset walks elsewhere.
- for(const f of frameLab.frames)draw(f.corners,[.37,.99,.74],.86,.009);
+ for(const f of frameLab.frames){
+  const fly=frameGames?.throws?.find(q=>q.id===f.id);
+  const tint=f.gameMode==='chain'?[.42,.85,1]:f.gameMode==='throw'?[1,.64,.35]:[.37,.99,.74];
+  draw(f.corners,tint,(fly?.alpha??.86),.009);
+ }
+ for(const j of frameGames?.links||[]){const parent=frameLab.frames.find(f=>f.id===j.parentId);
+  if(parent)strandRibbon(vp,[vadd(frameCenter(parent),j.pivotOffset),j.center],.008,[.8,1,.7],.90,eye);
+ }
+
  if(frameLab.enabled&&frameLabState?.live){
   const f=frameLabState.live,c=f.corners,p=frameLabState.progress;
   draw(c,[.64,1,.51],.75+.18*Math.sin(t*.007),.014);
@@ -1022,10 +1095,10 @@ function updateMascot(frame,t){const mode=mascotMode();if(mode==='none'){if(masc
 }
 
 function renderView(t,frame){const pose=frame.getViewerPose(refSpace);if(!pose){session.requestAnimationFrame(updateView);return;}latestPose=pose;if(!poseReady)place(pose);if(darkroom){renderCinema(frame,pose);session.requestAnimationFrame(updateView);return;}syncTrackedUI(pose,t);
- poll3d(t);pollLabSelector(frame,t,pose);pollStringLab(frame,t);pollFingerLab(frame,t);pollFrameLab(frame,t);pollPlacedFrameTouch(frame,t);advanceGrab(frame);for(const src of session.inputSources)pinchPoll(frame,src);pollGestures(frame,t);tween(t);faceCloudCards(pose,t);updateMascot(frame,t);tickMascotSpeech(t);tickVoiceIndicator(t,pose);typeStatus(t);updateMicVisual(t);updateDebugCard(t);if(captureEye&&t-lastEyeUpdate>67){if(eyeState!=='idle'&&t>eyeUntil)eyeState='idle';paintEye(t);lastEyeUpdate=t;}if(cameraHint&&t-lastHintCheck>180){lastHintCheck=t;const label=cameraHintMode();if(label!==cameraHintState){cameraHintState=label;cameraHintUntil=t+(label==='off'||label==='ready'?10000:7000);gl.deleteTexture(cameraHint.front);cameraHint.front=cameraHintTexture(label);cameraHint.back=cameraHint.front;cameraHint.resources=[cameraHint.front];}cameraHint.visible=t<cameraHintUntil&&voicePhase!=='listening'&&voicePhase!=='processing';}if(t-lastUi>150){updateHover(frame);lastUi=t;}
+ poll3d(t);pollLabSelector(frame,t,pose);pollStringLab(frame,t);pollFingerLab(frame,t);pollFrameLab(frame,t);pollPlacedFrameTouch(frame,t);pollFrameGames(t,pose);advanceGrab(frame);for(const src of session.inputSources)pinchPoll(frame,src);pollGestures(frame,t);tween(t);faceCloudCards(pose,t);updateMascot(frame,t);tickMascotSpeech(t);tickVoiceIndicator(t,pose);typeStatus(t);updateMicVisual(t);updateDebugCard(t);if(captureEye&&t-lastEyeUpdate>67){if(eyeState!=='idle'&&t>eyeUntil)eyeState='idle';paintEye(t);lastEyeUpdate=t;}if(cameraHint&&t-lastHintCheck>180){lastHintCheck=t;const label=cameraHintMode();if(label!==cameraHintState){cameraHintState=label;cameraHintUntil=t+(label==='off'||label==='ready'?10000:7000);gl.deleteTexture(cameraHint.front);cameraHint.front=cameraHintTexture(label);cameraHint.back=cameraHint.front;cameraHint.resources=[cameraHint.front];}cameraHint.visible=t<cameraHintUntil&&voicePhase!=='listening'&&voicePhase!=='processing';}if(t-lastUi>150){updateHover(frame);lastUi=t;}
  gl.bindFramebuffer(gl.FRAMEBUFFER,session.renderState.baseLayer.framebuffer);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
  for(const view of pose.views){const vp0=session.renderState.baseLayer.getViewport(view);gl.viewport(vp0.x,vp0.y,vp0.width,vp0.height);const vp=matmul(view.projectionMatrix,view.transform.inverse.matrix);
- decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(statusCard?.visible)drawCard(statusCard,vp);if(editbar)drawCard(editbar,vp);if(captureEye&&voicePhase!=='listening'&&voicePhase!=='processing')drawCard(captureEye,vp);if(cameraHint)drawCard(cameraHint,vp);if(voiceButton)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);/* description is composited after mascot for legibility */for(const m of meshPreviews)drawMeshPreview(m,vp,t);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);drawStringLab(vp,t,pose);drawFingerLab(vp,t,pose);drawSpatialFrames(vp,t,pose);if(labMenu?.visible)drawCard(labMenu,vp);depthCapability(frame,view);
+ decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(statusCard?.visible)drawCard(statusCard,vp);if(editbar)drawCard(editbar,vp);if(captureEye&&voicePhase!=='listening'&&voicePhase!=='processing')drawCard(captureEye,vp);if(cameraHint)drawCard(cameraHint,vp);if(voiceButton)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);/* description is composited after mascot for legibility */for(const m of meshPreviews)drawMeshPreview(m,vp,t);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);drawStringLab(vp,t,pose);drawFingerLab(vp,t,pose);drawSpatialFrames(vp,t,pose);drawFrameCubes(vp);if(labMenu?.visible)drawCard(labMenu,vp);depthCapability(frame,view);
  for(const src of session.inputSources){const r=ray(frame,src);if(!r)continue;const h=pick(r),end=vadd(r.o,vmul(r.d,h?.dist||1.2));const colour=src.hand?[.72,1,.75,.7]:[.77,.88,1,.72];line(vp,[r.o,end],colour);line(vp,[end],colour,true,h?16:9);}
  if(mascotPointer?.visible){if(mascotMode()==='2d'){if(!mascotPointer.front){mascotTex=mascotTexture();mascotPointer.front=mascotTex;mascotPointer.back=mascotTex;}drawCard(mascotPointer,vp);}else drawMascot3D(vp,t);}
  if(mascotSpeech)drawCard(mascotSpeech,vp);
@@ -1491,13 +1564,13 @@ async function action(id){const t=performance.now();if(t-lastAction<200)return;l
  case 'exit':held=null;return darkroom?closeDarkroom():session?.end();}}
 
 async function start(){if(session)return;if(!navigator.xr||!await navigator.xr.isSessionSupported('immersive-ar'))throw Error('Use Meta Quest Browser with immersive-ar support');
- setup();stringLab=new window.FreeLabStringLab.Experiment();stringLabState=null;rightStickDown=false;fingerLab=new window.FreeLabFingerLab.Experiment();fingerLabState=null;leftStickDown=false;frameLab=new window.FreeLabFrameLab.Experiment();frameLabState=null;labSelector=new window.FreeLabLabSelector.Selector();labMenu=null;labMenuIndex=-1;await gl.makeXRCompatible();session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['local'],optionalFeatures:['local-floor','hand-tracking','plane-detection','anchors','dom-overlay','depth-sensing'],depthSensing:{usagePreference:['gpu-optimized','cpu-optimized'],dataFormatPreference:['luminance-alpha','float32']},domOverlay:{root:document.getElementById('xrPromptEditor')}});xrDomOverlay=Boolean(session.domOverlayState);session.updateRenderState({baseLayer:new XRWebGLLayer(session,gl,{alpha:true,antialias:false})});
+ setup();stringLab=new window.FreeLabStringLab.Experiment();stringLabState=null;rightStickDown=false;fingerLab=new window.FreeLabFingerLab.Experiment();fingerLabState=null;leftStickDown=false;frameLab=new window.FreeLabFrameLab.Experiment();frameLabState=null;frameGames=new window.FreeLabFrameGames.Engine();labSelector=new window.FreeLabLabSelector.Selector();labMenu=null;labMenuIndex=-1;await gl.makeXRCompatible();session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['local'],optionalFeatures:['local-floor','hand-tracking','plane-detection','anchors','dom-overlay','depth-sensing'],depthSensing:{usagePreference:['gpu-optimized','cpu-optimized'],dataFormatPreference:['luminance-alpha','float32']},domOverlay:{root:document.getElementById('xrPromptEditor')}});xrDomOverlay=Boolean(session.domOverlayState);session.updateRenderState({baseLayer:new XRWebGLLayer(session,gl,{alpha:true,antialias:false})});
  try{refSpace=await session.requestReferenceSpace('local-floor');floorReference=true;}catch{refSpace=await session.requestReferenceSpace('local');floorReference=false;}poseReady=false;depthChecked=false;depthState='not requested';
  session.addEventListener('selectstart',e=>{lastNative.set(e.inputSource,performance.now());grabStart(e.frame,e.inputSource);});
  session.addEventListener('selectend',e=>{lastNative.set(e.inputSource,performance.now());grabEnd(e.inputSource,e.frame);});
  session.addEventListener('squeezestart',e=>{lastNative.set(e.inputSource,performance.now());grabStart(e.frame,e.inputSource);});
  session.addEventListener('squeezeend',e=>{lastNative.set(e.inputSource,performance.now());grabEnd(e.inputSource,e.frame);});
- session.addEventListener('end',()=>{if(labMenu?.front)gl.deleteTexture(labMenu.front);labMenu=null;labMenuIndex=-1;labSelector?.reset();labSelector=null;frameLab?.clear();frameLab=null;frameTouch=null;frameErase=null;frameLabState=null;window.FreeLabSound?.fingersStopAll?.();fingerLab?.setEnabled(false);fingerLab=null;fingerLabState=null;leftStickDown=false;window.FreeLabSound?.stringStop?.();stringLab?.setEnabled(false);stringLab=null;stringLabState=null;rightStickDown=false;cue('release');session=null;poseReady=false;held=null;clearCards();if(darkroom?.ownedTexture&&darkroom.front)gl.deleteTexture(darkroom.front);if(darkFloor?.front)gl.deleteTexture(darkFloor.front);if(darkClose?.front)gl.deleteTexture(darkClose.front);darkroom=null;darkBackdrop=null;darkClose=null;darkFloor=null;descriptionQuestionMode=false;if(voiceBadge?.front)gl.deleteTexture(voiceBadge.front);voiceBadge=null;dismissVoice();gestureDebounce.clear();gestureSpeechTimes.clear();lastGestureAnnouncement=-100000;if(mascotSpeech?.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(cameraHint?.front)gl.deleteTexture(cameraHint.front);cameraHint=null;cameraHintState='';if(captureEye?.front)gl.deleteTexture(captureEye.front);if(voiceButton?.front)gl.deleteTexture(voiceButton.front);if(extractButton?.front)gl.deleteTexture(extractButton.front);voiceButton=null;extractButton=null;extractVisualActive=null;inferenceCard=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;document.getElementById('xrPromptEditor')?.classList.add('hidden');document.getElementById('xrPromptEditor')?.classList.remove('xr-native-open');if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;if(descriptionPanel?.front)gl.deleteTexture(descriptionPanel.front);descriptionPanel=null;for(const m of meshPreviews)gl.deleteBuffer(m.buffer);meshPreviews=[];voiceRecord?.cancel?.();voiceRecord=null;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
+ session.addEventListener('end',()=>{if(labMenu?.front)gl.deleteTexture(labMenu.front);labMenu=null;labMenuIndex=-1;labSelector?.reset();labSelector=null;frameLab?.clear();frameLab=null;frameGames?.clear();frameGames=null;if(frameGameCubeBuffer){gl.deleteBuffer(frameGameCubeBuffer);frameGameCubeBuffer=null;}frameTouch=null;frameErase=null;frameLabState=null;window.FreeLabSound?.fingersStopAll?.();fingerLab?.setEnabled(false);fingerLab=null;fingerLabState=null;leftStickDown=false;window.FreeLabSound?.stringStop?.();stringLab?.setEnabled(false);stringLab=null;stringLabState=null;rightStickDown=false;cue('release');session=null;poseReady=false;held=null;clearCards();if(darkroom?.ownedTexture&&darkroom.front)gl.deleteTexture(darkroom.front);if(darkFloor?.front)gl.deleteTexture(darkFloor.front);if(darkClose?.front)gl.deleteTexture(darkClose.front);darkroom=null;darkBackdrop=null;darkClose=null;darkFloor=null;descriptionQuestionMode=false;if(voiceBadge?.front)gl.deleteTexture(voiceBadge.front);voiceBadge=null;dismissVoice();gestureDebounce.clear();gestureSpeechTimes.clear();lastGestureAnnouncement=-100000;if(mascotSpeech?.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(cameraHint?.front)gl.deleteTexture(cameraHint.front);cameraHint=null;cameraHintState='';if(captureEye?.front)gl.deleteTexture(captureEye.front);if(voiceButton?.front)gl.deleteTexture(voiceButton.front);if(extractButton?.front)gl.deleteTexture(extractButton.front);voiceButton=null;extractButton=null;extractVisualActive=null;inferenceCard=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;document.getElementById('xrPromptEditor')?.classList.add('hidden');document.getElementById('xrPromptEditor')?.classList.remove('xr-native-open');if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;if(descriptionPanel?.front)gl.deleteTexture(descriptionPanel.front);descriptionPanel=null;for(const m of meshPreviews)gl.deleteBuffer(m.buffer);meshPreviews=[];voiceRecord?.cancel?.();voiceRecord=null;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
  const saved=await window.FreeLab.listXRClouds().catch(()=>[]);clouds=saved;
  // Session-scoped XR placements are temporary, but every private JPEG and job remains in SQLite.
  // Resume queued cloud jobs after headset/browser restarts, without submitting a new paid request.

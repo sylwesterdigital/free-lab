@@ -2,7 +2,7 @@
  * Hold L3, tilt left/right, release to activate. No thumbstick click = no change.
  */
 (()=>{'use strict';
-const MODES=Object.freeze(['frames','five','thumbs','off']);
+const MODES=Object.freeze(['frames','chain','cubes','throw','five','thumbs','off']);
 function controller(sources){for(const s of sources||[]){
  if(s.handedness==='left'&&!s.hand&&s.gamepad?.mapping==='xr-standard'&&s.gamepad.buttons?.[3])return s;
 }return null;}
