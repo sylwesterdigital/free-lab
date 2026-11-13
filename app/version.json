@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.11",
-  "description": "Spatial shape sorter, private collaborative rooms, gallery and cinema browsing, API scopes"
+  "version": "0.10.12",
+  "description": "Compact Admin API access list, fixed Settings header and XR 3D-provider selection"
 }

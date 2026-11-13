@@ -95,3 +95,77 @@
 @media(max-width:740px){.workspace-drawer{inset:4px!important;padding:12px!important}.workspace-drawer .item-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.gallery-stage{gap:4px}.gallery-stage button{padding:5px!important;font-size:30px!important}}
 
 .room-choice .chosen{outline:2px solid #fbc1dc;background:#435c4d!important}
+
+/* 0.10.12 — fixed compact settings header, separately scrolling content and inline API management. */
+#profilePanel .profile-card{
+ width:min(740px,calc(100vw - 22px));max-height:min(86dvh,810px);
+ display:flex;flex-direction:column;overflow:hidden;padding:0;
+ border-radius:24px;background:#202925;border:1px solid #63786a65;
+}
+#profilePanel .profile-fixed-header{
+ position:relative;top:auto;z-index:8;flex:none;display:flex;
+ align-items:center;justify-content:space-between;
+ background:#202925;backdrop-filter:none;min-height:78px;
+ margin:0;padding:13px 22px 9px;border-bottom:0;
+}
+#profilePanel .profile-fixed-header .eyebrow{font-size:9px;margin:0 0 3px;letter-spacing:.18em}
+#profilePanel .profile-fixed-header h2{font-size:25px;line-height:1.05;letter-spacing:-.035em;margin:0}
+#profilePanel .profile-fixed-header .round-btn{width:34px;height:34px;min-height:34px;font-size:23px}
+#profilePanel .profile-tabs{display:flex;gap:5px;align-items:center;flex:none;position:relative;z-index:7;
+ background:#202925;border-bottom:1px solid #50625885;padding:0 20px 10px}
+#profilePanel .profile-tab{appearance:none;border:1px solid transparent;border-radius:8px;
+ color:#b9c8bc;background:transparent;padding:8px 18px;font-size:12px;font-weight:650;cursor:pointer}
+#profilePanel .profile-tab:hover{background:#ffffff0b;color:#e9fff0}
+#profilePanel .profile-tab.active{border-color:#7f9d85;background:#34453b;color:#effff4}
+#profilePanel .profile-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;
+ overscroll-behavior:contain;scrollbar-color:#637b6b #202925;scrollbar-width:thin;
+ padding:17px 22px 24px;position:relative;background:#202925}
+#profilePanel .profile-account{font-size:12px;color:#bfcec3;margin:0 0 11px}
+#profilePanel .experience-preferences{margin:0;padding:13px 15px;gap:12px;border-radius:12px}
+#profilePanel .experience-preferences label{gap:15px}
+#profilePanel .experience-preferences select{max-width:min(100%,340px)}
+#profilePanel .profile-section-heading{margin:0 0 17px}
+#profilePanel .profile-section-heading h3{font-size:17px;line-height:1.2;margin:0 0 5px;font-weight:690;letter-spacing:-.015em}
+#profilePanel .profile-section-heading p{font-size:12px;line-height:1.5;color:#aebdb2;margin:0;max-width:62ch}
+#profilePanel .api-table-labels{display:flex;justify-content:space-between;gap:8px;padding:0 9px 8px;
+ font-size:9px;letter-spacing:.1em;color:#98ab9e;font-weight:680}
+#profilePanel .api-provider-list{display:flex;flex-direction:column;gap:0}
+#profilePanel .api-provider-row{padding:12px 9px 13px;border-top:1px solid #ffffff1c;display:flex;flex-direction:column;gap:9px}
+#profilePanel .api-provider-heading{display:flex;align-items:center;gap:14px;justify-content:space-between}
+#profilePanel .api-provider-identity{display:flex;align-items:center;gap:6px;flex-direction:column;align-items:flex-start;min-width:0}
+#profilePanel .api-provider-name{font-size:13px;font-weight:650;color:#f0f7f0;overflow-wrap:anywhere}
+#profilePanel .api-provider-state{font-size:10px;color:#94a59a}
+#profilePanel .api-provider-state.configured{color:#a2e8bb}
+#profilePanel .api-provider-access{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:none;
+ font-size:11px;font-weight:650;color:#d1ddd5;cursor:pointer}
+#profilePanel .api-provider-access input{appearance:none;-webkit-appearance:none;position:relative;flex:none;width:45px;height:25px;
+ border-radius:22px;background:#505e55;border:1px solid #7b8a7f;padding:0;min-width:0;cursor:pointer;transition:background .15s}
+#profilePanel .api-provider-access input:before{content:"";position:absolute;left:3px;top:3px;width:17px;height:17px;
+ background:#f5f8f3;border-radius:50%;transition:transform .15s}
+#profilePanel .api-provider-access input:checked{background:#76b991}
+#profilePanel .api-provider-access input:checked:before{transform:translateX(20px)}
+#profilePanel .api-provider-access input:disabled{opacity:.38;cursor:not-allowed}
+#profilePanel .api-provider-controls{display:flex;flex-wrap:wrap;align-items:center;gap:7px}
+#profilePanel .api-provider-key{flex:1 1 180px;min-height:36px;font-size:12px;padding:8px 11px;border-radius:9px;
+ background:#121b16;min-width:140px}
+#profilePanel .api-provider-controls button{flex:none;padding:7px 11px;min-height:36px;border-radius:8px;font-size:11px;font-weight:680}
+#profilePanel .api-provider-controls .primary-btn{background:#d4f3dc;color:#183323}
+#profilePanel .api-remove-key{border:0;color:#b5c4b9;background:transparent;text-decoration:underline;cursor:pointer}
+#profilePanel .api-result{min-height:0;margin:0;font-size:11px;line-height:1.4;color:#abd7b8;overflow-wrap:anywhere}
+#profilePanel .api-result:empty{display:none}
+#profilePanel .api-result.error{color:#ffbbba}
+#profilePanel .profile-inline-status{font-size:11px;color:#c0d6c7}
+#profilePanel .profile-user-form{display:grid;gap:12px}
+#profilePanel .profile-user-form label{display:grid;gap:6px;color:#c7d6cb;font-size:11px}
+#profilePanel .profile-user-form input{font-size:13px}
+#profilePanel .profile-footer{border-top:1px solid #ffffff24;padding-top:15px;margin-top:25px}
+#profilePanel .profile-footer button{padding:9px 14px;min-height:36px}
+@media(max-width:550px){#profilePanel .profile-fixed-header{padding:12px 15px 10px;min-height:70px}
+ #profilePanel .profile-tabs{padding:0 13px 8px}#profilePanel .profile-scroll{padding:14px 14px 21px}
+ #profilePanel .api-provider-row{padding:12px 0}#profilePanel .api-table-labels{font-size:8px}
+ #profilePanel .api-provider-name{font-size:12px}#profilePanel .api-provider-controls{flex-wrap:wrap}
+ #profilePanel .api-provider-controls .api-provider-key{flex-basis:100%}}
+#profilePanel .api-extra{border-top:1px solid #ffffff29;margin-top:11px;padding-top:12px}
+#profilePanel .api-extra summary{font-size:11px;color:#acbcb0;font-weight:590;cursor:pointer;padding:4px 9px 12px}
+#profilePanel .api-extra summary:hover{color:#f0ffed}
+#profilePanel .api-extra-list{padding-left:8px;border-left:1px solid #ffffff20}

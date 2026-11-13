@@ -218,3 +218,31 @@ browsing controls, keeping the immersive black room visible. Window headers are 
 No inference work is performed without the existing explicit user action; no API keys are
 included. Hardware Quest operation, real-world hand tracking and live Aholo tasks must be
 checked on the target system; unit tests do not establish those properties.
+
+
+## Compact Admin model connections (v0.10.12)
+
+Settings is divided into Experience, APIs and Users. Admin model connections use
+server-encrypted credentials only. Each row has Save, read-only Test and a
+Private/Shared toggle; credentials are never returned to the browser. Shared means
+other authenticated profiles can invoke the provider without receiving the key.
+The four connected providers (Meta Muse + SAM, Aholo Lux3D, Meshy 3D and ElevenLabs)
+appear first, with other saved connections in an optional collapsed list. Provider
+checks that lack a verified read-only endpoint report an unverified result without
+submitting an inference call. The per-profile 3D-provider choice has moved from
+desktop Admin to the XR CONFIG window. The server preference remains persisted.
+No schema migrations, account resets or watcher updates are required.
+
+
+## Compact Admin model connections (v0.10.12)
+
+Settings is divided into Experience, APIs and Users. Admin model connections use
+server-encrypted credentials only. Each row has Save, read-only Test and a
+Private/Shared toggle; credentials are never returned to the browser. Shared means
+other authenticated profiles can invoke the provider without receiving the key.
+The four connected providers (Meta Muse + SAM, Aholo Lux3D, Meshy 3D and ElevenLabs)
+appear first, with other saved connections in an optional collapsed list. Provider
+checks that lack a verified read-only endpoint report an unverified result without
+submitting an inference call. The per-profile 3D-provider choice has moved from
+desktop Admin to the XR CONFIG window. The server preference remains persisted.
+No schema migrations, account resets or watcher updates are required.

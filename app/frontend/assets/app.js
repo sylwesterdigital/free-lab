@@ -13,7 +13,7 @@ function pref(name){try{
  if(name==='spoken'&&v===null)return true;
  if(name==='speechVoiceId')return v||'';
  if(name==='speechEngine')return v==='elevenlabs'?'elevenlabs':'browser';
- return v==='true';}catch{return name==='frameHoldSeconds'?3:name==='mascotMode'?'3d':name==='spoken';}}
+ return v==='true';}catch{return name==='frameHoldSeconds'?3:name==='mascotMode'?'3d':name==='speechEngine'?'browser':name==='speechVoiceId'?'':name==='spoken';}}
 function setPref(name,value){try{localStorage.setItem('freelab-pref-'+name,['mascotMode','frameHoldSeconds','speechVoiceId','speechEngine'].includes(name)?String(value):String(Boolean(value)));}catch{}traceEvent(name+' = '+String(value),'setting');}
 const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e;};
 let toastTimer, scanTimer=null, scanBusy=false;
@@ -110,24 +110,65 @@ async function segmentSnapshot(forcedPrompt=null){try{
  overlay.classList.remove('hidden');notify(`${boxes.length} SAM box(es) · ${data.saved_ids?.length||0} private crop(s) saved (not mask cutouts).`);state.tab='mine';selectTab('mine');await loadObjects();if(state.user?.role==='admin')loadUsage().catch(()=>{});return boxes.length;
  }catch(e){notify(e.message);return false;}finally{$('segment').disabled=false;}}
 async function loadUsage(){if(!state.user)return;const data=await api('/usage');const summary=$('usageSummary');if(!summary)return;summary.textContent=`FREE LAB rolling 24h: ${data.user_last_24h}/${data.user_cap||'unlimited'} requests for this profile · ${data.global_last_24h}/${data.global_cap||'unlimited'} overall. Local SQLite limits only; NOT a billing/spend cap. Set in /etc/free-lab.env on Ubuntu. `+((data.recent||[]).length?`Latest: ${data.recent[0].provider} / ${data.recent[0].status} / ${JSON.stringify(data.recent[0].tokens)}`:'No inference requests yet.');}
-async function loadProviderList(){if(state.user?.role!=='admin')return;
- const result=await api('/admin/providers');const box=$('providerList');box.replaceChildren();
- for(const p of result.providers){const sessionOnly=state.sessionKeys.has(p.provider);const chip=el('div','provider-chip'+(p.configured||sessionOnly?' enabled':''));chip.append(el('span','status'),el('span','',p.name+' · '+(p.configured?'Server '+p.source:sessionOnly?'Tab session':'Not set')));
- if(p.source==='vault'){const del=el('button','', '×');del.title='Delete server-encrypted key';del.onclick=async()=>{if(!confirm('Delete this server key?'))return;try{await api('/admin/providers/'+p.provider,{method:'DELETE'});await loadProviderList();await refresh();notify('Server key removed')}catch(e){notify(e.message)}};chip.append(del);}box.append(chip);}
- await loadUsage().catch(()=>{});
+const PROVIDER_SAFE_TESTS=new Set(['meta','aholo','meshy','openai','gemini','xai','replicate','elevenlabs']);
+const ACTIVE_PROVIDERS=new Set(['meta','aholo','meshy','elevenlabs']);
+let providerRows=new Map();
+function profileTab(name){
+ const valid=state.user?.role==='admin'?['experience','apis','users']:['experience'];
+ if(!valid.includes(name))name='experience';
+ document.querySelectorAll('[data-profile-tab]').forEach(button=>{const on=button.dataset.profileTab===name;button.classList.toggle('active',on);button.setAttribute('aria-selected',String(on));});
+ document.querySelectorAll('[data-profile-view]').forEach(panel=>panel.classList.toggle('hidden',panel.dataset.profileView!==name));
+ $('profileScroll').scrollTop=0;
+ if(name==='apis')loadProviderList().catch(error=>{$('apiListStatus').textContent=error.message;});
 }
-function currentProvider(){return $('providerChoice').value;}
-function formKey(){return $('providerKey').value.trim()||state.sessionKeys.get(currentProvider())||'';}
-async function loadProviderScope(){if(state.user?.role!=='admin')return;try{const r=await api('/admin/provider-scopes');$('apiShared').checked=Boolean(r.scopes[currentProvider()]);$('apiScopeResult').textContent=$('apiShared').checked?'Shared with all profiles':'Private to administrator';}catch(e){$('apiScopeResult').textContent=e.message;}}
-async function testProvider(){const provider=currentProvider(),key=formKey();$('providerResult').textContent='Checking authenticated read-only provider endpoint; no generation…';$('testProvider').disabled=true;
- try{const r=await api('/admin/providers/'+provider+'/check',{method:'POST',body:JSON.stringify(key?{api_key:key}:{})});let text=r.verified?'AUTHENTICATED':'NOT VERIFIED';if(r.message)text+=' · '+r.message;if(r.http_status)text+=' · HTTP '+r.http_status;if(r.models_visible!==undefined)text+=' · '+r.models_visible+' model(s) visible';if(r.meta_models?.length)text+=' · '+r.meta_models.join(', ');if(r.account)text+=' · '+r.account;if(r.balance)text+=' · credits '+JSON.stringify(r.balance);text+=' · No generation/inference request submitted.';$('providerResult').textContent=text;}
- catch(e){$('providerResult').textContent=e.message;}finally{$('testProvider').disabled=false;}}
-async function saveProvider(e){e.preventDefault();const provider=currentProvider(),key=$('providerKey').value.trim(),location=[...document.querySelectorAll('input[name="keyMode"]')].find(x=>x.checked)?.value||'session';
- if(!key){notify('Paste a new API key first');return;}
- try{if(location==='session'){state.sessionKeys.set(provider,key);notify('Key saved in this tab memory only — reload clears it');}
- else{await api('/admin/providers/'+provider,{method:'PUT',body:JSON.stringify({api_key:key})});state.sessionKeys.delete(provider);notify('Key encrypted in Ubuntu vault');}
- $('providerKey').value='';await loadProviderList();await refresh();}
- catch(e){notify(e.message)}finally{$('providerKey').value='';}}
+function apiRowMessage(id,message,fail=false){const status=providerRows.get(id)?.querySelector('.api-result');if(status){status.textContent=message;status.classList.toggle('error',fail);}else $('apiListStatus').textContent=message;}
+async function loadProviderList(){
+ if(state.user?.role!=='admin')return;
+ const [result,scopes]=await Promise.all([api('/admin/providers'),api('/admin/provider-scopes')]);
+ const list=$('providerList');list.replaceChildren();providerRows=new Map();
+ const extra=el('details','api-extra');const more=el('summary','', 'Other saved connections · not used by XR');extra.append(more);
+ const extraList=el('div','api-extra-list');extra.append(extraList);
+ for(const p of result.providers){
+  const row=el('section','api-provider-row');row.dataset.provider=p.provider;
+  const heading=el('div','api-provider-heading');
+  const title=el('div','api-provider-identity');title.append(el('span','api-provider-name',p.name),el('span','api-provider-state'+(p.configured?' configured':''),p.configured?'● Connected':'○ Not connected'));
+  const access=el('label','api-provider-access');access.setAttribute('aria-label','Share '+p.name+' with signed-in users');
+  const accessLabel=el('span','',scopes.scopes?.[p.provider]?'Shared':'Private');
+  const toggle=el('input');toggle.type='checkbox';toggle.setAttribute('role','switch');toggle.checked=Boolean(scopes.scopes?.[p.provider]);toggle.disabled=!p.configured;toggle.title=p.configured?'Allow all signed-in profiles to use this server credential':'Save a server key before sharing';
+  access.append(accessLabel,toggle);heading.append(title,access);row.append(heading);
+  const controls=el('div','api-provider-controls');const key=el('input','api-provider-key');key.type='password';key.autocomplete='new-password';key.placeholder=p.configured?'Replace key (optional)':'Paste API key';key.setAttribute('aria-label',p.name+' API key');key.maxLength=4096;
+  const save=el('button','primary-btn','Save');save.type='button';
+  const test=el('button','secondary-btn','Test');test.type='button';test.title=PROVIDER_SAFE_TESTS.has(p.provider)?'Read-only authentication check':'No known safe read-only test; no request will be sent';
+  controls.append(key,save,test);
+  if(p.source==='vault'){
+   const remove=el('button','api-remove-key','Remove');remove.type='button';remove.title='Delete encrypted server key';
+   remove.onclick=async()=>{if(!confirm('Remove '+p.name+' key from the server?'))return;remove.disabled=true;try{await api('/admin/providers/'+p.provider,{method:'DELETE'});await loadProviderList();await refresh();}catch(error){remove.disabled=false;apiRowMessage(p.provider,error.message,true);}};controls.append(remove);
+  }
+  row.append(controls,el('p','api-result'));
+  providerRows.set(p.provider,row);(ACTIVE_PROVIDERS.has(p.provider)?list:extraList).append(row);
+  save.onclick=async()=>{
+   const secret=key.value.trim();if(!secret)return apiRowMessage(p.provider,'Paste a key to save.',true);
+   save.disabled=true;apiRowMessage(p.provider,'Saving encrypted key…');
+   try{await api('/admin/providers/'+p.provider,{method:'PUT',body:JSON.stringify({api_key:secret})});key.value='';await loadProviderList();await refresh();apiRowMessage(p.provider,'Saved on server.');}
+   catch(error){apiRowMessage(p.provider,error.message,true);}finally{save.disabled=false;}
+  };
+  test.onclick=async()=>{
+   test.disabled=true;apiRowMessage(p.provider,'Testing…');
+   try{const r=await api('/admin/providers/'+p.provider+'/check',{method:'POST',body:JSON.stringify(key.value.trim()?{api_key:key.value.trim()}:{})});
+    const msg=r.verified?'Connected · authentication OK':r.http_status?'Authentication failed (HTTP '+r.http_status+')':r.message||'Unable to verify automatically';
+    apiRowMessage(p.provider,msg,!r.verified&&Boolean(r.http_status));
+   }catch(error){apiRowMessage(p.provider,error.message,true);}finally{test.disabled=false;}
+  };
+  toggle.onchange=async()=>{
+   toggle.disabled=true;
+   try{await api('/admin/provider-scopes/'+p.provider,{method:'PUT',body:JSON.stringify({shared:toggle.checked})});accessLabel.textContent=toggle.checked?'Shared':'Private';apiRowMessage(p.provider,toggle.checked?'Shared with signed-in users.':'Private to admin.');}
+   catch(error){toggle.checked=!toggle.checked;apiRowMessage(p.provider,error.message,true);}
+   finally{toggle.disabled=false;}
+  };
+ }
+ if(extraList.childElementCount)list.append(extra);
+ $('apiListStatus').textContent='';
+}
 async function xrDiagnostics(){const messages=[];messages.push('Secure context: '+window.isSecureContext);messages.push('WebXR API: '+Boolean(navigator.xr));
  if(navigator.xr)for(const mode of ['immersive-ar','immersive-vr'])try{messages.push(mode+': '+await navigator.xr.isSessionSupported(mode));}catch(e){messages.push(mode+': '+e.name);}
  messages.push('getUserMedia: '+Boolean(navigator.mediaDevices?.getUserMedia));messages.push('camera: '+cameraReport());
@@ -140,7 +181,7 @@ function selectTab(tab){state.tab=tab;document.querySelectorAll('.tab').forEach(
 function presentLog(force=false){if(!state.user)return;fetch('/changelog.json',{cache:'no-store'}).then(r=>r.json()).then(log=>{const key='free-lab-log:'+state.user.id+':'+log.version;if(!force&&localStorage.getItem(key))return;
  $('logTitle').textContent=log.title;$('logDate').textContent=log.datetime;$('logItems').replaceChildren(...log.changes.map(x=>el('li','',x)));$('changelog').classList.remove('hidden');$('changelog').dataset.key=key;}).catch(()=>{});}
 function dismissLog(){const key=$('changelog').dataset.key;if(key)localStorage.setItem(key,'seen');$('changelog').classList.add('hidden');}
-async function afterAuth(user){state.user=user;$('main').classList.remove('hidden');$('loginView').classList.add('hidden');$('profileSummary').textContent=user.display_name+' · @'+user.username+' · '+user.role;$('adminTools').classList.toggle('hidden',user.role!=='admin');await refresh();await loadObjects();presentLog();if(user.role==='admin'){await loadProviderList().catch(e=>notify(e.message));await loadProviderScope();}}
+async function afterAuth(user){state.user=user;$('main').classList.remove('hidden');$('loginView').classList.add('hidden');$('profileSummary').textContent=user.display_name+' · @'+user.username+' · '+user.role;$('adminTools').classList.toggle('hidden',user.role!=='admin');document.querySelectorAll('.admin-tab').forEach(e=>e.classList.toggle('hidden',user.role!=='admin'));await refresh();await loadObjects();presentLog();if(user.role==='admin'){await loadProviderList().catch(e=>notify(e.message));}}
 async function init(){
  wirePromptEditor();
  $('loginForm').onsubmit=async e=>{e.preventDefault();$('loginError').textContent='';try{const data=await api('/login',{method:'POST',body:JSON.stringify({username:$('username').value,password:$('password').value})});$('password').value='';await afterAuth(data.user);}catch(error){$('loginError').textContent=error.message;}};
@@ -148,14 +189,13 @@ async function init(){
  $('enterXR').onclick=()=>{window.FreeLabSound?.unlock();window.FreeLabSound?.play('enter');if(!state.user)return notify('Sign in before entering XR');window.FreeLabRooms.chooseXR();};
  $('toggleLibrary').onclick=()=>setLibrary($('workspace').classList.contains('hidden'));$('refresh3DJobs').onclick=refresh3DJobs;
  $('closeLibrary').onclick=()=>setLibrary(false);$('galleryClose').onclick=()=>$('desktopGallery').classList.add('hidden');$('galleryPrev').onclick=()=>browseGallery(-1);$('galleryNext').onclick=()=>browseGallery(1);let swipeX=null;$('galleryImage').addEventListener('pointerdown',e=>swipeX=e.clientX);$('galleryImage').addEventListener('pointerup',e=>{if(swipeX!==null&&Math.abs(e.clientX-swipeX)>45)browseGallery(e.clientX<swipeX?1:-1);swipeX=null;});document.addEventListener('keydown',e=>{if($('desktopGallery').classList.contains('hidden'))return;if(e.key==='Escape')$('galleryClose').click();else if(e.key==='ArrowLeft')browseGallery(-1);else if(e.key==='ArrowRight')browseGallery(1);});
- document.querySelectorAll('.provider-option').forEach(btn=>btn.onclick=()=>{$('providerChoice').value=btn.dataset.provider;document.querySelectorAll('.provider-option').forEach(b=>b.classList.toggle('selected',b===btn));$('providerResult').textContent='Provider: '+btn.textContent+'. Test without generation or save a credential.';loadProviderScope();});
  document.querySelectorAll('.model-option').forEach(btn=>btn.onclick=()=>{$('modelChoice').value=btn.dataset.model;document.querySelectorAll('.model-option').forEach(b=>b.classList.toggle('selected',b===btn));});
  $('saveUploadCloud')?.addEventListener('click',async()=>{const button=$('saveUploadCloud');button.disabled=true;
   try{if(!state.snapshot)throw Error('Upload an image first');const result=await api('/captures',{method:'POST',body:JSON.stringify({image:state.snapshot})});
    notify('Image saved to Spatial Library · open LIB in XR to explore it');state.snapshotOrigin='upload';}
   catch(e){notify('Cannot save imported image · '+e.message);}finally{button.disabled=false;}});
- const preferred3D=$('preferred3D');if(preferred3D){get3DPreference().then(p=>preferred3D.value=p.provider).catch(()=>{});preferred3D.onchange=async()=>{try{const pref=await save3DPreference(preferred3D.value);notify('3D provider: '+pref.provider+'. No automatic fallback.');}catch(e){notify(e.message);}};}
- $('apiShared').onchange=async()=>{try{const provider=currentProvider();const shared=$('apiShared').checked;await api('/admin/provider-scopes/'+provider,{method:'PUT',body:JSON.stringify({shared})});$('apiScopeResult').textContent=shared?'All signed-in profiles may now use '+provider:'Only admin may use '+provider;}catch(e){$('apiScopeResult').textContent=e.message;$('apiShared').checked=!$('apiShared').checked;}};$('providerForm').onsubmit=saveProvider;$('testProvider').onclick=testProvider;$('clearSessionKey').onclick=async()=>{state.sessionKeys.delete(currentProvider());$('providerKey').value='';await loadProviderList();await refresh();notify('Tab-only key cleared');};$('segment').onclick=()=>segmentSnapshot();$('toggleScan').onclick=toggleScan;$('cancelScan').onclick=()=>$('scanConsent').classList.add('hidden');$('confirmScan').onclick=startScanConfirmed;document.addEventListener('visibilitychange',()=>{if(document.hidden)stopScan()});
+ document.querySelectorAll('[data-profile-tab]').forEach(button=>button.onclick=()=>profileTab(button.dataset.profileTab));
+ $('segment').onclick=()=>segmentSnapshot();$('toggleScan').onclick=toggleScan;$('cancelScan').onclick=()=>$('scanConsent').classList.add('hidden');$('confirmScan').onclick=startScanConfirmed;document.addEventListener('visibilitychange',()=>{if(document.hidden)stopScan()});
  $('armXRMic')?.addEventListener('click',async()=>{try{const result=await armMicrophone();notify(result)}catch(e){notify('Mic permission: '+e.message)}});
  for(const name of ['spoken','troll']){const el=$('pref-'+name);if(el){el.checked=pref(name);el.onchange=()=>setPref(name,el.checked);}}
  const engine=$('pref-speechEngine');if(engine){engine.value=pref('speechEngine');engine.onchange=()=>setPref('speechEngine',engine.value);}
@@ -167,7 +207,7 @@ async function init(){
  $('fileInput').onchange=async e=>{window.FreeLabSound?.play('bloom');const file=e.target.files?.[0];if(!file)return;try{if(file.size>12*1024*1024)throw Error('Please choose an image under 12 MB');const bmp=await createImageBitmap(file);const canvas=$('snapshotCanvas');const scale=Math.min(1,960/Math.max(bmp.width,bmp.height));canvas.width=Math.round(scale*bmp.width);canvas.height=Math.round(scale*bmp.height);canvas.getContext('2d').drawImage(bmp,0,0,canvas.width,canvas.height);bmp.close();const preview=new Image();preview.src=canvas.toDataURL('image/jpeg',0.65);await preview.decode();$('cameraPanel').classList.remove('hidden');compress(preview);state.snapshotOrigin='upload';notify('Image ready — recognize or save manually');}catch(e){notify(e.message)}e.target.value='';};
  $('recognize').onclick=()=>submitCapture(true);$('saveManual').onclick=()=>{if(state.snapshot)submitCapture(false);else saveNameOnly().catch(e=>notify(e.message))};
  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{selectTab(t.dataset.list);loadObjects().catch(e=>notify(e.message))});
- $('profileButton').onclick=()=>$('profilePanel').classList.remove('hidden');$('closeProfile').onclick=()=>$('profilePanel').classList.add('hidden');
+ $('profileButton').onclick=()=>{$('profilePanel').classList.remove('hidden');profileTab(state.user?.role==='admin'?'apis':'experience');};$('closeProfile').onclick=()=>$('profilePanel').classList.add('hidden');
  $('logout').onclick=async()=>{state.sessionKeys.clear();stopScan();closeCamera();await api('/logout',{method:'POST'});location.reload()};
  $('createProfile').onsubmit=async e=>{e.preventDefault();try{await api('/admin/profiles',{method:'POST',body:JSON.stringify({username:$('newUsername').value,display_name:$('newDisplayName').value,password:$('newPassword').value})});e.target.reset();notify('New private profile created')}catch(error){notify(error.message)}};
  $('showChangelog').onclick=()=>presentLog(true);$('dismissChangelog').onclick=dismissLog;$('continueChangelog').onclick=dismissLog;

@@ -1,9 +1,9 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.11">
+<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.12">
 <title>FREELAB — Step into the spatial world</title>
-<link rel="stylesheet" href="/assets/style.css?v=0.10.11">
+<link rel="stylesheet" href="/assets/style.css?v=0.10.12">
 </head><body>
 <div id="app" class="app-shell">
 <header class="header" aria-label="Site navigation">
@@ -35,7 +35,7 @@
     </nav>
     <aside class="scene-caption"><span class="caption-index">01 / SPATIAL COLLECTOR</span><p>Capture. Bloom.<br>Collect.</p><span class="caption-muted">Capture → recognize → collect in 3D.</span></aside>
     <span id="modelStatus" class="visually-hidden">Models ready on demand</span>
-    <div class="stage-bottom"><span>LIVE EXPERIMENT / 0.10.11</span><span class="stage-line"></span><span>BUILT FOR CURIOSITY</span></div>
+    <div class="stage-bottom"><span>LIVE EXPERIMENT / 0.10.12</span><span class="stage-line"></span><span>BUILT FOR CURIOSITY</span></div>
   </section>
   <section id="workspace" class="workspace workspace-drawer hidden" aria-label="Private inventory">
     <div class="workspace-head"><div><p class="eyebrow">YOUR PERSONAL ARCHIVE</p><h2>Found in your world <span id="objectCounter" class="muted-count">00</span></h2></div><div class="workspace-actions"><div class="tabs"><button class="tab active" data-list="mine">Private</button><button class="tab" data-list="public">Public</button><button class="tab" data-list="bin">Bin</button></div><button id="closeLibrary" class="round-btn" aria-label="Close collection">×</button></div></div>
@@ -68,40 +68,51 @@
 
 <div id="loginView" class="auth-wrap hidden"><div class="auth-card"><span class="auth-sigil">◎</span><p class="eyebrow">YOUR OWN PRIVATE UNIVERSE</p><h2>Welcome to<br>FREELAB.</h2><p class="small-muted">Sign in to collect your world. Each profile has its own private inventory.</p><form id="loginForm"><label>PROFILE<input id="username" autocomplete="username" required maxlength="32" placeholder="username"></label><label>PASSWORD<input id="password" type="password" autocomplete="current-password" required placeholder="Your password"></label><button class="primary-btn" type="submit">Enter my space <span>↗</span></button><p id="loginError" class="error" role="alert"></p></form></div></div>
 <div id="cameraPanel" class="camera-panel hidden"><div class="panel-top"><div><p class="eyebrow">SPATIAL CAPTURE / CAMERA</p><strong id="cameraStatus">Camera not started</strong></div><button id="closeCamera" class="round-btn" aria-label="Close camera">×</button></div><div class="camera-content"><video id="cameraVideo" autoplay muted playsinline></video><canvas id="snapshotCanvas" hidden></canvas><img id="previewImage" alt="Snapshot preview" class="hidden"><canvas id="samOverlay" class="sam-overlay hidden" aria-hidden="true"></canvas><div id="captureEmpty" class="capture-empty">No camera pixels available. Upload a photo to explore.</div></div><div class="model-select"><label for="modelChoice">EXTRACTION QUALITY</label><input id="modelChoice" type="hidden" value="muse-ember-1.0"><div class="model-options" role="group" aria-label="Muse model"><button type="button" class="model-option selected" data-model="muse-ember-1.0">Quick <small>lower cost</small></button><button type="button" class="model-option" data-model="muse-spark-1.3">Detailed <small>higher cost</small></button></div></div><div class="camera-actions"><button id="takeSnapshot" class="secondary-btn">Snapshot</button><button type="button" class="secondary-btn" id="saveUploadCloud">Save photo to Spatial Library</button><button id="recognize" class="primary-btn">Extract objects with AI</button></div><div class="manual-entry"><input id="manualLabel" placeholder="Or name an object" maxlength="80"><button id="saveManual" class="secondary-btn">Save private</button></div><div class="sam-row"><input id="samPrompt" placeholder="SAM object e.g. chair" maxlength="60" aria-label="Object noun phrase to segment"><button id="segment" class="secondary-btn">Refine selected region</button></div><div class="scan-row"><button id="toggleScan" class="secondary-btn">Start 20s scan</button><small>Off by default · paid calls · optional request quota</small></div><p id="captureStatus" class="hint">Camera diagnostics pending.</p><p class="hint">Passthrough display ≠ camera pixels. Quest camera permission varies by browser build. Nothing uploads until you explicitly scan or recognize.</p></div>
-<div id="profilePanel" class="modal hidden"><div class="modal-card profile-card"><div class="modal-title"><div><p class="eyebrow">PERSONAL SPACE</p><h2>Settings</h2></div><button class="round-btn" id="closeProfile" aria-label="Close settings">×</button></div><p id="profileSummary"></p><div class="experience-preferences"><p class="eyebrow">XR / PERSONALIZATION</p>
-  <label for="pref-mascotMode">MASCOT IN XR
-  <select id="pref-mascotMode" aria-label="Mascot appearance in XR"><option value="3d">3D character</option><option value="2d">2D character</option><option value="none">Off</option></select>
-  </label>
-  <label for="pref-frameHoldSeconds">SPATIAL FRAME DETACH TIMER
-  <select id="pref-frameHoldSeconds" aria-label="Seconds to hold frame before detaching"><option value="1.5">1.5 seconds</option><option value="3" selected>3 seconds</option><option value="5">5 seconds</option></select>
-  </label>
-  <p class="small-muted">Press X on the left controller to open the experiment menu. Move the left joystick to choose, then press the left trigger to activate. Press X again to cancel. In SHAPES mode, make triangles using two tips on one hand and one opposite-hand finger; carry shapes into matching glowing bins. Draw a frame by joining the two index fingertips and two thumb tips; stretch, hold and release it into the room.</p>
-  <label><input type="checkbox" id="pref-spoken"> Speak descriptions and gesture updates (optional)</label>
-  <label for="pref-speechEngine">MASCOT VOICE ENGINE<select id="pref-speechEngine"><option value="browser">Browser / system speech (no additional TTS bill)</option><option value="elevenlabs">ElevenLabs (billed on each speech request)</option></select></label>
-  <label for="pref-speechVoiceId">ELEVENLABS VOICE<select id="pref-speechVoiceId"><option value="">Choose a voice</option></select></label>
-  <button type="button" class="secondary-btn" id="loadElevenVoices">Load available ElevenLabs voices · free metadata check</button>
-  <p class="small-muted" id="voiceLookupResult">ElevenLabs TTS stays OFF until selected here. Configure its API key under Admin → Model Connections.</p>
-  <label><input type="checkbox" id="pref-troll"> Playful commentary on found objects</label>
-  <p class="small-muted">Voice command transcription uses Meta and may incur usage charges. Voice responses use device speech when supported. These switches stay in this browser.</p>
-  <button type="button" class="secondary-btn" id="armXRMicSettings" onclick="document.getElementById('armXRMic').click()">Enable microphone for XR</button>
-</div><div id="adminTools" class="hidden"><hr><p class="eyebrow">ADMIN / MODEL CONNECTIONS</p><h3>Private API vault</h3><p class="small-muted">API keys are encrypted in the server database. The encryption key stays on Ubuntu outside the Git repository. Saved keys are never returned to the browser.</p><div id="providerList" class="provider-list"></div>
-<section id="apiScopeConfig"><p class="eyebrow">API KEY ACCESS</p><p class="small-muted">Private: admin only. Shared: all signed-in profiles may use this vault provider; keys are never exposed.</p><label for="apiShared" class="api-scope-row">Share selected provider with all users <input id="apiShared" type="checkbox" role="switch"></label><p id="apiScopeResult" class="small-muted"></p></section>
-<div class="usage-meter" id="usageSummary">Loading local budget…</div>
-<div class="provider-result" role="group" aria-label="3D generation provider" style="margin:18px 0 16px">
- <label for="preferred3D" class="tiny-label">3D GENERATION PROVIDER (NO SILENT FALLBACK)</label>
- <select id="preferred3D"><option value="aholo">Aholo Lux3D</option><option value="meshy">Meshy 3D</option></select>
- <p class="small-muted">Aholo uses a time-limited signed image link (2 hours) to fetch the selected private photograph; generation is paid only after confirmation.</p>
+<div id="profilePanel" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="profileHeading">
+ <div class="modal-card profile-card">
+  <div class="modal-title profile-fixed-header"><div><p class="eyebrow">PERSONAL SPACE</p><h2 id="profileHeading">Settings</h2></div><button class="round-btn" id="closeProfile" aria-label="Close settings">×</button></div>
+  <div class="profile-tabs" role="tablist" aria-label="Settings categories">
+   <button type="button" class="profile-tab" role="tab" aria-controls="profileExperience" data-profile-tab="experience" aria-selected="true">Experience</button>
+   <button type="button" class="profile-tab admin-tab hidden" role="tab" aria-controls="profileAPIs" data-profile-tab="apis" aria-selected="false">APIs</button>
+   <button type="button" class="profile-tab admin-tab hidden" role="tab" aria-controls="profileUsers" data-profile-tab="users" aria-selected="false">Users</button>
+  </div>
+  <div class="profile-scroll" id="profileScroll">
+   <section id="profileExperience" role="tabpanel" data-profile-view="experience">
+    <p class="profile-account" id="profileSummary"></p>
+    <div class="experience-preferences"><p class="eyebrow">XR / PERSONALIZATION</p>
+     <label for="pref-mascotMode">MASCOT IN XR<select id="pref-mascotMode"><option value="3d">3D character</option><option value="2d">2D character</option><option value="none">Off</option></select></label>
+     <label for="pref-frameHoldSeconds">FRAME DETACH TIMER<select id="pref-frameHoldSeconds"><option value="1.5">1.5 seconds</option><option value="3" selected>3 seconds</option><option value="5">5 seconds</option></select></label>
+     <p class="small-muted">X opens experimental modes in XR. Left joystick selects; left trigger confirms.</p>
+     <label><input type="checkbox" id="pref-spoken"> Speak descriptions and gesture updates</label>
+     <label for="pref-speechEngine">MASCOT VOICE<select id="pref-speechEngine"><option value="browser">Device voice</option><option value="elevenlabs">ElevenLabs (paid)</option></select></label>
+     <label for="pref-speechVoiceId">VOICE<select id="pref-speechVoiceId"><option value="">Choose a voice</option></select></label>
+     <button type="button" class="secondary-btn" id="loadElevenVoices">Load available voices</button>
+     <p class="small-muted" id="voiceLookupResult">Select ElevenLabs above to use a server-configured voice.</p>
+     <label><input type="checkbox" id="pref-troll"> Playful commentary on found objects</label>
+     <button type="button" class="secondary-btn" id="armXRMicSettings" onclick="document.getElementById('armXRMic').click()">Enable XR microphone</button>
+    </div>
+   </section>
+   <section id="adminTools" class="hidden">
+    <section data-profile-view="apis" id="profileAPIs" role="tabpanel" class="hidden">
+     <div class="profile-section-heading"><h3>Model connections</h3><p>Keys stay encrypted on this server. Shared access lets signed-in users run models without seeing keys.</p></div>
+     <div class="api-table-labels"><span>PROVIDER / SAVED KEY</span><span>ACCESS · PRIVATE / SHARED</span></div>
+     <div id="providerList" class="api-provider-list" aria-label="Configured model APIs"></div>
+     <p id="apiListStatus" class="profile-inline-status" role="status" aria-live="polite"></p>
+    </section>
+    <section data-profile-view="users" id="profileUsers" role="tabpanel" class="hidden">
+     <div class="profile-section-heading"><h3>Users</h3><p>Create accounts separately from API connections.</p></div>
+     <form id="createProfile" class="profile-user-form">
+      <label>Username<input id="newUsername" placeholder="Username" required minlength="3" maxlength="32" autocomplete="off"></label>
+      <label>Display name<input id="newDisplayName" placeholder="Display name" maxlength="64"></label>
+      <label>Password<input id="newPassword" placeholder="At least 12 characters" type="password" minlength="12" required autocomplete="new-password"></label>
+      <button class="primary-btn" type="submit">Create user</button>
+     </form>
+    </section>
+   </section>
+   <div class="profile-footer"><button class="secondary-btn" id="logout">Sign out</button></div>
+  </div>
  </div>
-<form id="providerForm"><label for="providerChoice" class="tiny-label">PROVIDER</label>
-<input id="providerChoice" type="hidden" value="meta"><div id="providerChoices" class="provider-grid" role="group" aria-label="Model provider"><button type="button" class="provider-option selected" data-provider="meta">Meta Muse + SAM</button><button type="button" class="provider-option" data-provider="aholo">AHOLO Lux3D</button><button type="button" class="provider-option" data-provider="meshy">Meshy 3D</button><button type="button" class="provider-option" data-provider="tripo">Tripo 3D</button><button type="button" class="provider-option" data-provider="fal">fal.ai</button><button type="button" class="provider-option" data-provider="replicate">Replicate</button><button type="button" class="provider-option" data-provider="openai">OpenAI</button><button type="button" class="provider-option" data-provider="gemini">Gemini</button><button type="button" class="provider-option" data-provider="xai">Grok Imagine</button><button type="button" class="provider-option" data-provider="elevenlabs">ElevenLabs voice</button></div>
-<label class="tiny-label">KEY LOCATION</label><div class="storage-pick" role="group" aria-label="Credential storage">
-<label><input type="radio" name="keyMode" value="session" checked> This tab only (RAM)</label>
-<label><input type="radio" name="keyMode" value="server"> Server vault (encrypted)</label></div>
-<input type="password" id="providerKey" autocomplete="new-password" placeholder="Paste provider API key (never placed in source)" minlength="12">
-<p class="small-muted">Tab-only keys remain in JavaScript memory until reload or sign out. For inference, a temporary key is sent to this server over HTTPS for a single request. Server-vault keys are encrypted at rest on Ubuntu.</p>
-<div class="provider-actions"><button class="secondary-btn" type="button" id="testProvider">Test key · no generation</button><button class="primary-btn" type="submit" id="saveProvider">Save chosen location</button><button class="secondary-btn" type="button" id="clearSessionKey">Clear tab key</button></div>
-<div id="providerResult" class="provider-result" role="status" aria-live="polite">Select a provider, enter a key, and test authentication without requesting inference. Some providers have no verified read-only test; these will not be called.</div>
-</form><hr><p class="eyebrow">ADMIN / ACCOUNT ACCESS</p><form id="createProfile"><input id="newUsername" placeholder="New username" required minlength="3" maxlength="32"><input id="newDisplayName" placeholder="Display name" maxlength="64"><input id="newPassword" placeholder="Password (12+ characters)" type="password" minlength="12" required><button class="secondary-btn" type="submit">Create private profile</button></form></div><button class="secondary-btn" id="logout">Sign out</button></div></div>
+</div>
 <div id="xrReadiness" class="modal hidden"><div class="modal-card"><div class="modal-title"><div><p class="eyebrow">QUEST 3 / CAPABILITY CHECK</p><h2>Reality check</h2></div><button id="closeXRReadiness" class="round-btn" aria-label="Close">×</button></div>
 <p class="small-muted">Passthrough visualization, tracked hands and camera pixels are three separate permissions/capabilities.</p>
 <pre id="xrDiagnostics" class="xr-diagnostics" role="status">Checking…</pre>
@@ -111,18 +122,18 @@
 <div id="scanConsent" class="modal hidden"><div class="modal-card"><p class="eyebrow">COST CONFIRMATION</p><h2>Enable periodic scans?</h2><p class="small-muted">One JPEG every 20 seconds can consume a paid Meta Muse API request. This is disabled by default and stops when the page becomes hidden. It counts against FREE LAB's daily request quotas, which are not dollar limits.</p><div class="provider-actions"><button id="cancelScan" class="secondary-btn">Cancel</button><button id="confirmScan" class="primary-btn">Start paid scan</button></div></div></div>
 <div id="changelog" class="modal hidden"><div class="modal-card changelog-card"><div class="modal-title"><div><p class="eyebrow">WHAT'S NEW / DEVELOPMENT LOG</p><h2 id="logTitle">Release notes</h2><p id="logDate" class="small-muted"></p></div><button class="round-btn" id="dismissChangelog" aria-label="Close development log">×</button></div><ul id="logItems"></ul><button class="primary-btn" id="continueChangelog">Start exploring ↗</button></div></div>
 <div id="toast" class="toast hidden" role="status"></div>
-<script src="/assets/sound.js?v=0.10.11" defer></script>
-<script src="/assets/gestures.js?v=0.10.11" defer></script>
-<script src="/assets/strand-geometry.js?v=0.10.11" defer></script>
-<script src="/assets/string-lab.js?v=0.10.11" defer></script>
-<script src="/assets/finger-lab.js?v=0.10.11" defer></script>
-<script src="/assets/frame-lab.js?v=0.10.11" defer></script>
-<script src="/assets/lab-selector.js?v=0.10.11" defer></script>
-<script src="/assets/frame-games.js?v=0.10.11" defer></script>
-<script src="/assets/shape-sort.js?v=0.10.11" defer></script>
-<script src="/assets/rooms.js?v=0.10.11" defer></script>
-<script src="/assets/cloud-tree.js?v=0.10.11" defer></script>
-<script src="/assets/xr-ui.js?v=0.10.11" defer></script>
-<script src="/assets/app.js?v=0.10.11" defer></script><script src="/assets/xr.js?v=0.10.11" defer></script>
-<script src="/assets/scene.mjs?v=0.10.11" type="module"></script>
+<script src="/assets/sound.js?v=0.10.12" defer></script>
+<script src="/assets/gestures.js?v=0.10.12" defer></script>
+<script src="/assets/strand-geometry.js?v=0.10.12" defer></script>
+<script src="/assets/string-lab.js?v=0.10.12" defer></script>
+<script src="/assets/finger-lab.js?v=0.10.12" defer></script>
+<script src="/assets/frame-lab.js?v=0.10.12" defer></script>
+<script src="/assets/lab-selector.js?v=0.10.12" defer></script>
+<script src="/assets/frame-games.js?v=0.10.12" defer></script>
+<script src="/assets/shape-sort.js?v=0.10.12" defer></script>
+<script src="/assets/rooms.js?v=0.10.12" defer></script>
+<script src="/assets/cloud-tree.js?v=0.10.12" defer></script>
+<script src="/assets/xr-ui.js?v=0.10.12" defer></script>
+<script src="/assets/app.js?v=0.10.12" defer></script><script src="/assets/xr.js?v=0.10.12" defer></script>
+<script src="/assets/scene.mjs?v=0.10.12" type="module"></script>
 </body></html>

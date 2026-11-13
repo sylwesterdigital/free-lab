@@ -59,7 +59,7 @@ s.update(inp(false,false,0));s.update(inp(true,false,0));s.update(inp(false,fals
                       'frameGames?.linkOnOverlap(frameLab.frames,df.id)', 'frameGames?.launch(frameLab.frames,frameTouch.id',
                       'pollFrameGames(t,pose)', 'drawFrameCubes(vp)', 'gl.drawArrays(gl.TRIANGLES,0,36)'):
             self.assertIn(token,XR)
-        self.assertIn('frame-games.js?v=0.10.11',PAGE)
+        self.assertIn('frame-games.js?v=0.10.12',PAGE)
         self.assertNotIn('cdn', (ROOT/'frontend/assets/frame-games.js').read_text())
 
 if __name__=='__main__':unittest.main()

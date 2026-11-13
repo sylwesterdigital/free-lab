@@ -1,4 +1,4 @@
-"""v0.10.11: shape matching, room permissions, provider scopes, gallery and XR navigation."""
+"""v0.10.12: shape matching, room permissions, provider scopes, gallery and XR navigation."""
 import os,sys,tempfile,sqlite3,subprocess,unittest
 from pathlib import Path
 from backend import db,aholo3d
@@ -65,7 +65,7 @@ class Access111(unittest.TestCase):
    result=aholo3d.status('19741','key');self.assertIn('19741',result['error'])
  def test_html_desktop_and_scope_controls(self):
   code=(ROOT/'frontend/index.html').read_text()
-  for needle in ('id="roomButton"','id="roomInviteList"','id="roomChooser"','id="roomCanvas"','id="desktopGallery"','id="galleryNext"','id="apiShared"','shape-sort.js','rooms.js'):
+  for needle in ('id="roomButton"','id="roomInviteList"','id="roomChooser"','id="roomCanvas"','id="desktopGallery"','id="galleryNext"','id="providerList"','shape-sort.js','rooms.js'):
    self.assertIn(needle,code)
  def test_room_state_does_not_send_camera_pixels(self):
   code=(ROOT/'frontend/assets/xr.js').read_text()

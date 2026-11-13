@@ -1,14 +1,13 @@
 {
-  "version": "0.10.11",
-  "title": "Shared Spatial Rooms · v0.10.11",
+  "version": "0.10.12",
+  "title": "Compact Model Connections · v0.10.12",
   "datetime": "2026-11-13 UTC",
   "changes": [
-    "Spatial shape sorter: draw rectangles or triangles with two-hand gestures; glow-edged cuboid and triangular-prism bins only accept matching shapes",
-    "Admin chooses private/shared access for each encrypted provider key; existing stored credentials are preserved and never sent to browsers",
-    "Aholo Lux3D requests explicit GLB output and reports actual task failure and task ID, rather than generic check-provider-account errors",
-    "Desktop Collection fills the window with a source/child image carousel, swipe navigation and filmstrip; XR cinema supports previous/next without exiting",
-    "Settings, diagnostic modals and Personal Archive retain their headers while scrolling",
-    "Private/public headset room prompt, signed-in user room browser, invitations, explicit join and read-only desktop spectator of live headset and card placement",
-    "Shared scenes use bounded SQLite state updates and source-scoped image reads; ordinary personal object/image endpoints remain private"
+    "Settings has a compact, fixed header with Experience / APIs / Users navigation and independently scrolling content",
+    "Admin APIs display one row per provider with encrypted server-key Save, unified read-only Test and Private/Shared access switch",
+    "Meta Muse/SAM, Aholo, Meshy and ElevenLabs appear first; other stored credentials remain accessible in a collapsed section",
+    "Removed RAM key storage, debug usage dump and oversized desktop 3D-provider panel from Settings",
+    "The XR CONFIG panel now chooses Aholo or Meshy 3D and displays whether the selected key is available to this profile",
+    "Existing vault keys, access scopes, user accounts and saved library data are preserved"
   ]
 }

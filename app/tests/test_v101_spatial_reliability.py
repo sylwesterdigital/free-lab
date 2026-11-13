@@ -38,7 +38,8 @@ class ImageDialogueTests(unittest.TestCase):
         self.assertIn('aholo3d.submit',APP)
         self.assertIn('aholo3d.status',APP)
         self.assertNotIn("provider:'meshy'",FRONT)
-        self.assertIn('id="preferred3D"',INDEX)
+        self.assertIn("text(ctx,'3D GENERATION'",XR)
+        self.assertIn('save3DPreference',XR)
         self.assertIn("response=await window.FreeLab.list3DJobs", XR.replace('oldJobs=await window.FreeLab.list3DJobs','response=await window.FreeLab.list3DJobs'))
 
 class AholoAdapterTests(unittest.TestCase):

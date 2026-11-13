@@ -7,7 +7,7 @@
 let gl,canvas,program,lineProgram,quad,rayBuffer,refSpace,session,root,poseReady=false,floorReference=false;
 let pending3dJobs=[],galleryPage=0,darkroom=null,darkBackdrop=null,darkClose=null,darkFloor=null,descriptionContext=null,descriptionQuestionMode=false,frameTouch=null,frameErase=null,lastMascotQuip=0,statusBorn=0,jobProvider='auto';
 let meshUniforms=null;
-let configPanel=null,configShowing=false,uiSettings=window.FreeLabXRUI?.read?.()||{},lastConfigTick=0,mascotTrailAt=0;
+let configPanel=null,configShowing=false,config3DChoice='aholo',config3DAvailable=false,uiSettings=window.FreeLabXRUI?.read?.()||{},lastConfigTick=0,mascotTrailAt=0;
 let toolbar=null,editbar=null,statusCard=null,cloud=null,clouds=[],cards=[],zones=[],selected=null,held=null;
 let branchFocusId=null,branchPage=0; // Parent-based tree browsing, no fixed generation/depth limit.
 let imageMenuOpen=false,voiceBadge=null,voicePhase='idle',voiceMessage='',voiceUntil=0,voicePending=null,voiceOk=null,voiceCancel=null,voiceResultStamp=0;
@@ -269,12 +269,16 @@ function configTexture(){const [c,ctx]=canvas2d(770,970),p=uiPalette();panelSkin
  text(ctx,'◀',615,135,30,p.accent,700,'center');text(ctx,'▶',710,135,30,p.accent,700,'center');
  text(ctx,'✦  GENERATE COLOUR THEME',48,212,28,p.accent,690);
  ctx.strokeStyle=p.edge;ctx.globalAlpha=.35;ctx.beginPath();ctx.moveTo(38,251);ctx.lineTo(730,251);ctx.stroke();ctx.globalAlpha=1;
- configSwitches.forEach(([key,label],i)=>{const y=306+i*80;
+ configSwitches.forEach(([key,label],i)=>{const y=293+i*67;
   text(ctx,label,43,y,26,p.text,600);const on=uiSettings[key]!==false;
   rrect(ctx,638,y-33,91,45,24,on?p.accent:p.panel2);
   ctx.beginPath();ctx.arc(on?700:661,y-10,17,0,TAU);ctx.fillStyle=on?p.panel2:p.muted;ctx.fill();
  });
- ctx.strokeStyle=p.edge;ctx.globalAlpha=.3;ctx.beginPath();ctx.moveTo(38,782);ctx.lineTo(730,782);ctx.stroke();ctx.globalAlpha=1;
+ ctx.strokeStyle=p.edge;ctx.globalAlpha=.3;ctx.beginPath();ctx.moveTo(38,700);ctx.lineTo(730,700);ctx.stroke();ctx.globalAlpha=1;
+ text(ctx,'3D GENERATION',43,750,25,p.text,670);
+ text(ctx,config3DChoice==='meshy'?'MESHY':'AHOLO',433,791,25,p.accent,700);
+ text(ctx,config3DAvailable?'KEY AVAILABLE':'NO KEY FOR THIS PROFILE',43,800,17,config3DAvailable?p.muted:'#f7a9b6',550);
+ text(ctx,'◀',610,791,30,p.accent,700,'center');text(ctx,'▶',702,791,30,p.accent,700,'center');
  text(ctx,'PROCESSING ANIMATION',43,841,25,p.text,670);
  text(ctx,(uiSettings.processing||'spin').toUpperCase(),430,887,26,p.accent,670);
  text(ctx,'◀',610,888,30,p.accent,700,'center');text(ctx,'▶',702,888,30,p.accent,700,'center');
@@ -286,13 +290,14 @@ function showConfig(){configShowing=!configShowing;
  if(configShowing&&!configPanel){const m=latestPose?.transform.matrix;const pos=latestPose?point(poseForwardAnchor(latestPose,1.05,-.08),[0,0,0]):[0,1.3,-1];const q=latestPose?lookingQuat(pos,[m[12],m[13],m[14]]):[0,0,0,1];const tex=configTexture();
   configPanel={id:'xr-config',kind:'config',pos,q,size:[.66,.83],scale:1,visible:true,front:tex,back:tex,resources:[tex]};}
  if(configPanel)configPanel.visible=configShowing;
- if(configShowing)refreshConfig();
+ if(configShowing){refreshConfig();window.FreeLab?.get3DPreference?.().then(p=>{if(!configShowing)return;config3DChoice=p.provider==='meshy'?'meshy':'aholo';config3DAvailable=Boolean(p.available?.[config3DChoice]);refreshConfig();}).catch(()=>{});}
 }
 function configHit(hit){const x=(hit.x+.5)*770,y=(.5-hit.y)*970;
  if(y<90)return x>645?'configclose':null;
  if(y>=95&&y<174)return x>650?'themenext':x>565?'themeprev':null;
  if(y>=178&&y<250)return 'themerandom';
- if(y>=267&&y<744)return 'config-'+configSwitches[clamp(Math.floor((y-267)/80),0,configSwitches.length-1)][0];
+ if(y>=260&&y<690)return 'config-'+configSwitches[clamp(Math.floor((y-260)/67),0,configSwitches.length-1)][0];
+ if(y>=716&&y<807)return x>650?'config3dnext':x>565?'config3dprev':null;
  if(y>=809&&y<919)return x>650?'processingnext':x>555?'processingprev':null;
  return null;
 }
@@ -1758,6 +1763,7 @@ async function action(id){const t=performance.now();if(t-lastAction<200)return;l
  case 'config':return showConfig();case 'configclose':configShowing=false;if(configPanel)configPanel.visible=false;return;
  case 'themenext':return cycleSetting('theme',1);case 'themeprev':return cycleSetting('theme',-1);
  case 'themerandom':uiSettings.generated=window.FreeLabXRUI.generate();return uiUpdate('generated',uiSettings.generated);
+ case 'config3dnext':case 'config3dprev':{const value=config3DChoice==='aholo'?'meshy':'aholo';return window.FreeLab?.save3DPreference?.(value).then(p=>{config3DChoice=p.provider;return window.FreeLab.get3DPreference().then(result=>{config3DAvailable=Boolean(result.available?.[config3DChoice]);refreshConfig();setStatus('3D MODEL · '+config3DChoice.toUpperCase()+(config3DAvailable?' READY':' NO KEY'),5000);});}).catch(e=>setStatus('3D settings · '+e.message,8000));}
  case 'processingnext':return cycleSetting('processing',1);case 'processingprev':return cycleSetting('processing',-1);
  case 'config-borders':case 'config-backgrounds':case 'config-mascot':case 'config-experimental':case 'config-masked':case 'config-voice':{
    const key=id.slice(7);return uiUpdate(key,uiSettings[key]===false);}

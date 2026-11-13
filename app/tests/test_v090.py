@@ -38,11 +38,11 @@ class XRMenuTests(unittest.TestCase):
         self.assertIn('function pollGestures(',XR)
         self.assertIn('mascotMode()',XR)
         self.assertIn('id="pref-mascotMode"',HTML)
-        self.assertIn('gestures.js?v=0.10.11',HTML)
+        self.assertIn('gestures.js?v=0.10.12',HTML)
     def test_watchers_are_colored_and_silent(self):
         if not WATCH:
             # Ubuntu ships application files, not the macOS release watcher.
-            self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.11')
+            self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.12')
             return
         self.assertIn("VERSION='0.9.0'",WATCH)
         self.assertIn("'PASS':'\\033[1;32m'",WATCH)

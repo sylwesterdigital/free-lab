@@ -78,8 +78,8 @@ if(w.FreeLabLabSelector.input([{handedness:'right',gamepad:{mapping:'xr-standard
                       "labMenu.q=quatY(cameraYaw(pose))",'for(const f of frameLab.frames)',
                       "window.FreeLab?.pref?.('frameHoldSeconds')",'gl.TRIANGLE_STRIP'):
             self.assertIn(token,XR)
-        self.assertIn('lab-selector.js?v=0.10.11',PAGE)
-        self.assertIn('frame-lab.js?v=0.10.11',PAGE)
+        self.assertIn('lab-selector.js?v=0.10.12',PAGE)
+        self.assertIn('frame-lab.js?v=0.10.12',PAGE)
         self.assertIn('id="pref-frameHoldSeconds"',PAGE)
         for name in ('frame-lab.js','lab-selector.js'):
             self.assertNotIn('fetch(', (ROOT/'frontend/assets'/name).read_text())
