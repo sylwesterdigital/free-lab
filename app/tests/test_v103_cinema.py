@@ -1,4 +1,4 @@
-"""v0.10.3: offline regression coverage of cinema compositing, status & Meta descriptions."""
+"""v0.10.4: offline regression coverage of cinema compositing, status & Meta descriptions."""
 import json, subprocess, unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -56,8 +56,8 @@ class CinemaTests(unittest.TestCase):
   self.assertIn('mascotReactionTarget=handGesturePositions[side]',XR)
 
  def test_release_version(self):
-  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.3')
-  self.assertIn('xr.js?v=0.10.3',INDEX)
+  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.4')
+  self.assertIn('xr.js?v=0.10.4',INDEX)
 
 class VisionTests(unittest.TestCase):
  def test_explicit_description_refresh_instead_of_stale_dialogue(self):
@@ -65,7 +65,7 @@ class VisionTests(unittest.TestCase):
   self.assertIn('refresh=false',FRONT)
   self.assertIn('refresh};',FRONT)
   self.assertIn("if not question and history and not v.get('refresh')",SERVER)
-  self.assertIn('Unable to analyze this image:',XR)
+  self.assertIn('Cannot analyze this image:',XR)
 
  def test_vision_model_request_is_actual_image_and_spark(self):
   jpeg=b'\xff\xd8'+b'A'*12

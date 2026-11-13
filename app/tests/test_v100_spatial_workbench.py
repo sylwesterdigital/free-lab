@@ -1,4 +1,4 @@
-"""FREE LAB 0.10.3: self-contained, no-network media/XR regressions."""
+"""FREE LAB 0.10.4: self-contained, no-network media/XR regressions."""
 import json, struct, sqlite3, tempfile, unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -35,7 +35,7 @@ class SpatialWorkbench(unittest.TestCase):
         self.assertIn("description=history[-1]['answer'],cached=True",SERVER)
         self.assertIn('INSERT INTO image_dialogue',SERVER)
         self.assertIn('providers.describe(raw,key,question=',SERVER)
-        self.assertIn('descriptionTexture(value,label)',XR)
+        self.assertIn('descriptionTexture(value,label,retryable=false)',XR)
         self.assertIn("return describeSelected()",XR)
     def test_separate_movable_debug_window(self):
         self.assertIn("kind:'diagnostics',pos:anchor",XR)

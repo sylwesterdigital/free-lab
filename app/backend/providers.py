@@ -1,9 +1,73 @@
 """Meta Muse image recognition; one explicit, capped call per capture."""
 from __future__ import annotations
-import base64,json,os,re,urllib.error,urllib.request
+import base64,json,os,re,time,urllib.error,urllib.request
 
 API_URL='https://api.meta.ai/v1/chat/completions'
 MODEL_IDS={'muse-ember-1.0','muse-spark-1.3','muse-spark-1.2','muse-spark-1.1'}
+
+class MetaVisionUnavailable(RuntimeError):
+    """A provider-side failure, not an invalid image or a FREE LAB quota."""
+    def __init__(self, status, code='', retry_after=None, request_id='', attempts=1):
+        self.status=int(status)
+        self.code=re.sub(r'[^a-zA-Z0-9_.-]','',str(code or ''))[:64]
+        self.retry_after=retry_after
+        self.request_id=re.sub(r'[^a-zA-Z0-9_.-]','',str(request_id or ''))[:90]
+        self.attempts=attempts
+        if self.status==429:
+            message='Meta rate limit reached (429)'
+        elif self.status in (500,502,503,504):
+            message=f'Meta temporarily unavailable ({self.status})'
+        elif self.status in (401,403):
+            message=f'Meta access denied ({self.status}); check model access or API key'
+        elif self.status in (400,404,422):
+            message=f'Meta request rejected ({self.status}); check model/input format'
+        else:
+            message=f'Meta vision HTTP {self.status}'
+        if self.code: message+=f' · {self.code}'
+        if isinstance(self.retry_after,int) and self.retry_after>0:
+            message+=f' · retry after {self.retry_after}s'
+        super().__init__(message)
+
+
+def _vision_error(error, attempts):
+    """Read only the structured error code, never log image bytes/prompts/API keys."""
+    status=int(error.code)
+    body=b''
+    try: body=error.read(3072)
+    except (OSError,ValueError): pass
+    code=''
+    try:
+        parsed=json.loads(body)
+        if isinstance(parsed,dict) and isinstance(parsed.get('error'),dict):
+            code=parsed['error'].get('code','') or parsed['error'].get('type','')
+    except (ValueError,TypeError,UnicodeError): pass
+    headers=error.headers or {}
+    raw_retry=headers.get('Retry-After','')
+    try: retry_after=max(0,int(raw_retry))
+    except (ValueError,TypeError): retry_after=None
+    request_id=headers.get('x-request-id','') or headers.get('X-Request-ID','')
+    return MetaVisionUnavailable(status,code,retry_after,request_id,attempts)
+
+
+def _vision_request(req):
+    """Retry only transient Meta failures, max three requests, no model switching."""
+    for attempt in range(1,4):
+        try:
+            with urllib.request.urlopen(req,timeout=43) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as exc:
+            error=_vision_error(exc,attempt)
+            if error.status not in (429,500,502,503,504) or attempt==3:
+                raise error from exc
+            # Honor explicit long Retry-After without blocking XR for a minute.
+            if error.retry_after is not None and error.retry_after>4:
+                raise error from exc
+            delay=min(4.0, error.retry_after if error.retry_after is not None else .65*2**(attempt-1))
+            if delay:time.sleep(delay)
+        except (TimeoutError,urllib.error.URLError) as exc:
+            if attempt==3:raise RuntimeError('Meta vision connection failed after 3 attempts') from exc
+            time.sleep(.65*2**(attempt-1))
+    raise RuntimeError('Meta vision request failed')
 SCHEMA={
  'type':'object','additionalProperties':False,
  'properties':{
@@ -77,10 +141,7 @@ def describe(jpeg: bytes, api_key: str, model: str = 'muse-spark-1.3', question:
        'max_completion_tokens':500,'store':False}
     req=urllib.request.Request(API_URL,data=json.dumps(payload).encode('utf-8'),method='POST',
         headers={'Authorization':'Bearer '+api_key,'Content-Type':'application/json','User-Agent':'FREELAB-Describe/0.10'})
-    try:
-        with urllib.request.urlopen(req,timeout=43) as response: result=json.load(response)
-    except urllib.error.HTTPError as e:raise RuntimeError(f'Meta description failed: HTTP {e.code}') from e
-    except (TimeoutError,urllib.error.URLError) as e:raise RuntimeError('Meta description endpoint unavailable') from e
+    result=_vision_request(req)
     try:
         value=result['choices'][0]['message']['content']
         if isinstance(value,list):value=' '.join(v.get('text','') for v in value if isinstance(v,dict))

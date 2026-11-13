@@ -766,6 +766,13 @@ def media_describe():
             g.con.execute('INSERT INTO image_dialogue(owner_id,capture_id,object_id,question,answer) VALUES(?,?,?,?,?)',(g.user['id'],cid,oid,question,answer))
         db.finish_inference(g.con,call,'ok',usage)
         return jsonify(description=answer,cached=False,model='muse-spark-1.3',history=history+[{'question':question,'answer':answer}],usage=usage,capture_id=cid,object_id=oid)
+    except providers.MetaVisionUnavailable as e:
+        db.finish_inference(g.con,call,'error')
+        return (jsonify(error=str(e),provider='meta',model='muse-spark-1.3',
+                        upstream_status=e.status,provider_code=e.code,
+                        request_id=e.request_id,retry_after=e.retry_after,
+                        attempts=e.attempts,retryable=e.status in (429,500,502,503,504)),
+                503 if e.status in (500,502,503,504) else 429 if e.status==429 else 502)
     except (OSError,ValueError,RuntimeError) as e:
         db.finish_inference(g.con,call,'error');return jsonify(error=str(e)),502
 

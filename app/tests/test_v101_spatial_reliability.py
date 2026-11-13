@@ -1,4 +1,4 @@
-"""v0.10.3: no-network release regression checks for critical provider and XR paths."""
+"""v0.10.4: no-network release regression checks for critical provider and XR paths."""
 import json, tempfile, unittest
 from pathlib import Path
 from unittest.mock import patch

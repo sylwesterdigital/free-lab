@@ -1,14 +1,11 @@
 {
-  "version": "0.10.3",
-  "title": "Immersive Cinema and Clear XR Feedback · v0.10.3",
+  "version": "0.10.4",
+  "title": "Reliable Meta Image Descriptions \u00b7 v0.10.4",
   "datetime": "2026-11-13 UTC",
   "changes": [
-    "Cinema now replaces the entire passthrough renderer with a fully opaque black stereo backdrop; a large, camera-aligned image and an accessible white Exit control are the only controls visible.",
-    "The selected original image is loaded into the cinema at preserved aspect ratio. A faint simulated reflective floor is displayed; the normal spatial cards and mascot are hidden until Exit.",
-    "Camera and action notices use one compact muted-green line below the pink camera hint. A silent microphone transcript shows only No speech once.",
-    "DESCRIBE forces an explicit Meta vision request when selected, reports provider errors in its bubble and in LOG, and no longer leaves a permanent Analyzing placeholder on failure.",
-    "Image-action menu angular size remains controlled when photos are brought close to the headset.",
-    "Mascot aligns its head along its actual 3D flight direction and reacts to two pointing rays, an open palm, a fist, and forward gestures.",
-    "No watcher modifications, arbitrary quotas, or automatically initiated paid requests."
+    "DESCRIBE retries transient Meta vision 5xx errors with bounded backoff; explicit long Retry-After is shown rather than waiting a minute inside XR.",
+    "Meta provider error codes, request ID, status and number of attempts are returned safely; request bodies, API keys and private images are never logged.",
+    "When Meta is temporarily unavailable, the image description bubble offers RETRY without leaving XR or losing the selected image.",
+    "No silent alternate-model fallback, automatic image generation, new quotas or watcher modifications."
   ]
 }

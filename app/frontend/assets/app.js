@@ -26,7 +26,10 @@ async function api(path,opts={}){
  try{response=await fetch('/api'+path,init);let result={};try{result=await response.json()}catch{}
   const duration=Math.round(performance.now()-began);
   traceEvent(`${opts.method||'GET'} ${path.replace(/\/\d+(?=\/|$)/g,'/:id')} → HTTP ${response.status} (${duration} ms)${result.error?' · '+String(result.error).slice(0,135):''}`,response.ok?'api':'error');
-  if(!response.ok)throw Error(result.error||'HTTP '+response.status);return result;
+  if(!response.ok){const err=Error(result.error||'HTTP '+response.status);err.status=response.status;
+   err.upstreamStatus=result.upstream_status||null;err.providerCode=result.provider_code||'';
+   err.retryable=Boolean(result.retryable);err.retryAfter=result.retry_after||null;
+   err.providerRequestId=result.request_id||'';throw err;}return result;
  }catch(e){if(!response)traceEvent(`${path.split('?')[0]} · NETWORK ERROR · ${e.message}`,'error');throw e;}
 }
 async function refresh(){try{const h=await api('/health');$('healthStatus').textContent=h.ok?'System online':'Offline';$('connectionDot').classList.toggle('good',h.ok);state.config=await api('/config');const enabled=state.config.inference_enabled||Boolean(sessionMeta());$('modelStatus').textContent=(enabled?'AI ready · on demand':'AI offline · manual mode');$('modelStatus').previousElementSibling.classList.toggle('good',enabled);}

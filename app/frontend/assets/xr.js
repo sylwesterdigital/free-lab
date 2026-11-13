@@ -1,4 +1,4 @@
-/* FREELAB 0.10.3 — spatial media workbench, draggable diagnostics, voice meter, bounded 3D previews.
+/* FREELAB 0.10.4 — spatial media workbench, draggable diagnostics, voice meter, bounded 3D previews.
    Minimal WebGL WebXR renderer: real camera input only, no fake passthrough pixels.
    World-positioned photos, yaw-upright follow toolbar, image derivatives, spatial grab.
    Flat grey floating controls, double-sided, draggable spatial cards.
@@ -336,7 +336,7 @@ function updateDebugCard(t){if(!debugShowing||!toolbar||!gl)return;if(!debugPane
  if(t-debugLast>1200){debugLast=t;const tex=debugTexture();gl.deleteTexture(debugPanel.front);debugPanel.front=tex;debugPanel.back=tex;}
  if(t-serverPoll>6000){serverPoll=t;loadServerDiagnostic();}}
 
-function descriptionTexture(value,label){
+function descriptionTexture(value,label,retryable=false){
  const [c,ctx]=canvas2d(800,355);ctx.clearRect(0,0,c.width,c.height);
  rrect(ctx,8,4,784,346,38,'#fff');
  text(ctx,'ABOUT · '+String(label).slice(0,34),36,50,25,'#1c2820',680);
@@ -346,17 +346,17 @@ function descriptionTexture(value,label){
   const next=line?line+' '+word:word;if(ctx.measureText(next).width>718&&line){lines.push(line);line=word;}else line=next;
  }if(line)lines.push(line);
  for(const row of lines.slice(-5)){text(ctx,row,37,y,22,'#213629',450);y+=34;}
- rrect(ctx,30,274,205,61,30,'#e6efe9');text(ctx,'⌨  ASK',132,314,24,'#203a2d',640,'center');
+ rrect(ctx,30,274,205,61,30,'#e6efe9');text(ctx,retryable?'↻  RETRY':'⌨  ASK',132,314,24,'#203a2d',640,'center');
  rrect(ctx,255,274,205,61,30,'#e6efe9');text(ctx,'◎  VOICE',358,314,24,'#203a2d',640,'center');
  rrect(ctx,685,18,83,62,30,'#edf0ed');text(ctx,'×',728,62,40,'#1d3427',590,'center');
  return texture(c);
 }
 function hideDescription(){if(descriptionPanel?.front)gl.deleteTexture(descriptionPanel.front);descriptionPanel=null;descriptionContext=null;}
-function showDescription(card,value){if(descriptionPanel?.front)gl.deleteTexture(descriptionPanel.front);
- const tex=descriptionTexture(value,card.data?.label||'IMAGE');
+function showDescription(card,value,retryable=false){if(descriptionPanel?.front)gl.deleteTexture(descriptionPanel.front);
+ const tex=descriptionTexture(value,card.data?.label||'IMAGE',retryable);
  const pos=point(cardModel(card),[.63,-.02,.07]);
  const viewer=latestPose?.transform?.matrix||null;
- descriptionPanel={id:'description-popup',kind:'description',pos,q:viewer?lookingQuat(pos,[viewer[12],viewer[13],viewer[14]]):worldCardQuat(card),size:[.58,.257],scale:1,visible:true,front:tex,back:tex};
+ descriptionPanel={id:'description-popup',kind:'description',retryable,pos,q:viewer?lookingQuat(pos,[viewer[12],viewer[13],viewer[14]]):worldCardQuat(card),size:[.58,.257],scale:1,visible:true,front:tex,back:tex};
  descriptionContext={card,captureId:cloud?.id,objectId:card.kind==='object'?card.data.id:null};
 }
 async function askDescription(question=''){
@@ -366,7 +366,12 @@ async function askDescription(question=''){
   if(descriptionContext===context)showDescription(context.card,result.description);
   setStatus(result.cached?'Opened saved image description':'META DESCRIPTION READY · ask a follow-up or close',8000);
   mascotSay('I found something!');mascotEmotion('happy');window.FreeLab?.speakUpdate?.(result.description);
- }catch(e){if(descriptionContext===context)showDescription(context.card,'Unable to analyze this image: '+e.message+'\n\nCheck LOG for request details.');setStatus('Image analysis failed · see LOG',11000);window.FreeLab?.traceEvent?.('DESCRIBE FAILED · '+e.message,'error');}
+ }catch(e){const retry=Boolean(e.retryable||[429,503,504].includes(e.upstreamStatus));
+  const message=retry?'Meta is busy right now. Tap RETRY to try again.':
+   ('Cannot analyze this image: '+e.message+'\nCheck LOG for details.');
+  if(descriptionContext===context)showDescription(context.card,message,retry);
+  setStatus(retry?'Meta is busy · retry the description':'Image analysis failed · see LOG',9500);
+  window.FreeLab?.traceEvent?.('DESCRIBE FAILED · '+e.message+(e.providerRequestId?' · request '+e.providerRequestId:''),'error');}
  finally{busy=false;inferenceCard=null;}
 }
 async function describeSelected(){const target=currentPromptTarget();if(!target)return setStatus('Select an image to describe');
@@ -778,7 +783,7 @@ function imageButtonAt(card,x,y){
 function buttonFromHit(h){if(!h)return null;
  if(h.card.kind==='description'){
   if(h.x>.33&&h.y>.27)return 'descriptionclose';
-  if(h.y<-.26&&h.x<-.19)return 'descriptionask';
+  if(h.y<-.26&&h.x<-.19)return h.card.retryable?'descriptionretry':'descriptionask';
   if(h.y<-.26&&h.x<.09)return 'descriptionvoice';
   return null;
  }
@@ -1418,7 +1423,7 @@ function renderCinema(frame,pose){
 async function action(id){const t=performance.now();if(t-lastAction<200)return;lastAction=t;
  if(busy&&['capture','extract','segment','voice','refine','prompt','describe','3d','submit3d','apply'].includes(id))return;
  switch(id){case 'capture':return makeCapture();case 'extract':return runExtract();
- case 'describe':return describeSelected();case 'descriptionclose':hideDescription();return;case 'descriptionask':return descriptionAskKeyboard();case 'descriptionvoice':if(descriptionContext){descriptionQuestionMode=true;return voicePrompt();}return;
+ case 'describe':return describeSelected();case 'descriptionclose':hideDescription();return;case 'descriptionask':return descriptionAskKeyboard();case 'descriptionretry':return askDescription('');case 'descriptionvoice':if(descriptionContext){descriptionQuestionMode=true;return voicePrompt();}return;
  case 'debugclose':debugShowing=false;return;case 'debuglarger':if(debugPanel)debugPanel.scale=clamp(debugPanel.scale+.2,.55,2.6);return;case 'debugsmaller':if(debugPanel)debugPanel.scale=clamp(debugPanel.scale-.2,.55,2.6);return;
  case '3d':return open3d();case 'submit3d':return submit3d();case 'cancel3d':return close3d();
  case 'voice':return voicePrompt();case 'confirmvoice':return confirmVoice();case 'cancelvoice':dismissVoice();descriptionQuestionMode=false;return setStatus('Voice cancelled · tap microphone to record again',7000);case 'closemenu':return closeImageMenu();
