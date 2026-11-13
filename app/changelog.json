@@ -1,13 +1,14 @@
 {
-  "version": "0.10.12",
-  "title": "Compact Model Connections · v0.10.12",
+  "version": "0.10.13",
+  "title": "Three.js Spatial Rooms \u00b7 v0.10.13",
   "datetime": "2026-11-13 UTC",
   "changes": [
-    "Settings has a compact, fixed header with Experience / APIs / Users navigation and independently scrolling content",
-    "Admin APIs display one row per provider with encrypted server-key Save, unified read-only Test and Private/Shared access switch",
-    "Meta Muse/SAM, Aholo, Meshy and ElevenLabs appear first; other stored credentials remain accessible in a collapsed section",
-    "Removed RAM key storage, debug usage dump and oversized desktop 3D-provider panel from Settings",
-    "The XR CONFIG panel now chooses Aholo or Meshy 3D and displays whether the selected key is available to this profile",
-    "Existing vault keys, access scopes, user accounts and saved library data are preserved"
+    "Replaced the canvas-based room mockup with a fullscreen, continuously rendered Three.js spatial viewer",
+    "Added fluid orbit/zoom with pointer inertia, Fit Scene, and free-flight exploration with WASD, Q/E and Shift",
+    "Spectators see a tracked headset avatar with live head orientation, actual 3D image planes and parent-child branch links",
+    "Click a floating image to inspect the full media, saved description, ancestor or child links, and enlarge it",
+    "The room feed now includes authenticated metadata and headset/card orientations; camera pixels are never streamed",
+    "XR room publishing and desktop state polling run multiple times per second; Three.js rendering is independent of polling",
+    "Room UI and gallery fill the viewport and do not alter the private-by-default invitation model or archive data"
   ]
 }

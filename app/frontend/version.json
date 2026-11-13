@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.12",
-  "description": "Compact Admin API access list, fixed Settings header and XR 3D-provider selection"
+  "version": "0.10.13",
+  "description": "Immersive 3D desktop rooms with spatial image exploration"
 }

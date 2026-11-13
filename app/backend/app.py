@@ -982,6 +982,9 @@ def update_room_state():
     if not isinstance(cards,list) or len(cards)>72 or not isinstance(pose,list) or len(pose)!=3:return jsonify(error='Invalid room state'),400
     def coords(q):return isinstance(q,list) and len(q)==3 and all(type(x) in (float,int) and abs(x)<100 for x in q)
     if not coords(pose):return jsonify(error='Invalid headset position'),400
+    def quaternion(q):return isinstance(q,list) and len(q)==4 and all(type(x) in (float,int) and abs(x)<=1.001 for x in q) and 0.9<sum(float(x)**2 for x in q)<1.1
+    orientation=v.get('q',[0,0,0,1])
+    if not quaternion(orientation):return jsonify(error='Invalid headset orientation'),400
     clean=[]
     for c in cards:
         if not isinstance(c,dict) or not coords(c.get('p')):return jsonify(error='Invalid card position'),400
@@ -990,10 +993,13 @@ def update_room_state():
         if kind=='object':owned=g.con.execute('SELECT 1 FROM objects WHERE id=? AND owner_id=? AND shelf!=?',(ident,g.user['id'],'bin')).fetchone()
         else:owned=g.con.execute('SELECT 1 FROM captures WHERE id=? AND owner_id=? AND hidden=0',(ident,g.user['id'])).fetchone()
         if not owned:abort(403)
-        clean.append({'id':ident,'kind':kind,'p':[round(float(x),3) for x in c['p']]})
+        if 'q' in c and not quaternion(c['q']):return jsonify(error='Invalid card orientation'),400
+        item={'id':ident,'kind':kind,'p':[round(float(x),3) for x in c['p']]}
+        if 'q' in c:item['q']=[round(float(x),4) for x in c['q']]
+        clean.append(item)
     r=g.con.execute('SELECT id FROM live_rooms WHERE owner_id=?',(g.user['id'],)).fetchone()
     if not r:return jsonify(error='Create a room before updating'),409
-    payload=json.dumps({'pose':pose,'cards':clean},separators=(',',':'))
+    payload=json.dumps({'pose':pose,'q':[round(float(x),4) for x in orientation],'cards':clean},separators=(',',':'))
     with g.con:g.con.execute('''UPDATE live_rooms SET state_json=?,active=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?''',(payload,int(active),r['id']))
     return jsonify(ok=True)
 
@@ -1004,7 +1010,27 @@ def read_room_state(rid):
     if not r:abort(404)
     try:scene=json.loads(r['state_json'])
     except (ValueError,TypeError):scene={}
-    # Do not leak private images to non-members; media endpoint applies the same gate.
+    # Spectators see only published media, but each published card has enough
+    # title/description/parent context to navigate the same spatial image tree.
+    # Access is checked above for both the state and media endpoints.
+    published=scene.get('cards',[]) if isinstance(scene,dict) else []
+    owner=r['owner_id']
+    objects=[c['id'] for c in published if isinstance(c,dict) and c.get('kind')=='object' and type(c.get('id')) is int]
+    captures=[c['id'] for c in published if isinstance(c,dict) and c.get('kind')=='capture' and type(c.get('id')) is int]
+    metadata={}
+    if objects:
+        marks=','.join('?' for _ in objects)
+        rows=g.con.execute(f'''SELECT id,label,description,parent_object_id,capture_id,created_at
+          FROM objects WHERE owner_id=? AND shelf!='bin' AND id IN ({marks})''',(owner,*objects)).fetchall()
+        metadata.update({('object',row['id']):dict(row) for row in rows})
+    if captures:
+        marks=','.join('?' for _ in captures)
+        rows=g.con.execute(f'''SELECT id,description,created_at
+          FROM captures WHERE owner_id=? AND hidden=0 AND id IN ({marks})''',(owner,*captures)).fetchall()
+        metadata.update({('capture',row['id']):{'label':'Capture '+str(row['id']),
+          'description':row['description'],'created_at':row['created_at']} for row in rows})
+    scene['cards']=[{**c,**metadata[(c['kind'],c['id'])]} for c in published
+        if isinstance(c,dict) and (c.get('kind'),c.get('id')) in metadata]
     return jsonify(room=_room_dict(r),scene=scene)
 
 @app.get('/api/rooms/<int:rid>/media/<kind>/<int:item_id>')

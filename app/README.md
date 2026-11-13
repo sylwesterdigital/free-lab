@@ -246,3 +246,22 @@ checks that lack a verified read-only endpoint report an unverified result witho
 submitting an inference call. The per-profile 3D-provider choice has moved from
 desktop Admin to the XR CONFIG window. The server preference remains persisted.
 No schema migrations, account resets or watcher updates are required.
+
+
+## Real-time 3D room spectator (v0.10.13)
+
+The desktop Rooms spectator uses Three.js r181, loaded lazily when a room is
+opened. It has a continuously rendered requestAnimationFrame WebGL scene (subject
+to actual device refresh rate), smooth mouse/touch orbit, zoom/pan and an Explore
+mode with WASD movement, Q/E altitude and Shift to move faster. F fits the current
+room. The live headset position and orientation, published media positions and
+orientations, and permitted media metadata are interpolated independently of
+the polling cadence (XR publishing every 250 ms; desktop state queries every
+350 ms while visible). The viewer represents the headset as a pink camera avatar,
+loads authenticated media on real 3D planes and shows curved lineage links where
+parent and child are both in the published room scene. Select a card to inspect
+its original image, saved description and immediately visible family links.
+Large-image inspection stays in the desktop room. Privacy and group membership
+are unchanged; raw XR passthrough camera pixels are not shared. Three.js requires
+access to the pinned CDN; the viewer shows an explicit loading error if the
+module is unavailable. WebGL framerate depends on spectator hardware.
