@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.0",
-  "description": "Spatial workstation: manual XR voice, movable diagnostic log, contextual describe, optional ElevenLabs TTS and bounded Meshy 3D previews"
+  "version": "0.10.1",
+  "description": "Spatial hotfix: real Meta image conversation, Aholo 3D routing, XR darkroom, saved library paging, readable scene panels and experimental frame touch"
 }

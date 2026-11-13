@@ -45,6 +45,18 @@ CREATE TABLE IF NOT EXISTS jobs_3d (
  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS jobs_3d_owner ON jobs_3d(owner_id,id DESC);
+CREATE TABLE IF NOT EXISTS profile_settings (
+ user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+ model_3d TEXT NOT NULL DEFAULT 'auto' CHECK(model_3d IN ('auto','aholo','meshy'))
+);
+CREATE TABLE IF NOT EXISTS image_dialogue (
+ id INTEGER PRIMARY KEY,owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ capture_id INTEGER NOT NULL REFERENCES captures(id) ON DELETE CASCADE,
+ object_id INTEGER REFERENCES objects(id) ON DELETE CASCADE,
+ question TEXT NOT NULL DEFAULT '', answer TEXT NOT NULL,
+ created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS image_dialogue_owner ON image_dialogue(owner_id,capture_id,object_id,id);
 CREATE TABLE IF NOT EXISTS provider_secrets (
  provider TEXT PRIMARY KEY, ciphertext BLOB NOT NULL, updated_at TEXT NOT NULL
 );

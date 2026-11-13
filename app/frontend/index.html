@@ -1,9 +1,9 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.0">
+<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.1">
 <title>FREELAB — Step into the spatial world</title>
-<link rel="stylesheet" href="/assets/style.css?v=0.10.0">
+<link rel="stylesheet" href="/assets/style.css?v=0.10.1">
 </head><body>
 <div id="app" class="app-shell">
 <header class="header" aria-label="Site navigation">
@@ -34,7 +34,7 @@
     </nav>
     <aside class="scene-caption"><span class="caption-index">01 / SPATIAL COLLECTOR</span><p>Capture. Bloom.<br>Collect.</p><span class="caption-muted">Capture → recognize → collect in 3D.</span></aside>
     <span id="modelStatus" class="visually-hidden">Models ready on demand</span>
-    <div class="stage-bottom"><span>LIVE EXPERIMENT / 0.10.0</span><span class="stage-line"></span><span>BUILT FOR CURIOSITY</span></div>
+    <div class="stage-bottom"><span>LIVE EXPERIMENT / 0.10.1</span><span class="stage-line"></span><span>BUILT FOR CURIOSITY</span></div>
   </section>
   <section id="workspace" class="workspace workspace-drawer hidden" aria-label="Private inventory">
     <div class="workspace-head"><div><p class="eyebrow">YOUR PERSONAL ARCHIVE</p><h2>Found in your world <span id="objectCounter" class="muted-count">00</span></h2></div><div class="workspace-actions"><div class="tabs"><button class="tab active" data-list="mine">Private</button><button class="tab" data-list="public">Public</button><button class="tab" data-list="bin">Bin</button></div><button id="closeLibrary" class="round-btn" aria-label="Close collection">×</button></div></div>
@@ -75,6 +75,11 @@
   <button type="button" class="secondary-btn" id="armXRMicSettings" onclick="document.getElementById('armXRMic').click()">Enable microphone for XR</button>
 </div><div id="adminTools" class="hidden"><hr><p class="eyebrow">ADMIN / MODEL CONNECTIONS</p><h3>Private API vault</h3><p class="small-muted">API keys are encrypted in the server database. The encryption key stays on Ubuntu outside the Git repository. Saved keys are never returned to the browser.</p><div id="providerList" class="provider-list"></div>
 <div class="usage-meter" id="usageSummary">Loading local budget…</div>
+<div class="provider-result" role="group" aria-label="3D generation provider" style="margin:18px 0 16px">
+ <label for="preferred3D" class="tiny-label">3D GENERATION PROVIDER (NO SILENT FALLBACK)</label>
+ <select id="preferred3D"><option value="aholo">Aholo Lux3D</option><option value="meshy">Meshy 3D</option></select>
+ <p class="small-muted">Aholo uses a time-limited signed image link (2 hours) to fetch the selected private photograph; generation is paid only after confirmation.</p>
+ </div>
 <form id="providerForm"><label for="providerChoice" class="tiny-label">PROVIDER</label>
 <input id="providerChoice" type="hidden" value="meta"><div id="providerChoices" class="provider-grid" role="group" aria-label="Model provider"><button type="button" class="provider-option selected" data-provider="meta">Meta Muse + SAM</button><button type="button" class="provider-option" data-provider="aholo">AHOLO Lux3D</button><button type="button" class="provider-option" data-provider="meshy">Meshy 3D</button><button type="button" class="provider-option" data-provider="tripo">Tripo 3D</button><button type="button" class="provider-option" data-provider="fal">fal.ai</button><button type="button" class="provider-option" data-provider="replicate">Replicate</button><button type="button" class="provider-option" data-provider="openai">OpenAI</button><button type="button" class="provider-option" data-provider="gemini">Gemini</button><button type="button" class="provider-option" data-provider="xai">Grok Imagine</button><button type="button" class="provider-option" data-provider="elevenlabs">ElevenLabs voice</button></div>
 <label class="tiny-label">KEY LOCATION</label><div class="storage-pick" role="group" aria-label="Credential storage">
@@ -94,13 +99,13 @@
 <div id="scanConsent" class="modal hidden"><div class="modal-card"><p class="eyebrow">COST CONFIRMATION</p><h2>Enable periodic scans?</h2><p class="small-muted">One JPEG every 20 seconds can consume a paid Meta Muse API request. This is disabled by default and stops when the page becomes hidden. It counts against FREE LAB's daily request quotas, which are not dollar limits.</p><div class="provider-actions"><button id="cancelScan" class="secondary-btn">Cancel</button><button id="confirmScan" class="primary-btn">Start paid scan</button></div></div></div>
 <div id="changelog" class="modal hidden"><div class="modal-card changelog-card"><div class="modal-title"><div><p class="eyebrow">WHAT'S NEW / DEVELOPMENT LOG</p><h2 id="logTitle">Release notes</h2><p id="logDate" class="small-muted"></p></div><button class="round-btn" id="dismissChangelog" aria-label="Close development log">×</button></div><ul id="logItems"></ul><button class="primary-btn" id="continueChangelog">Start exploring ↗</button></div></div>
 <div id="toast" class="toast hidden" role="status"></div>
-<script src="/assets/sound.js?v=0.10.0" defer></script>
-<script src="/assets/gestures.js?v=0.10.0" defer></script>
-<script src="/assets/strand-geometry.js?v=0.10.0" defer></script>
-<script src="/assets/string-lab.js?v=0.10.0" defer></script>
-<script src="/assets/finger-lab.js?v=0.10.0" defer></script>
-<script src="/assets/frame-lab.js?v=0.10.0" defer></script>
-<script src="/assets/lab-selector.js?v=0.10.0" defer></script>
-<script src="/assets/app.js?v=0.10.0" defer></script><script src="/assets/xr.js?v=0.10.0" defer></script>
-<script src="/assets/scene.mjs?v=0.10.0" type="module"></script>
+<script src="/assets/sound.js?v=0.10.1" defer></script>
+<script src="/assets/gestures.js?v=0.10.1" defer></script>
+<script src="/assets/strand-geometry.js?v=0.10.1" defer></script>
+<script src="/assets/string-lab.js?v=0.10.1" defer></script>
+<script src="/assets/finger-lab.js?v=0.10.1" defer></script>
+<script src="/assets/frame-lab.js?v=0.10.1" defer></script>
+<script src="/assets/lab-selector.js?v=0.10.1" defer></script>
+<script src="/assets/app.js?v=0.10.1" defer></script><script src="/assets/xr.js?v=0.10.1" defer></script>
+<script src="/assets/scene.mjs?v=0.10.1" type="module"></script>
 </body></html>

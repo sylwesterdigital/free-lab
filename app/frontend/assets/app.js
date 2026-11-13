@@ -132,6 +132,7 @@ async function init(){
   try{if(!state.snapshot)throw Error('Upload an image first');const result=await api('/captures',{method:'POST',body:JSON.stringify({image:state.snapshot})});
    notify('Image saved to Spatial Library · open LIB in XR to explore it');state.snapshotOrigin='upload';}
   catch(e){notify('Cannot save imported image · '+e.message);}finally{button.disabled=false;}});
+ const preferred3D=$('preferred3D');if(preferred3D){get3DPreference().then(p=>preferred3D.value=p.provider).catch(()=>{});preferred3D.onchange=async()=>{try{const pref=await save3DPreference(preferred3D.value);notify('3D provider: '+pref.provider+'. No automatic fallback.');}catch(e){notify(e.message);}};}
  $('providerForm').onsubmit=saveProvider;$('testProvider').onclick=testProvider;$('clearSessionKey').onclick=async()=>{state.sessionKeys.delete(currentProvider());$('providerKey').value='';await loadProviderList();await refresh();notify('Tab-only key cleared');};$('segment').onclick=()=>segmentSnapshot();$('toggleScan').onclick=toggleScan;$('cancelScan').onclick=()=>$('scanConsent').classList.add('hidden');$('confirmScan').onclick=startScanConfirmed;document.addEventListener('visibilitychange',()=>{if(document.hidden)stopScan()});
  $('armXRMic')?.addEventListener('click',async()=>{try{const result=await armMicrophone();notify(result)}catch(e){notify('Mic permission: '+e.message)}});
  for(const name of ['spoken','troll']){const el=$('pref-'+name);if(el){el.checked=pref(name);el.onchange=()=>setPref(name,el.checked);}}
@@ -160,10 +161,11 @@ async function saveXRFrame(onLocal){
  return {...r,image:state.snapshot};
 }
 async function createXR3D(cid,oid){
- const payload={provider:'meshy',capture_id:cid,object_id:oid??null,confirm_paid:true};
+ const payload={capture_id:cid,object_id:oid??null,confirm_paid:true};
  return api('/media/3d',{method:'POST',body:JSON.stringify(payload)});
 }
 async function checkXR3D(id,refresh=false){return api('/media/3d/'+id+(refresh?'?refresh=1':''));}
+async function list3DJobs(){const response=await api('/media/3d');return response.jobs||[];}
 async function refresh3DJobs(){
  const panel=$('modelJobs');if(!panel)return;
  panel.replaceChildren();try{
@@ -302,8 +304,11 @@ function startWavPrompt(){
 }
 async function recordWavPrompt(durationMs=12000){const rec=startWavPrompt();await new Promise(resolve=>setTimeout(resolve,Math.max(1000,Math.min(durationMs,90000))));return rec.stop();}
 function currentRecording(){return recorder;}
-async function describeXR(cid,oid=null){const payload={capture_id:cid,object_id:oid};if(sessionMeta())payload.session_api_key=sessionMeta();return api('/media/describe',{method:'POST',body:JSON.stringify(payload)});}
+async function describeXR(cid,oid=null,question=''){const payload={capture_id:cid,object_id:oid,question};if(sessionMeta())payload.session_api_key=sessionMeta();return api('/media/describe',{method:'POST',body:JSON.stringify(payload)});}
 async function modelXRPreview(id){return api('/media/3d/'+id+'/preview');}
+async function get3DPreference(){return api('/preferences/3d');}
+async function save3DPreference(provider){return api('/preferences/3d',{method:'PUT',body:JSON.stringify({provider})});}
+
 async function loadElevenVoices(){return api('/media/voices');}
 
 let pendingPrompt=null;
@@ -339,6 +344,6 @@ function wirePromptEditor(){
  };
 }
 
-window.FreeLab={startWavPrompt,currentRecording,describeXR,modelXRPreview,loadElevenVoices,createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
+window.FreeLab={startWavPrompt,currentRecording,describeXR,modelXRPreview,get3DPreference,save3DPreference,list3DJobs,loadElevenVoices,createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
 document.addEventListener('DOMContentLoaded',()=>{init().catch(e=>notify('Initialization failed: '+e.message));const bloom=$('featureBloom');if(bloom){setTimeout(()=>window.FreeLabSound?.play('arrival'),3000);bloom.querySelectorAll('.feature-seed').forEach(button=>{button.addEventListener('mouseenter',()=>window.FreeLabSound?.hover());button.addEventListener('focus',()=>window.FreeLabSound?.hover());});}});
 })();

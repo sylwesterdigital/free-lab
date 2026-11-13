@@ -1,4 +1,4 @@
-"""FREE LAB 0.10.0: self-contained, no-network media/XR regressions."""
+"""FREE LAB 0.10.1: self-contained, no-network media/XR regressions."""
 import json, struct, sqlite3, tempfile, unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -31,10 +31,10 @@ class SpatialWorkbench(unittest.TestCase):
     def test_description_is_explicit_private_and_cached(self):
         self.assertIn("@app.post('/api/media/describe')",SERVER)
         self.assertIn("(cid,g.user['id'])",SERVER)
-        self.assertIn("row['description'] and not v.get('refresh')",SERVER)
-        self.assertIn('description=row[\'description\'],cached=True',SERVER)
-        self.assertIn('UPDATE objects SET description=?',SERVER)
-        self.assertIn('UPDATE captures SET description=?',SERVER)
+        self.assertIn("image_dialogue WHERE owner_id=?",SERVER)
+        self.assertIn("description=history[-1]['answer'],cached=True",SERVER)
+        self.assertIn('INSERT INTO image_dialogue',SERVER)
+        self.assertIn('providers.describe(raw,key,question=',SERVER)
         self.assertIn('descriptionTexture(value,label)',XR)
         self.assertIn("return describeSelected()",XR)
     def test_separate_movable_debug_window(self):
@@ -48,7 +48,7 @@ class SpatialWorkbench(unittest.TestCase):
         self.assertIn("@app.get('/api/media/3d/<int:jid>/preview')",SERVER)
         self.assertIn("row['status']!='SUCCEEDED'",SERVER)
         self.assertIn('glb_preview.MAX_FILE',SERVER)
-        self.assertIn('spawnMeshPreview(job.id,origin)',XR)
+        self.assertIn('spawnMeshPreview(job.id,item.origin)',XR)
         self.assertIn('createXR3D(target.captureId,target.objectId)',XR)
         self.assertEqual(glb_preview.MAX_TRIANGLES,3600)
     def test_non_xr_upload_and_elevenlabs_opt_in(self):

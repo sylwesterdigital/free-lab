@@ -4,8 +4,9 @@ import base64,hashlib,hmac,io,json,os,re,secrets,sqlite3,threading,time,urllib.r
 from pathlib import Path
 from functools import wraps
 from flask import Flask,abort,g,jsonify,request,send_file,session
+from itsdangerous import URLSafeTimedSerializer,BadSignature,SignatureExpired
 from werkzeug.middleware.proxy_fix import ProxyFix
-from . import db,providers,secrets as keyvault,sam,provider_checks,media,meshy3d,glb_preview
+from . import db,providers,secrets as keyvault,sam,provider_checks,media,meshy3d,aholo3d,glb_preview
 
 APP_ROOT=Path(__file__).resolve().parents[1]
 DATA_DIR=Path(os.getenv('FREE_LAB_DATA_DIR',APP_ROOT/'var')).resolve()
@@ -146,6 +147,24 @@ def check_provider(provider):
     if not key:return jsonify(error='Choose a session key or save a server key first'),400
     result=provider_checks.check(provider,key)
     return jsonify(result)
+
+def preferred_3d_provider():
+    r=g.con.execute('SELECT model_3d FROM profile_settings WHERE user_id=?',(g.user['id'],)).fetchone()
+    value=r['model_3d'] if r else 'auto'
+    if value=='auto':
+        return 'aholo' if keyvault.get_key(g.con,'aholo') else 'meshy'
+    return value
+
+@app.route('/api/preferences/3d',methods=['GET','PUT'])
+@require_user
+def model_3d_preference():
+    if request.method=='GET':
+        return jsonify(provider=preferred_3d_provider(),available={k:bool(keyvault.get_key(g.con,k)) for k in ('aholo','meshy')})
+    v=body();value=v.get('provider')
+    if value not in ('auto','aholo','meshy'):return jsonify(error='Choose Aholo or Meshy'),400
+    with g.con:
+        g.con.execute('INSERT INTO profile_settings(user_id,model_3d) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET model_3d=excluded.model_3d',(g.user['id'],value))
+    return jsonify(provider=preferred_3d_provider())
 
 @app.get('/api/usage')
 @require_user
@@ -537,7 +556,7 @@ def admin_diagnostics():
 def media_capabilities():
     return jsonify(image_edit={'meta':{'model':'muse-image-1.0','available':bool(keyvault.get_meta_key(g.con))}},
                    speech={'meta':{'model':'muse-voice-transcribe-1.0','available':bool(keyvault.get_meta_key(g.con))}},
-                   video={},three_d={'meshy':{'available':bool(keyvault.get_key(g.con,'meshy')),'async':True,'model':'meshy-6-lite'}},message='3D generation is opt-in via Meshy. Other 3D/video provider adapters are not yet connected.')
+                   video={},three_d={p:{'available':bool(keyvault.get_key(g.con,p)),'async':True} for p in ('aholo','meshy')},message='3D provider preference selects Aholo or Meshy; no silent fallback.')
 
 def job_3d_dict(row):
     return {'id':row['id'],'capture_id':row['capture_id'],'object_id':row['object_id'],
@@ -551,12 +570,30 @@ def jobs_3d():
     rows=g.con.execute('SELECT * FROM jobs_3d WHERE owner_id=? ORDER BY id DESC LIMIT 500',(g.user['id'],)).fetchall()
     return jsonify(jobs=[job_3d_dict(row) for row in rows])
 
+@app.get('/api/media/3d/source/<token>')
+def signed_3d_source(token):
+    """Private JPEG made temporarily fetchable by a selected 3D provider only.
+    Signed URLs expire in two hours; ordinary capture endpoints remain authenticated.
+    """
+    try:info=URLSafeTimedSerializer(str(app.secret_key),salt='freelab-aholo-image-v1').loads(token,max_age=7200)
+    except (BadSignature,SignatureExpired):abort(404)
+    with db.connect(DB) as con:
+        if info.get('oid'):
+            row=con.execute('SELECT image_name FROM objects WHERE id=? AND capture_id=? AND owner_id=? AND shelf!=?',
+                 (info['oid'],info['cid'],info['uid'],'bin')).fetchone()
+        else:
+            row=con.execute('SELECT image_name FROM captures WHERE id=? AND owner_id=? AND hidden=0',(info['cid'],info['uid'])).fetchone()
+    if not row or not (IMAGE_DIR/row['image_name']).is_file():abort(404)
+    resp=send_file(IMAGE_DIR/row['image_name'],mimetype='image/jpeg',max_age=0)
+    resp.headers['Cache-Control']='private, no-store';return resp
+
 @app.post('/api/media/3d')
 @require_user
 def media_3d_start():
     v=body()
-    if v.get('provider','meshy')!='meshy':return jsonify(error='Only Meshy 3D generation is connected'),422
     if v.get('confirm_paid') is not True:return jsonify(error='Explicit paid-task confirmation required'),400
+    provider=preferred_3d_provider()
+    if v.get('provider') not in (None,'auto',provider):return jsonify(error='Provider selection changed. Reopen 3D settings to confirm.'),409
     cid=v.get('capture_id');oid=v.get('object_id')
     if type(cid) is not int or cid<=0:return jsonify(error='Capture ID required'),400
     cap=g.con.execute('SELECT image_name FROM captures WHERE id=? AND owner_id=? AND hidden=0',(cid,g.user['id'])).fetchone()
@@ -564,26 +601,25 @@ def media_3d_start():
     name=cap['image_name']
     if oid is not None:
         if type(oid) is not int or oid<=0:return jsonify(error='Invalid object ID'),400
-        obj=g.con.execute('SELECT image_name FROM objects WHERE id=? AND capture_id=? AND owner_id=? AND shelf!=?',
-                          (oid,cid,g.user['id'],'bin')).fetchone()
+        obj=g.con.execute('SELECT image_name FROM objects WHERE id=? AND capture_id=? AND owner_id=? AND shelf!=?',(oid,cid,g.user['id'],'bin')).fetchone()
         if not obj or not obj['image_name']:abort(404)
         name=obj['image_name']
-    key=keyvault.get_key(g.con,'meshy')
-    if not key:return jsonify(error='Save a Meshy API key in Admin → Model Connections before generating 3D'),503
+    key=keyvault.get_key(g.con,provider)
+    if not key:return jsonify(error=f'{provider.upper()} API NOT CONFIGURED. Add its key in Admin → Model Connections.'),503
     raw=(IMAGE_DIR/name).read_bytes()
-    digest=hashlib.sha256(raw+secrets.token_bytes(16)+b'meshy-image-to-3d').hexdigest()
-    try:call=db.begin_inference(g.con,g.user['id'],digest,'meshy-image-to-3d',
-         daily_cap=application_inference_limits()['daily_cap'],
-         user_cap=application_inference_limits()['user_cap'],
-         cooldown=application_inference_limits()['cooldown'])
+    digest=hashlib.sha256(raw+secrets.token_bytes(16)+provider.encode()).hexdigest()
+    limits=application_inference_limits()
+    try:call=db.begin_inference(g.con,g.user['id'],digest,provider+'-image-to-3d',daily_cap=limits['daily_cap'],user_cap=limits['user_cap'],cooldown=limits['cooldown'])
     except ValueError as e:return jsonify(error=str(e)),429
     try:
-        task=meshy3d.submit(raw,key)
+        if provider=='aholo':
+            signed=URLSafeTimedSerializer(str(app.secret_key),salt='freelab-aholo-image-v1').dumps({'uid':g.user['id'],'cid':cid,'oid':oid,'nonce':secrets.token_hex(12)})
+            task=aholo3d.submit('https://free-lab.cam/api/media/3d/source/'+signed,key)
+        else:task=meshy3d.submit(raw,key)
         with g.con:
-            job=g.con.execute('''INSERT INTO jobs_3d(owner_id,capture_id,object_id,provider_task)
-                   VALUES(?,?,?,?)''',(g.user['id'],cid,oid,task)).lastrowid
+            job=g.con.execute("INSERT INTO jobs_3d(owner_id,capture_id,object_id,provider,provider_task) VALUES(?,?,?,?,?)",(g.user['id'],cid,oid,provider,task)).lastrowid
         db.finish_inference(g.con,call,'ok')
-        return jsonify(id=job,status='PENDING',provider='meshy',paid_task_submitted=True),202
+        return jsonify(id=job,status='PENDING',provider=provider,paid_task_submitted=True),202
     except (ValueError,RuntimeError,OSError) as e:
         db.finish_inference(g.con,call,'error');return jsonify(error=str(e)),502
 
@@ -594,9 +630,9 @@ def media_3d_status(jid):
     if not row:abort(404)
     # The read-only status call never creates an additional billable task.
     if row['status'] in ('PENDING','IN_PROGRESS','UNKNOWN') or (row['status']=='SUCCEEDED' and request.args.get('refresh')=='1'):
-        key=keyvault.get_key(g.con,'meshy')
-        if not key:return jsonify(error='Meshy API key missing: cannot poll task'),503
-        try:info=meshy3d.status(row['provider_task'],key)
+        key=keyvault.get_key(g.con,row['provider'])
+        if not key:return jsonify(error=row['provider'].upper()+' key missing: cannot poll task'),503
+        try:info=(aholo3d.status(row['provider_task'],key) if row['provider']=='aholo' else meshy3d.status(row['provider_task'],key))
         except (RuntimeError,ValueError) as e:return jsonify(error=str(e)),502
         with g.con:
             g.con.execute('''UPDATE jobs_3d SET status=?,progress=?,credits=?,glb_url=?,thumbnail_url=?,error=?,
@@ -610,9 +646,9 @@ def media_3d_status(jid):
 @require_user
 def media_3d_preview(jid):
     """Return small bounded geometry, not a 20-100MB textured model to Quest."""
-    row=g.con.execute('SELECT status,glb_url FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
+    row=g.con.execute('SELECT status,provider,glb_url FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
     if not row:abort(404)
-    if row['status']!='SUCCEEDED' or not meshy3d.safe_file_url(row['glb_url']):
+    if row['status']!='SUCCEEDED' or not (meshy3d.safe_file_url(row['glb_url']) if row['provider']=='meshy' else aholo3d.safe_preview_url(row['glb_url'])):
         return jsonify(error='3D model not ready for preview'),409
     req=urllib.request.Request(row['glb_url'],headers={'User-Agent':'FREELAB-GeometryPreview/0.10'})
     opener=urllib.request.build_opener(meshy3d.NoRedirect)
@@ -623,7 +659,7 @@ def media_3d_preview(jid):
             raw=response.read(glb_preview.MAX_FILE+1)
         geometry=glb_preview.decode(raw)
         return jsonify(**geometry)
-    except urllib.error.HTTPError as e:return jsonify(error=f'Meshy model download HTTP {e.code}; renew the link in Library'),502
+    except urllib.error.HTTPError as e:return jsonify(error=f'3D model download HTTP {e.code}; renew the link in Library'),502
     except (ValueError,OSError,KeyError,IndexError,TypeError) as e:return jsonify(error=str(e)),422
 
 @app.post('/api/media/edit')
@@ -704,34 +740,32 @@ def media_edit():
 @require_user
 def media_describe():
     v=body();cid=v.get('capture_id');oid=v.get('object_id')
-    if type(cid) is not int or cid<=0:return jsonify(error='Select a capture first'),400
-    cap=g.con.execute('SELECT id,image_name,description FROM captures WHERE id=? AND owner_id=? AND hidden=0',
-                      (cid,g.user['id'])).fetchone()
+    if type(cid) is not int or cid<=0:return jsonify(error='Select an image to describe'),400
+    cap=g.con.execute('SELECT id,image_name FROM captures WHERE id=? AND owner_id=? AND hidden=0',(cid,g.user['id'])).fetchone()
     if not cap:abort(404)
     obj=None
     if oid is not None:
-        if type(oid) is not int or oid<=0:return jsonify(error='Invalid object ID'),400
-        obj=g.con.execute('SELECT id,image_name,description FROM objects WHERE id=? AND owner_id=? AND capture_id=? AND shelf!=?',
-             (oid,g.user['id'],cid,'bin')).fetchone()
+        if type(oid) is not int:return jsonify(error='Invalid object ID'),400
+        obj=g.con.execute('SELECT id,image_name FROM objects WHERE id=? AND owner_id=? AND capture_id=? AND shelf!=?',(oid,g.user['id'],cid,'bin')).fetchone()
         if not obj or not obj['image_name']:abort(404)
-    row=obj or cap
-    if row['description'] and not v.get('refresh'):
-        return jsonify(description=row['description'],cached=True,object_id=oid,capture_id=cid)
+    question=str(v.get('question') or '').strip()[:500]
+    rows=g.con.execute("SELECT question,answer FROM image_dialogue WHERE owner_id=? AND capture_id=? AND object_id IS ? ORDER BY id DESC LIMIT 10",(g.user['id'],cid,oid)).fetchall()
+    history=[{'question':r['question'],'answer':r['answer']} for r in reversed(rows)]
+    if not question and history and not v.get('refresh'):
+        return jsonify(description=history[-1]['answer'],cached=True,history=history,capture_id=cid,object_id=oid)
     key=request_meta_key(v)
-    if not key:return jsonify(error='Meta API key not configured; no description requested'),503
-    raw=(IMAGE_DIR/row['image_name']).read_bytes()
-    digest=hashlib.sha256(raw+b'|describe-v1|'+secrets.token_bytes(8)).hexdigest()
-    limits=application_inference_limits()
-    try:call=db.begin_inference(g.con,g.user['id'],digest,'muse-describe',
-         daily_cap=limits['daily_cap'],user_cap=limits['user_cap'],cooldown=limits['cooldown'])
+    if not key:return jsonify(error='META API NOT CONFIGURED. No paid request started.'),503
+    raw=(IMAGE_DIR/(obj or cap)['image_name']).read_bytes()
+    limits=application_inference_limits();digest=hashlib.sha256(raw+secrets.token_bytes(12)+b'vision-chat').hexdigest()
+    try:call=db.begin_inference(g.con,g.user['id'],digest,'muse-vision-dialogue',daily_cap=limits['daily_cap'],user_cap=limits['user_cap'],cooldown=limits['cooldown'])
     except ValueError as e:return jsonify(error=str(e)),429
     try:
-        description,usage=providers.describe(raw,key)
+        prior=(' Previous conversation: '+' '.join(f"Q: {r['question']} A: {r['answer']}" for r in history[-3:])) if history else ''
+        answer,usage=providers.describe(raw,key,question=(question+prior)[:500] if question else '')
         with g.con:
-            if obj:g.con.execute('UPDATE objects SET description=? WHERE id=? AND owner_id=?',(description,oid,g.user['id']))
-            else:g.con.execute('UPDATE captures SET description=? WHERE id=? AND owner_id=?',(description,cid,g.user['id']))
+            g.con.execute('INSERT INTO image_dialogue(owner_id,capture_id,object_id,question,answer) VALUES(?,?,?,?,?)',(g.user['id'],cid,oid,question,answer))
         db.finish_inference(g.con,call,'ok',usage)
-        return jsonify(description=description,cached=False,usage=usage,object_id=oid,capture_id=cid)
+        return jsonify(description=answer,cached=False,history=history+[{'question':question,'answer':answer}],usage=usage,capture_id=cid,object_id=oid)
     except (OSError,ValueError,RuntimeError) as e:
         db.finish_inference(g.con,call,'error');return jsonify(error=str(e)),502
 

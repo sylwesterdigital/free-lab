@@ -14,7 +14,7 @@ function noiseBurst(start=0,duration=.22,vol=.07,filter=1600){
  gain.gain.setValueAtTime(.0001,ctx.currentTime+start);gain.gain.linearRampToValueAtTime(vol,ctx.currentTime+start+.015);
  gain.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+start+duration);source.start(ctx.currentTime+start);source.stop(ctx.currentTime+start+duration+.01);
 }
-function play(name){if(!enabled)return;if(!ctx){if(name==='arrival')arrivalQueued=true;return;}if(name!=='arrival')arrivalQueued=false;if(ctx.state!=='running'){if(name==='arrival'){arrivalQueued=true;return;}ctx.resume().then(()=>play(name)).catch(()=>{});return;}if(name==='shutter'){noiseBurst(0,.075,.10,3500);noiseBurst(.080,.05,.055,1800);}if(name==='paper'){noiseBurst(0,.18,.065,1100);noiseBurst(.09,.18,.043,900);noiseBurst(.2,.12,.035,1400);}
+function play(name){if(!enabled)return;if(!ctx){if(name==='arrival')arrivalQueued=true;return;}if(name!=='arrival')arrivalQueued=false;if(ctx.state!=='running'){if(name==='arrival'){arrivalQueued=true;return;}ctx.resume().then(()=>play(name)).catch(()=>{});return;}if(name==='type')note(890+Math.random()*270,ctx.currentTime+.006,.027,.006,'triangle');if(name==='squeak')note(650,ctx.currentTime+.006,.14,.017,'sine',1.28);if(name==='shutter'){noiseBurst(0,.075,.10,3500);noiseBurst(.080,.05,.055,1800);}if(name==='paper'){noiseBurst(0,.18,.065,1100);noiseBurst(.09,.18,.043,900);noiseBurst(.2,.12,.035,1400);}
  const now=ctx.currentTime+.012;for(const [freq,offset,duration,vol] of sequences[name]||[])note(freq,now+offset,duration,vol,'sine',name==='capture'?.82:1);}
 // A synthesised bowed-string tone: shorter is lower, stretching increases pitch.
 // Continuous oscillators are created only while the experimental lab is active.

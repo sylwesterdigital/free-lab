@@ -1,16 +1,19 @@
 {
-  "version": "0.10.0",
-  "title": "Spatial Workbench, Descriptions & Voice · v0.10.0",
-  "datetime": "2026-11-12 22:18 UTC",
+  "version": "0.10.1",
+  "title": "Spatial Reliability & Image Conversations · v0.10.1",
+  "datetime": "2026-11-13 01:08 UTC",
   "changes": [
-    "Reduced the single image-action popover to 90%, set it further behind the card plane; actions are EXTRACT, DESCRIBE, REFINE, PROMPT, VOICE and 3D.",
-    "Lowered the microphone/capture/extract trio; temporary statuses now appear as transparent readable text rather than large fixed cards.",
-    "Voice recording is now toggled by pressing the microphone again; a live 36-band volume/frequency ring displays levels, then transcript OK/Cancel without keyboard.",
-    "Descriptions of privately owned captures or extracted objects are requested explicitly from Meta, saved in SQLite, displayed in closable white cards and optionally spoken.",
-    "ElevenLabs added to server-side encrypted provider vault, with read-only voice catalog and explicitly opted-in synthetic mascot speech; system speech remains default.",
-    "3D Meshy status polling reports failure/progress, with successful models simplified into an untextured, bounded XR geometry preview. Full GLB remains downloadable.",
-    "LOG panel now moves independently in room space, can be resized or closed; non-admins no longer generate repeated Forbidden diagnostics calls.",
-    "Collapsing a cloud animates its stored cards toward the LIB icon; uploaded non-XR photographs can be saved to the same private spatial library.",
-    "Existing watcher unchanged; accounts, images, secrets, quotas, and experimental hand labs preserved."
+    "Fixed DESCRIBE: actual Meta vision analysis of the selected private JPEG; previous refine prompt no longer masquerades as a description.",
+    "Added image-specific multi-turn Meta questions with a compact bubble, native keyboard/voice input, private dialogue history and explicit paid calls.",
+    "Added selected 3D-provider preference; Aholo Lux3D now submits and polls actual tasks, instead of silently invoking Meshy.",
+    "Aholo image submission uses an expiring signed source URL (two hours) only after paid confirmation; no automatic fallback.",
+    "Restored all older private capture sessions through paged XR Library navigation; 3D job polling resumes after XR restart.",
+    "Added closable cinema/darkroom image preview directly in XR, no extra network request.",
+    "Adjusted image orientation to camera elevation, and independently placed LOG to the camera viewing pitch.",
+    "Status updates appear with a medium-fast typewriter reveal and very soft WebAudio typing sounds.",
+    "Slowed the 3D mascot to curved floating paths with optional, periodic browser/ElevenLabs speech and subtle expression changes.",
+    "Added pinch relocation and sustained little-fingertip deletion of hand-created experimental frames.",
+    "Experimental-mode exit cleans input capture without deleting collections; exits are no longer tied to a successful render frame.",
+    "No new storage, model or daily usage quotas. Existing watcher unchanged."
   ]
 }

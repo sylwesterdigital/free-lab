@@ -64,7 +64,7 @@ def identify(jpeg, model=None, api_key=None):
         raise RuntimeError('Meta API returned an incompatible object response') from e
 
 
-def describe(jpeg: bytes, api_key: str, model: str = 'muse-ember-1.0'):
+def describe(jpeg: bytes, api_key: str, model: str = 'muse-ember-1.0', question: str = '', history=None):
     """Describe the actual image only. A paid, user-initiated vision request."""
     if model not in MODEL_IDS: raise ValueError('Unsupported Meta vision model')
     if not api_key: raise RuntimeError('Meta API key not configured')
@@ -73,7 +73,7 @@ def describe(jpeg: bytes, api_key: str, model: str = 'muse-ember-1.0'):
     uri = 'data:image/jpeg;base64,' + base64.b64encode(jpeg).decode('ascii')
     payload = {'model':model,'messages':[
        {'role':'system','content':'Describe only what is clearly visible in the supplied image. Do not identify people or invent objects, unseen surfaces, depth data, room layout or locations. Focus on objects, colors, positions within the photograph and useful visual details. Use 2-4 concise sentences in English.'},
-       {'role':'user','content':[{'type':'text','text':'Provide an accessible description of this photograph for a private spatial collection.'},{'type':'image_url','image_url':{'url':uri}}]}],
+       {'role':'user','content':[{'type':'text','text':(question.strip()[:500] if question else 'Describe what is actually visible in this image, including plausible ingredients, materials and any uncertainty. Do not describe editing instructions.')},{'type':'image_url','image_url':{'url':uri}}]}],
        'max_completion_tokens':500,'store':False}
     req=urllib.request.Request(API_URL,data=json.dumps(payload).encode('utf-8'),method='POST',
         headers={'Authorization':'Bearer '+api_key,'Content-Type':'application/json','User-Agent':'FREELAB-Describe/0.10'})
