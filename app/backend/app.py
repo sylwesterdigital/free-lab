@@ -207,8 +207,8 @@ def segment_image():
         source=IMAGE_DIR/src['image_name']
         if not source.is_file():return jsonify(error='Selected image missing from server'),404
         raw=source.read_bytes()
-        if len(raw)>2_000_000 or not raw.startswith(b'\xff\xd8'):
-            return jsonify(error='Selected object must be a valid JPEG'),422
+        if len(raw)>10_000_000 or not (raw.startswith(b'\xff\xd8') or raw.startswith(b'\x89PNG\r\n\x1a\n')):
+            return jsonify(error='Selected object must be a saved image'),422
     else:
         try:raw=decode_jpeg(v)
         except ValueError as e:return jsonify(error=str(e)),400
@@ -223,37 +223,33 @@ def segment_image():
        user_cap=application_inference_limits()['user_cap'])
     except ValueError as e:return jsonify(error=str(e)),429
     try:
-        result=sam.segment_jpeg(raw,prompt,api_key)
+        from PIL import Image, ImageOps
+        model_jpeg=sam.jpeg_for_model(raw)
+        result=sam.segment_jpeg(model_jpeg,prompt,api_key)
+        regions=result.pop('_regions',[])
         db.finish_inference(g.con,call,'ok',result.get('usage'))
         result['saved_ids']=[]
-        if v.get('save') is True and result['boxes']:
-            # Persist bounded IMAGE CROPS (not mask cutouts); usable immediately in inventory.
-            from PIL import Image, ImageOps
+        if v.get('save') is True and regions:
             Image.MAX_IMAGE_PIXELS=12_000_000
             photo=Image.open(io.BytesIO(raw))
-            if photo.width * photo.height > 12_000_000:
-                raise ValueError('JPEG resolution exceeds safe segmentation crop size')
-            photo=ImageOps.exif_transpose(photo).convert('RGB')
-            for box in result['boxes'][:6]:
-                x1,y1,x2,y2=[int(n) for n in box['box']]
-                w,h=box['image_size']; sx=photo.width/w;sy=photo.height/h
-                crop=photo.crop((max(0,round(x1*sx)),max(0,round(y1*sy)),
-                                 min(photo.width,round((x2+1)*sx)),min(photo.height,round((y2+1)*sy))))
-                if crop.width<8 or crop.height<8:continue
-                crop.thumbnail((960,960))
-                name=secrets.token_hex(16)+'.jpg'
-                out=IMAGE_DIR/name
-                crop.save(out,format='JPEG',quality=78,optimize=True)
+            if photo.width*photo.height>12_000_000:
+                raise ValueError('Image resolution exceeds safe segmentation size')
+            for region in regions[:8]:
+                try:content=sam.cutout_png(photo,region)
+                except ValueError:continue
+                name=secrets.token_hex(16)+'.png';out=IMAGE_DIR/name
+                out.write_bytes(content)
                 try:
                     with g.con:
                         oid=g.con.execute('''INSERT INTO objects(owner_id,label,description,provider,image_name,sha256,capture_id,parent_object_id,operation)
                           VALUES(?,?,?,?,?,?,?,?,?)''',
-                        (g.user['id'],prompt,'SAM 3.1 bounding-box crop (not a decoded segmentation mask)',
-                         'sam-3.1-box',name,hashlib.sha256(out.read_bytes()).hexdigest(),cid,parent_id,'segmentation')).lastrowid
+                        (g.user['id'],prompt,'Transparent SAM 3.1 object cutout',
+                         'sam-3.1-mask',name,hashlib.sha256(content).hexdigest(),cid,parent_id,'segmentation')).lastrowid
                     result['saved_ids'].append(oid)
                 except Exception:
                     out.unlink(missing_ok=True)
                     raise
+        result['cutouts_saved']=len(result['saved_ids'])
         return jsonify(result)
     except (RuntimeError,ValueError) as e:
         db.finish_inference(g.con,call,'error')
@@ -340,7 +336,7 @@ def image(oid):
     if row['visibility']!='public' and (not user or user['id']!=row['owner_id']):abort(404)
     path=IMAGE_DIR/row['image_name']
     if not path.is_file():abort(404)
-    return send_file(path,mimetype='image/jpeg',conditional=True,max_age=0)
+    return send_file(path,mimetype='image/png' if path.suffix.lower()=='.png' else 'image/jpeg',conditional=True,max_age=0)
 
 @app.get('/api/shared/<token>')
 def shared(token):
@@ -356,7 +352,7 @@ def shared_image(token):
     digest=hashlib.sha256(token.encode()).hexdigest()
     row=g.con.execute("SELECT image_name FROM objects WHERE share_hash=? AND visibility='link'",(digest,)).fetchone()
     if not row or not row['image_name']:abort(404)
-    return send_file(IMAGE_DIR/row['image_name'],mimetype='image/jpeg',max_age=0)
+    return send_file(IMAGE_DIR/row['image_name'],mimetype='image/png' if row['image_name'].endswith('.png') else 'image/jpeg',max_age=0)
 
 @app.post('/api/objects')
 @require_user
@@ -443,6 +439,7 @@ def capture():
         if type(cid) is not int or not g.con.execute('SELECT 1 FROM captures WHERE id=? AND owner_id=?',(cid,g.user['id'])).fetchone():
             return jsonify(error='Capture is not owned by this profile'),403
     parent_id=v.get('object_id')
+    source_original=None
     if parent_id is not None:
         if type(parent_id) is not int or not cid:
             return jsonify(error='A private capture and selected object are required'),400
@@ -453,11 +450,14 @@ def capture():
         source_path=IMAGE_DIR/src['image_name']
         if not source_path.is_file():return jsonify(error='Selected object image missing'),404
         raw=source_path.read_bytes()
-        if not 100<len(raw)<=2_000_000 or not (raw.startswith(b'\xff\xd8') and raw.endswith(b'\xff\xd9')):
-            return jsonify(error='Selected object must be a valid saved JPEG'),422
+        if not 100<len(raw)<=10_000_000 or not (raw.startswith(b'\xff\xd8') or raw.startswith(b'\x89PNG\r\n\x1a\n')):
+            return jsonify(error='Selected object must be a saved JPEG or PNG'),422
+        source_original=raw
+        raw=sam.jpeg_for_model(raw)
     else:
         try:raw=decode_jpeg(v)
         except ValueError as e:return jsonify(error=str(e)),400
+    if source_original is None:source_original=raw
     digest=hashlib.sha256(raw).hexdigest()
     use_model=v.get('recognize') is True
     if use_model and not request_meta_key(v):
@@ -489,33 +489,67 @@ def capture():
         from PIL import Image,ImageOps
         Image.MAX_IMAGE_PIXELS=12_000_000
         try:
-            im=Image.open(io.BytesIO(raw))
+            im=Image.open(io.BytesIO(source_original))
             if im.width*im.height>12_000_000:return jsonify(error='Image pixels exceed 12 million'),400
-            source=ImageOps.exif_transpose(im).convert('RGB')
+            source=ImageOps.exif_transpose(im).convert('RGBA')
         except Exception:return jsonify(error='Cannot decode capture JPEG'),400
+    regions_by_id={}
+    if use_model and v.get('cutouts') is True and source is not None:
+        # A single paid SAM request receives up to 8 Muse candidate boxes, rather
+        # than one costly model call per object. The mask refines each box.
+        prompt_boxes=[];indices=[]
+        for idx,item in enumerate(detections[:8]):
+            bounds=item.get('box')
+            if not isinstance(bounds,(list,tuple)) or len(bounds)!=4:continue
+            try:
+                a,b,c,d=[int(x) for x in bounds]
+                box=(max(0,int(a*source.width/1000)),max(0,int(b*source.height/1000)),
+                     min(source.width,int(c*source.width/1000)+1),min(source.height,int(d*source.height/1000)+1))
+            except (TypeError,ValueError):continue
+            if box[2]-box[0]<4 or box[3]-box[1]<4:continue
+            prompt_boxes.append(box);indices.append(idx)
+        if prompt_boxes:
+            try:mask_call=db.begin_inference(g.con,g.user['id'],hashlib.sha256(raw+b'|sam-cutouts|'+secrets.token_bytes(12)).hexdigest(),
+                  'sam-3.1',daily_cap=application_inference_limits()['daily_cap'],user_cap=application_inference_limits()['user_cap'])
+            except ValueError as e:return jsonify(error='SAM mask call not permitted: '+str(e)),429
+            try:
+                response=sam.segment_jpeg(sam.jpeg_for_model(raw),'',request_meta_key(v),object_boxes=prompt_boxes)
+                for region in response.pop('_regions',[]):
+                    if region['object_id'].isdigit():
+                        n=int(region['object_id'])
+                        if n<len(indices):regions_by_id[indices[n]]=region
+                db.finish_inference(g.con,mask_call,'ok',response.get('usage'))
+            except (RuntimeError,ValueError) as e:
+                db.finish_inference(g.con,mask_call,'error')
+                return jsonify(error='Object detection worked, but SAM cutouts failed: '+str(e)),502
+    cutout_count=0
     with g.con:
-        for obj in detections:
+        for idx,obj in enumerate(detections):
             content=raw
             box=obj.get('box')
-            if source is not None and box and box!=[0,0,1000,1000]:
+            region=regions_by_id.get(idx)
+            if region is not None:
+                try:content=sam.cutout_png(source,region);cutout_count+=1
+                except ValueError:region=None
+            if region is None and source is not None and box and box!=[0,0,1000,1000]:
                 x1,y1,x2,y2=box
                 pad=32
                 left=max(0,int((x1-pad)*source.width/1000));top=max(0,int((y1-pad)*source.height/1000))
                 right=min(source.width,int((x2+pad)*source.width/1000));bottom=min(source.height,int((y2+pad)*source.height/1000))
                 if right-left>=12 and bottom-top>=12:
                     crop=source.crop((left,top,right,bottom));crop.thumbnail((800,800))
-                    mem=io.BytesIO();crop.save(mem,format='JPEG',quality=77,optimize=True)
+                    mem=io.BytesIO();crop.convert('RGB').save(mem,format='JPEG',quality=77,optimize=True)
                     content=mem.getvalue()
-            name=secrets.token_hex(16)+'.jpg';path=IMAGE_DIR/name;path.write_bytes(content)
+            name=secrets.token_hex(16)+('.png' if region is not None else '.jpg');path=IMAGE_DIR/name;path.write_bytes(content)
             try:
                 oid=g.con.execute('''INSERT INTO objects(owner_id,label,description,provider,image_name,sha256,capture_id,parent_object_id,operation)
                   VALUES(?,?,?,?,?,?,?,?,?)''',
-                  (g.user['id'],obj['label'],obj['description'],model,name,hashlib.sha256(content).hexdigest(),cid,
+                  (g.user['id'],obj['label'],obj['description'],model+'+sam-3.1-mask' if region is not None else model,name,hashlib.sha256(content).hexdigest(),cid,
                    parent_id,'nested_extraction' if parent_id is not None else 'recognition')).lastrowid
             except Exception:
                 path.unlink(missing_ok=True);raise
             ids.append(oid)
-    return jsonify(ids=ids,objects=detections,provider=model,usage=usage),201
+    return jsonify(ids=ids,objects=detections,provider=model,usage=usage,cutouts_saved=cutout_count,rectangular_crops=len(ids)-cutout_count),201
 
 
 # Image operations use a capability router. Only image-edit is live in this release;
@@ -584,7 +618,7 @@ def signed_3d_source(token):
         else:
             row=con.execute('SELECT image_name FROM captures WHERE id=? AND owner_id=? AND hidden=0',(info['cid'],info['uid'])).fetchone()
     if not row or not (IMAGE_DIR/row['image_name']).is_file():abort(404)
-    resp=send_file(IMAGE_DIR/row['image_name'],mimetype='image/jpeg',max_age=0)
+    resp=send_file(IMAGE_DIR/row['image_name'],mimetype='image/png' if row['image_name'].endswith('.png') else 'image/jpeg',max_age=0)
     resp.headers['Cache-Control']='private, no-store';return resp
 
 @app.post('/api/media/3d')
@@ -606,7 +640,7 @@ def media_3d_start():
         name=obj['image_name']
     key=keyvault.get_key(g.con,provider)
     if not key:return jsonify(error=f'{provider.upper()} API NOT CONFIGURED. Add its key in Admin → Model Connections.'),503
-    raw=(IMAGE_DIR/name).read_bytes()
+    raw=sam.jpeg_for_model((IMAGE_DIR/name).read_bytes())
     digest=hashlib.sha256(raw+secrets.token_bytes(16)+provider.encode()).hexdigest()
     limits=application_inference_limits()
     try:call=db.begin_inference(g.con,g.user['id'],digest,provider+'-image-to-3d',daily_cap=limits['daily_cap'],user_cap=limits['user_cap'],cooldown=limits['cooldown'])
@@ -702,14 +736,14 @@ def media_edit():
                     (source_id,g.user['id'])).fetchone()
             if not row or not row['image_name']:return jsonify(error='Mix source not available for this profile'),404
             raw=(IMAGE_DIR/row['image_name']).read_bytes()
-            if len(raw)>2_000_000 or not raw.startswith(b'\xff\xd8'):return jsonify(error='Mix image must be a small JPEG'),422
+            raw=sam.jpeg_for_model(raw)
             raws.append(raw)
             if len(raws)==1:
                 if row['capture_id']:cid=row['capture_id']
                 parent=source_id if kind=='object_id' else None
         label='Mix of two images'
     else:
-        raws=[(IMAGE_DIR/source_name).read_bytes()]
+        raws=[sam.jpeg_for_model((IMAGE_DIR/source_name).read_bytes())]
     if any(not raw.startswith(b'\xff\xd8') or len(raw)>2_000_000 for raw in raws):return jsonify(error='Stored source is not a suitable JPEG'),422
     key=request_meta_key(v)
     if not key:return jsonify(error='Configure Meta API key first'),503
@@ -755,7 +789,7 @@ def media_describe():
         return jsonify(description=history[-1]['answer'],cached=True,history=history,capture_id=cid,object_id=oid)
     key=request_meta_key(v)
     if not key:return jsonify(error='META API NOT CONFIGURED. No paid request started.'),503
-    raw=(IMAGE_DIR/(obj or cap)['image_name']).read_bytes()
+    raw=sam.jpeg_for_model((IMAGE_DIR/(obj or cap)['image_name']).read_bytes())
     limits=application_inference_limits();digest=hashlib.sha256(raw+secrets.token_bytes(12)+b'vision-chat').hexdigest()
     try:call=db.begin_inference(g.con,g.user['id'],digest,'muse-vision-dialogue',daily_cap=limits['daily_cap'],user_cap=limits['user_cap'],cooldown=limits['cooldown'])
     except ValueError as e:return jsonify(error=str(e)),429

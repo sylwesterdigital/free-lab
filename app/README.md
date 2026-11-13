@@ -145,3 +145,6 @@ Hold the left controller thumbstick, tilt to select FRAME, CHAIN, CUBES, THROW, 
 
 ## v0.10.8 Persistent Experimental Menu & Mascot Impacts
 Press **X on the left controller** to open the experiment selector; it stays visible beside the controller. Tilt **left stick** left or right (with a return to centre between choices) and press the **left trigger** to apply. Press X again to dismiss without changing the mode. Selecting a mode no longer depends on holding/releasing L3. In THROW mode, a frame striking the flying mascot produces a one-second orange glow, warm procedural sparks and a synthetic impact pop. Each thrown frame can trigger this impact only once. All of this is local and has no inference cost.
+
+## SAM 3.1 transparent cutouts (v0.10.9)
+XR EXTRACT uses Muse recognition plus one SAM 3.1 box-prompt request to produce masked PNG child objects. Further explicit SAM segmentation also saves transparent PNG descendants. This is an additional paid Meta Model API request, not a simulated or client-side rectangle crop. The official `meta-sam-parser==0.2.0` decoder is installed with Python dependencies. The server preserves historic JPEG crop records. Meta live model calls and physical Quest 3 rendering must be verified after deployment.

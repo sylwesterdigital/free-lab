@@ -1,4 +1,4 @@
-"""v0.10.8 physics games: pure WebXR-independent geometry and simulated game states."""
+"""v0.10.9 physics games: pure WebXR-independent geometry and simulated game states."""
 import subprocess
 import unittest
 from pathlib import Path
@@ -59,7 +59,7 @@ s.update(inp(false,false,0));s.update(inp(true,false,0));s.update(inp(false,fals
                       'frameGames?.linkOnOverlap(frameLab.frames,df.id)', 'frameGames?.launch(frameLab.frames,frameTouch.id',
                       'pollFrameGames(t,pose)', 'drawFrameCubes(vp)', 'gl.drawArrays(gl.TRIANGLES,0,36)'):
             self.assertIn(token,XR)
-        self.assertIn('frame-games.js?v=0.10.8',PAGE)
+        self.assertIn('frame-games.js?v=0.10.9',PAGE)
         self.assertNotIn('cdn', (ROOT/'frontend/assets/frame-games.js').read_text())
 
 if __name__=='__main__':unittest.main()

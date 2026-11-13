@@ -1,4 +1,4 @@
-/* FREELAB 0.10.8 — spatial media workbench, draggable diagnostics, voice meter, bounded 3D previews.
+/* FREELAB 0.10.9 — spatial media workbench, draggable diagnostics, voice meter, bounded 3D previews.
    Minimal WebGL WebXR renderer: real camera input only, no fake passthrough pixels.
    World-positioned photos, yaw-upright follow toolbar, image derivatives, spatial grab.
    Flat grey floating controls, double-sided, draggable spatial cards.
@@ -41,7 +41,7 @@ function haptic(src,strength=.25,ms=35){try{const gamepad=src?.gamepad;const a=g
 const promptTools=[['voice','◎'],['apply','↗'],['cancel','×']];
 const threeDTools=[['submit3d','⬡'],['cancel3d','×']];
 const V=`attribute vec3 aPos;attribute vec2 aUV;uniform mat4 uMVP;varying vec2 vUV;void main(){vUV=aUV;gl_Position=uMVP*vec4(aPos,1.);}`;
-const F=`precision mediump float;varying vec2 vUV;uniform sampler2D uTex;uniform bool uFlip;uniform float uOpacity;void main(){vec2 uv=vec2(uFlip?1.-vUV.x:vUV.x,vUV.y);gl_FragColor=texture2D(uTex,uv)*uOpacity;}`;
+const F=`precision mediump float;varying vec2 vUV;uniform sampler2D uTex;uniform bool uFlip;uniform float uOpacity;void main(){vec2 uv=vec2(uFlip?1.-vUV.x:vUV.x,vUV.y);vec4 color=texture2D(uTex,uv);if(color.a<.012)discard;gl_FragColor=color*uOpacity;}`;
 const LV=`attribute vec3 aPos;uniform mat4 uVP;uniform float uSize;void main(){gl_Position=uVP*vec4(aPos,1.);gl_PointSize=uSize;}`;
 const LF=`precision mediump float;uniform vec4 uColor;uniform bool uPoint;void main(){if(uPoint&&length(gl_PointCoord-vec2(.5))>.5)discard;gl_FragColor=uColor;}`;
 const MV=`attribute vec3 aPos;attribute vec3 aNormal;uniform mat4 uMVP;uniform mat4 uModel;varying vec3 vNormal;void main(){vNormal=normalize(mat3(uModel)*aNormal);gl_Position=uMVP*vec4(aPos,1.);}`;
@@ -190,20 +190,21 @@ function rrect(ctx,x,y,w,h,r,color){ctx.fillStyle=color;ctx.beginPath();ctx.roun
 function text(ctx,msg,x,y,size=24,color='#fff',weight=600,align='left'){ctx.font=`${weight} ${size}px system-ui, sans-serif`;ctx.fillStyle=color;ctx.textAlign=align;ctx.fillText(String(msg),x,y);ctx.textAlign='left';}
 function wrapping(ctx,str,x,y,width,lh=30,lines=4){ctx.font='22px system-ui';const words=String(str||'').split(/\s+/);let out='',n=0;for(const word of words){const test=out?out+' '+word:word;if(ctx.measureText(test).width>width&&out){text(ctx,out,x,y+n*lh,21,'#d4ded9',450);out=word;n++;if(n>=lines)return;}else out=test;}if(out)text(ctx,out,x,y+n*lh,21,'#d4ded9',450);}
 function texture(c){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,c);return t;}
-function cardTexture(imageSrc,labelText,sub='PRIVATE CAPTURE',back=false,onDimensions=null,showExtract=false,readyImage=null){
+function cardTexture(imageSrc,labelText,sub='PRIVATE CAPTURE',back=false,onDimensions=null,showExtract=false,readyImage=null,cutout=false){
  // Canvas and geometry both adapt to the source dimensions: never stretch or center-crop an object.
  const resource={tex:null,canvas:null};
  const paint=(image=null)=>{const fullWidth=600,frameWidth=566;
   const frameHeight=image?clamp(Math.round(frameWidth*image.height/image.width),112,1000):310;
   const h=back?420:frameHeight+110;const [c,ctx]=canvas2d(fullWidth,h);resource.canvas=c;
-  rrect(ctx,0,0,fullWidth,h,29,'#343c38');
+  if(!cutout||back)rrect(ctx,0,0,fullWidth,h,29,'#343c38');
   if(back){rrect(ctx,18,18,fullWidth-36,h-36,24,'#424a46');text(ctx,'FREELAB / OBJECT',40,65,19,'#a7c0b0',670);text(ctx,labelText.slice(0,25),40,130,37,'#fff',690);wrapping(ctx,sub,40,175,fullWidth-86,32,6);}
   else{
-   rrect(ctx,17,17,frameWidth,frameHeight,18,'#131a17');
+   if(!cutout)rrect(ctx,17,17,frameWidth,frameHeight,18,'#131a17');
    if(image){const factor=Math.min(frameWidth/image.width,frameHeight/image.height);const w=image.width*factor,hh=image.height*factor;
     ctx.drawImage(image,17+(frameWidth-w)*.5,17+(frameHeight-hh)*.5,w,hh);}
    else text(ctx,'◎',fullWidth/2,frameHeight/2+53,102,'#9baea2',250,'center');
    if(showExtract){rrect(ctx,35,30,182,54,24,'#d6f3dc');text(ctx,'✳ EXTRACT',126,66,21,'#213b2b',690,'center');}
+   if(cutout)rrect(ctx,14,h-103,fullWidth-28,102,22,'rgba(29,42,35,.74)');
    text(ctx,labelText.slice(0,34),28,h-58,27,'#f4fff6',680);text(ctx,sub.slice(0,56),28,h-23,15,'#c4d3c7',540);rrect(ctx,fullWidth-90,h-96,61,61,18,'#283b32');text(ctx,'⛶',fullWidth-59,h-53,41,'#effff2',550,'center');
   }
   if(!back){rrect(ctx,fullWidth-150,27,55,55,26,'#28352f');text(ctx,'···',fullWidth-122,64,31,'#ffffff',630,'center');
@@ -423,7 +424,7 @@ function statusTexture(value){
  return texture(c);
 }
 function addCard(id,kind,data,loc,size){let c;
- const front=cardTexture(data.image||null,data.label||'',data.subtitle||'',false,(w,h)=>{if(c){c.size=cardDimensions(w,h,kind);c.canvasHeight=h;c.buttonBand=.5-86/h;}},kind==='source'&&data.saved!==false,data.decodedImage||null);
+ const front=cardTexture(data.image||null,data.label||'',data.subtitle||'',false,(w,h)=>{if(c){c.size=cardDimensions(w,h,kind);c.canvasHeight=h;c.buttonBand=.5-86/h;}},kind==='source'&&data.saved!==false,data.decodedImage||null,kind==='object'&&String(data.provider||'').includes('sam-3.1-mask'));
  const back=cardTexture(null,data.label||'',`FOLDER: ${data.folder||'Unsorted'}. ${data.description||'Object from your personal space'}`,true);
  const initialHeight=front.canvas?.height||420;
  c={id,kind,data,front:front.tex,back:back.tex,resources:[front.tex,back.tex],pos:[...loc],from:[...loc],to:[...loc],start:0,duration:0,scale:1,rot:0,q:[0,0,0,1],visible:true,
@@ -1298,26 +1299,26 @@ function bloomChildren(items,parent=null){if(!cloud||!items?.length)return;
 }
 async function runExtract(){if(!extractionAvailable())return setStatus('Capture a real photo first · if saving failed, check XR LOG',12000);if(busy)return setStatus('AI is working · wait for the current request');
  busy=true;inferenceCard=cards.find(c=>c.kind==='source');inferenceStarted=performance.now();
- setStatus('EXTRACTING · source stays in place · 1 paid analysis',14000);
+ setStatus('Extracting with Muse + SAM…',14000);
  try{const result=await window.FreeLab.recognizeXR(cloud.id);
   const found=result.items||[];if(!found.length)window.FreeLab?.traceEvent?.('Extract response contained no recognized object items','warn');cloud.objects=[...cloud.objects,...found];
   const persisted=clouds.find(x=>x.id===cloud.id);if(persisted)persisted.objects=cloud.objects;
   bloomChildren(found);if(found.length&&activeBranchView().pages>1)branchNavigation(activeBranchView());cue('bloom');mascotMood=found.length?'happy':'confused';mascotMoodUntil=performance.now()+3200;
   let quote=found.length?`Found ${found.length} objects`:'No objects found';
   if(found.length&&window.FreeLab?.pref?.('troll')){const jokes=['Your room has been officially inspected by a very small expert.','That is a surprisingly respectable collection of stuff.','Found objects! None of them offered me a snack.'];quote+=' . '+jokes[Math.floor(Math.random()*jokes.length)];}
-  window.FreeLab?.speakUpdate?.(quote);setStatus(found.length?`${found.length} objects bloomed from your photo`:'No clear objects found · check LOG for API details',8500);
+  window.FreeLab?.speakUpdate?.(quote);setStatus(found.length?(result.crops?`${result.cutouts} cutouts · ${result.crops} crops`:`${result.cutouts} transparent cutouts saved`):'No clear objects found · check LOG',8500);
  }catch(e){setStatus('Extract failed · '+e.message,12000);}finally{busy=false;inferenceCard=null;}}
 async function extractParts(){
  if(!cloud||cloud.legacy||busy||selected?.kind!=='object'||!selected.data?.id)
    return setStatus('Select an extracted image to analyze it again',11000);
  const parent=selected,id=parent.data.id;closeImageMenu();busy=true;inferenceCard=parent;inferenceStarted=performance.now();
- setStatus('EXTRACTING PARTS · analyzing selected image · one paid Muse request',16000);
+ setStatus('Extracting parts with Muse + SAM…',16000);
  try{const result=await window.FreeLab.recognizeXR(cloud.id,id);
   const items=result.items||[];cloud.objects.push(...items);
   const existing=clouds.find(c=>c.id===cloud.id);if(existing)existing.objects=cloud.objects;
   await showCloud(cloud.id,id,window.FreeLabCloudTree.pageOfChild(cloud.objects,id,items[0]?.id));cue('bloom');
   window.FreeLab?.speakUpdate?.(`Found ${items.length} parts`);
-  setStatus(items.length?`${items.length} new image(s) bloomed from ${parent.data.label}`:'No additional identifiable parts',10000);
+  setStatus(items.length?(result.crops?`${result.cutouts} cutouts · ${result.crops} crops`:`${result.cutouts} cutouts saved`):'No additional identifiable parts',10000);
  }catch(e){setStatus('Extract parts failed · '+e.message,14000);window.FreeLab?.traceEvent?.('NESTED EXTRACTION FAILED · '+e.message,'error');}
  finally{busy=false;inferenceCard=null;}
 }
@@ -1330,7 +1331,7 @@ async function runSam(){if(!cloud||busy||cloud.legacy)return setStatus('Capture 
  try{const result=await window.FreeLab.segmentXR(cloud.id,noun,item.id);
    const items=result.items||[];cloud.objects.push(...items);
    const persisted=clouds.find(x=>x.id===cloud.id);if(persisted)persisted.objects=cloud.objects;
-   bloomChildren(items,selected);setStatus(`${items.length} extra image region(s) saved · bounding crops`,9500);
+   bloomChildren(items,selected);setStatus(`${items.length} transparent cutouts saved`,9500);
  }catch(e){setStatus('Refine failed · '+e.message,12000);}finally{busy=false;}}
 function updatePromptTexture(){if(!promptPanel)return;gl.deleteTexture(promptPanel.front);promptPanel.front=toolbarTexture('prompt');promptPanel.back=promptPanel.front;}
 function currentPromptTarget(){const card=selected?.kind==='object'||selected?.kind==='source'?selected:cards.find(c=>c.kind==='source');

@@ -3,3 +3,5 @@ gunicorn==23.0.0
 
 cryptography>=43,<48
 Pillow>=11,<13
+
+meta-sam-parser==0.2.0

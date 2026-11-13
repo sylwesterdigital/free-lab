@@ -188,13 +188,13 @@ async function refresh3DJobs(){
 }
 async function recognizeXR(cid,objectId=null){
  if(!objectId&&!state.snapshot)throw Error('Capture an image first');
- const payload={recognize:true,capture_id:cid,model:$('modelChoice').value};
+ const payload={recognize:true,cutouts:true,capture_id:cid,model:$('modelChoice').value};
  if(objectId)payload.object_id=objectId;else payload.image=state.snapshot;
  if(sessionMeta())payload.session_api_key=sessionMeta();
  const result=await api('/capture',{method:'POST',body:JSON.stringify(payload)});
  state.tab='mine';selectTab('mine');await loadObjects();
  if(state.user?.role==='admin')loadUsage().catch(()=>{});
- return {items:state.objects.filter(x=>result.ids.includes(x.id)),detections:result.objects,usage:result.usage};
+ return {items:state.objects.filter(x=>result.ids.includes(x.id)),detections:result.objects,usage:result.usage,cutouts:result.cutouts_saved||0,crops:result.rectangular_crops||0};
 }
 async function segmentXR(cid,noun,objectId=null){
  if(!objectId&&!state.snapshot)throw Error('Capture an image first');

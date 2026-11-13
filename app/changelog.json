@@ -1,11 +1,11 @@
 {
-  "version": "0.10.8",
-  "title": "Persistent Labs & Mascot Impact · v0.10.8",
+  "version": "0.10.9",
+  "title": "Transparent SAM Cutouts \u00b7 v0.10.9",
   "datetime": "2026-11-13 UTC",
   "changes": [
-    "Left controller X opens a persistent experiment selector; left joystick cycles and left trigger applies.",
-    "Press X again to cancel without changing mode; previous L3 hold/release behavior removed.",
-    "THROW rectangles trigger one orange mascot glow, impact tone and spark burst per collision.",
-    "No new billing, limits, schema migrations or watcher updates."
+    "SAM 3.1 masks decoded with the official parser and saved as transparent PNG objects",
+    "Muse detections supply box prompts to one SAM mask request",
+    "Transparent objects render without rectangular card backgrounds",
+    "PNG descendants remain usable for deeper segmentation, description and AI image editing"
   ]
 }

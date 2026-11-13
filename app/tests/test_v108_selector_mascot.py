@@ -1,4 +1,4 @@
-"""v0.10.8: executable local selector and swept mascot collision regressions."""
+"""v0.10.9: executable local selector and swept mascot collision regressions."""
 import subprocess, unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
