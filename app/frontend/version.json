@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.7",
-  "description": "Three offline WebXR hand-frame games: linking chains, falling cuboids and throw-to-dismiss"
+  "version": "0.10.8",
+  "description": "Persistent X-button lab selector and thrown-frame mascot collision"
 }

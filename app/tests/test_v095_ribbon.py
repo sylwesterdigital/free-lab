@@ -57,9 +57,9 @@ assert(build([[0,0,0],[0,1,0]],[0,0,1],0).length===0,'Invalid width ignored');
         self.assertEqual(XR.count('strandRibbon(vp,path,width*2.25,color,.98,eye)'),1)
 
     def test_guide_asset_version_and_no_new_billing(self):
-        self.assertIn('strand-geometry.js?v=0.10.7',PAGE)
-        self.assertLess(PAGE.index('strand-geometry.js?v=0.10.7'),PAGE.index('xr.js?v=0.10.7'))
-        self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.7')
+        self.assertIn('strand-geometry.js?v=0.10.8',PAGE)
+        self.assertLess(PAGE.index('strand-geometry.js?v=0.10.8'),PAGE.index('xr.js?v=0.10.8'))
+        self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.8')
         self.assertNotIn('fetch(', (ROOT/'frontend/assets/strand-geometry.js').read_text())
 
 if __name__=='__main__':unittest.main()

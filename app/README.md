@@ -140,5 +140,8 @@ Open an object menu (`··· → OPEN BRANCH`) to see that object's children; us
 Nested operations bill according to the selected model; browsing an existing tree does not.
 
 
-## v0.10.7 Experimental Physics Games
+## v0.10.8 Experimental Physics Games
 Hold the left controller thumbstick, tilt to select FRAME, CHAIN, CUBES, THROW, FIVE STRINGS, THUMBS, OFF; release to activate. Draw a frame by joining both pairs of thumb/index fingertips, opening it, and holding for the configured frame-detach interval. CHAIN links two placed frames when a grabbed frame intersects another; a pendulum/hinge constraint lets a child swing as the parent moves. CUBES converts each completed frame into a shaded cuboid that drops onto a local-floor-based plane and stacks against previously placed cuboids. THROW lets a grabbed frame fly using fingertip velocity; it fades and disappears after about 1.6 seconds. Games work offline without model inference. Physics is a small bounded built-in solver for this experiment (not the Rapier WASM engine), with limited axis-aligned box collisions, max 22 cuboids and no environment mesh collisions.
+
+## v0.10.8 Persistent Experimental Menu & Mascot Impacts
+Press **X on the left controller** to open the experiment selector; it stays visible beside the controller. Tilt **left stick** left or right (with a return to centre between choices) and press the **left trigger** to apply. Press X again to dismiss without changing the mode. Selecting a mode no longer depends on holding/releasing L3. In THROW mode, a frame striking the flying mascot produces a one-second orange glow, warm procedural sparks and a synthetic impact pop. Each thrown frame can trigger this impact only once. All of this is local and has no inference cost.

@@ -1,11 +1,11 @@
 {
-  "version": "0.10.7",
-  "title": "Experimental Physics Games · v0.10.7",
+  "version": "0.10.8",
+  "title": "Persistent Labs & Mascot Impact · v0.10.8",
   "datetime": "2026-11-13 UTC",
   "changes": [
-    "Three new local hand-frame games: overlapping frames link into swinging chains; drawn frames turn into falling cuboids; thrown frames fly and disappear.",
-    "Compact left-thumbstick selector exposes seven modes, retaining the original Frames, Five Strings and Thumbs experiments.",
-    "Physics uses a bounded built-in fixed-step box/hinge solver, not an unbundled Rapier/WASM dependency; no AI billing or extra app quotas.",
-    "Fixed mode cleanup so captures, extraction and Exit remain independent of experimental physics."
+    "Left controller X opens a persistent experiment selector; left joystick cycles and left trigger applies.",
+    "Press X again to cancel without changing mode; previous L3 hold/release behavior removed.",
+    "THROW rectangles trigger one orange mascot glow, impact tone and spark burst per collision.",
+    "No new billing, limits, schema migrations or watcher updates."
   ]
 }

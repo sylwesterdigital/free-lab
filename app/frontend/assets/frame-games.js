@@ -1,4 +1,4 @@
-/* FREE LAB v0.10.7: three offline spatial games. No network or AI inference.
+/* FREE LAB v0.10.8: three offline spatial games. No network or AI inference.
  * A bounded, fixed-step rigid-box solver keeps Quest frame-time predictable;
  * use Rapier/WASM for complex collision shapes when the engine is vendored.
  */
@@ -23,6 +23,30 @@ function nearestEdge(a,b){let found=null;
   const c=segmentContact(a.corners[i],a.corners[(i+1)%4],b.corners[j],b.corners[(j+1)%4]);
   if(!found||c.dist<found.dist)found=c;
  }return found;
+}
+// Test the filled plane of a wire frame, not merely its thin outline.
+// Both triangles are considered, so a fast frame can hit a small flying mascot.
+function pointSegmentDistance(p,a,b){const edge=sub(b,a),t=clamp(dot(sub(p,a),edge)/(dot(edge,edge)||1),0,1);
+ return len(sub(p,add(a,mul(edge,t))));}
+function pointTriangleDistance(p,a,b,c){const ab=sub(b,a),ac=sub(c,a),normal=cross(ab,ac),n2=dot(normal,normal);
+ if(n2>1e-12){const planeDist=dot(sub(p,a),normal)/Math.sqrt(n2);
+  const projection=sub(p,mul(normal,dot(sub(p,a),normal)/n2));
+  const ap=sub(projection,a),d00=dot(ab,ab),d01=dot(ab,ac),d11=dot(ac,ac),d20=dot(ap,ab),d21=dot(ap,ac),den=d00*d11-d01*d01;
+  if(Math.abs(den)>1e-12){const v=(d11*d20-d01*d21)/den,w=(d00*d21-d01*d20)/den;
+   if(v>=-1e-6&&w>=-1e-6&&v+w<=1+1e-6)return Math.abs(planeDist);}
+ }
+ return Math.min(pointSegmentDistance(p,a,b),pointSegmentDistance(p,b,c),pointSegmentDistance(p,c,a));
+}
+function frameSphereHit(corners,p,radius=.14){if(!Array.isArray(corners)||corners.length!==4||!finite(p))return false;
+ return pointTriangleDistance(p,corners[0],corners[1],corners[2])<=radius ||
+  pointTriangleDistance(p,corners[0],corners[2],corners[3])<=radius;
+}
+function sweptFrameSphereHit(before,after,p,radius=.14){if(!before||!after||!finite(p))return false;
+ // Six steps prevent most tunnelling at the throw speed cap of 4.5 metres/s.
+ for(let step=0;step<=6;step++){const t=step/6;
+  const corners=before.map((v,i)=>add(v,mul(sub(after[i],v),t)));
+  if(frameSphereHit(corners,p,radius))return true;
+ }return false;
 }
 function rotateVector(a,b,v){ // shortest-arc rotation to swing whole frame around its hinge
  const u=unit(a),w=unit(b),dp=clamp(dot(u,w),-1,1);
@@ -122,7 +146,11 @@ class Engine{
   }
   for(const fly of this.throws){const f=frames.find(q=>q.id===fly.id);if(!f)continue;
    const u=clamp((time-fly.start)/1600,0,1);
-   const shift=mul(fly.velocity,dt);f.corners=f.corners.map(p=>add(p,shift));fly.alpha=clamp((1-u)/.35,0,1);
+   const before=copied(f.corners),shift=mul(fly.velocity,dt);f.corners=f.corners.map(p=>add(p,shift));
+   if(!fly.hitMascot&&finite(opts.mascot)&&sweptFrameSphereHit(before,f.corners,opts.mascot,opts.mascotRadius||.14)){
+    fly.hitMascot=true;events.push({event:'mascot-hit',id:fly.id,position:opts.mascot.slice()});
+   }
+   fly.alpha=clamp((1-u)/.35,0,1);
    if(time>=fly.until){const index=frames.indexOf(f);if(index>=0)frames.splice(index,1);events.push({event:'vanish',id:fly.id});}
   }
   this.throws=this.throws.filter(f=>f.until>time);
@@ -131,5 +159,5 @@ class Engine{
  }
  resetGames(){this.boxes=[];this.links=[];this.throws=[];this.lastTime=null;}
 }
-window.FreeLabFrameGames={Engine,segmentContact,nearestEdge,boxFromFrame,resolvePair,rotateVector};
+window.FreeLabFrameGames={Engine,segmentContact,nearestEdge,boxFromFrame,resolvePair,rotateVector,frameSphereHit,sweptFrameSphereHit};
 })();
