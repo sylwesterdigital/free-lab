@@ -1,4 +1,4 @@
-"""FREELAB v0.10.22: source-only regressions. Never contacts paid providers."""
+"""FREELAB v0.10.23: source-only regressions. Never contacts paid providers."""
 import json,re,tempfile,unittest
 from pathlib import Path
 from backend import db,model_cache,glb_preview
@@ -50,9 +50,9 @@ class InlineModelAvatar122(unittest.TestCase):
   self.assertIn('profile3DAvatarInput',APP)
   self.assertIn('spawnGuestAvatar(',XR)
  def test_frame_uses_camera_pixels_not_xr_compositor(self):
-  self.assertIn('async function captureFrameCamera(frame)',XR)
+  self.assertIn('async function captureFrameCamera(frame,crop)',XR)
   self.assertIn('window.FreeLab?.cameraFrameReady?.()',XR)
-  self.assertIn('void captureFrameCamera(placed)',XR)
+  self.assertIn('void captureFrameCamera(placed,bounds)',XR)
   self.assertIn('drawFramePhotos(vp)',XR)
   self.assertIn('getVideoTracks',APP)
   self.assertNotIn('gl.readPixels(',XR)
@@ -70,7 +70,7 @@ class InlineModelAvatar122(unittest.TestCase):
    self.assertIn("'--porcelain=v1','-z'",WATCH)
    self.assertIn(".stdout.split('\\0')",WATCH)
   for file in ('version.json','frontend/version.json','changelog.json','frontend/changelog.json'):
-   self.assertEqual(json.loads((ROOT/file).read_text())['version'],'0.10.22')
+   self.assertEqual(json.loads((ROOT/file).read_text())['version'],'0.10.23')
   for src in re.findall(r'(?:src|href)="(/assets/[^"]+)"',HTML):
    self.assertTrue((ROOT/'frontend'/src.split('?')[0].lstrip('/')).is_file(),src)
 if __name__=='__main__':unittest.main()

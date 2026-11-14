@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.22",
+  "version": "0.10.23",
   "description": "Inline image editing, persistent 3D viewer, small GLB guest avatars, camera-backed frames and watcher fixes"
 }

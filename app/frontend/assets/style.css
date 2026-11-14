@@ -458,7 +458,7 @@
 #desktopGallery #galleryAIStatus.working{border:1px solid #f4add38a;background:#182a24;border-radius:12px;padding:9px;animation:fl-processing-glow 1.6s ease-in-out infinite}
 
 .room-image-lightbox{position:fixed;inset:0;z-index:41;background:rgba(3,6,9,.94);display:grid;place-items:center;padding:32px}.room-image-lightbox img{max-width:min(92vw,1400px);max-height:84vh;object-fit:contain;box-shadow:0 20px 80px #000b;border-radius:14px}.room-image-toolbar{position:absolute;top:18px;right:18px;display:flex;gap:12px}.room-image-toolbar button{width:52px;height:52px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:#fff;color:#0d1317;font-size:26px;font-weight:700;box-shadow:0 8px 30px rgba(0,0,0,.28)}.room-image-toolbar button:hover{filter:brightness(1.06)}
-/* v0.10.22: prompt stays in the composer; distinct progressive statuses */
+/* v0.10.23: prompt stays in the composer; distinct progressive statuses */
 .capture-result[data-state="running"]{border-color:#7caeff;background:linear-gradient(130deg,#182d33,#16241f);box-shadow:0 0 22px #8cceff24;animation:fl-processing-glow 2.5s ease-in-out infinite}
 .capture-result[data-state="running"] strong,.capture-result[data-state="running"] p,.model-stage #modelStageStatus.working{background:linear-gradient(90deg,#c5ffe4,#8be0ff,#ffb4d2,#ffe09a,#9debd7,#c5ffe4);background-size:250% 100%;color:transparent;background-clip:text;-webkit-background-clip:text;animation:fl-rainbow-text 3.4s linear infinite}
 .capture-result[data-state="success"]{border-color:#8cdbb9;background:#122e24}.capture-result[data-state="success"] strong{color:#b9ffe5}

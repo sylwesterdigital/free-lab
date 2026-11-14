@@ -1,4 +1,4 @@
-"""v0.10.22 regression tests; never call paid providers or remote server."""
+"""v0.10.23 regression tests; never call paid providers or remote server."""
 from __future__ import annotations
 import json,tempfile,unittest,struct
 from pathlib import Path
@@ -34,7 +34,7 @@ class UI119(unittest.TestCase):
   self.assertIn('Extract named object',HTML)
   self.assertIn('Refine image',HTML)
  def test_audio_worklet_and_fallback(self):
-  self.assertIn("audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.22')",APP)
+  self.assertIn("audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.23')",APP)
   self.assertIn("new AudioWorkletNode(audio,'freelab-mic-recorder'",APP)
   self.assertIn('audio.createScriptProcessor(2048,1,1)',APP)
   self.assertIn("registerProcessor('freelab-mic-recorder'",(ROOT/'frontend/assets/mic-worklet.mjs').read_text())
@@ -56,8 +56,8 @@ class UI119(unittest.TestCase):
   self.assertIn('model_cache.store(',B)
  def test_versioned_files(self):
   for f in ('version.json','changelog.json','frontend/version.json','frontend/changelog.json'):
-   self.assertEqual(json.loads((ROOT/f).read_text())['version'],'0.10.22')
-  self.assertIn('room-viewer.mjs?v=0.10.22',(ROOT/'frontend/assets/rooms.js').read_text())
+   self.assertEqual(json.loads((ROOT/f).read_text())['version'],'0.10.23')
+  self.assertIn('room-viewer.mjs?v=0.10.23',(ROOT/'frontend/assets/rooms.js').read_text())
 
 
  def test_prompt_editor_theater_and_xr_layout_hotfixes(self):

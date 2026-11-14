@@ -1,4 +1,4 @@
-/* FREELAB v0.10.22: explicit interactive 3D preview; does not start a separate XR context. */
+/* FREELAB v0.10.23: explicit interactive 3D preview; does not start a separate XR context. */
 const $=id=>document.getElementById(id);
 let renderer=null,scene=null,camera=null,root=null,raf=0,active=false,loadingToken=0,drag=null,yaw=.48,pitch=.20,dist=2.8,lastTouchDistance=0;
 let THREE=null,GLTFLoader=null;

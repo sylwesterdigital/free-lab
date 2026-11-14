@@ -1,17 +1,30 @@
 {
-  "version": "0.10.22",
-  "title": "FREELAB v0.10.22 — Inline editing, live models and spatial camera frames",
+  "version": "0.10.23",
+  "title": "FREELAB v0.10.23 — Upright framed photos, bounded crop and spatial grab",
   "datetime": "2026-11-14",
   "changes": [
-    "Send in Capture Studio now edits or refines the selected image directly; no second text-entry modal. The gallery has its own inline editor.",
-    "3D jobs are monitored globally when the site is visible, with distinct queued/running/completed/failed states. Completed GLBs load into an interactive private Three.js scene with geometry fallback.",
-    "Private model cache limit raised from 12 to 32 MB with SHA/GLB checks, size cap, provider URL allowlist and authenticated access. Models above the new limit still depend on the provider link.",
-    "Profiles accept self-contained GLB avatars under 2 MB; XR guests and browser-room spectators receive static decimated 3D avatar previews where supported. Rigging is preserved in storage; no body-pose streaming yet.",
-    "Desktop and mobile capture/gallery/collection menus include Download photo. The three XR roundels move higher, the LIB/PIN/LOG bar lower and cinema controls form a compact grouped row.",
-    "Placing an experimental FRAME saves a photo only if a separately permissioned, readable browser camera stream exists; it maps the snapshot on the frame. Standard Quest XR passthrough framebuffer pixels cannot be captured.",
-    "Watcher v0.9.2 uses NUL-delimited Git status so allowed update ZIP filenames containing spaces do not falsely block preflight."
+    "Fixed upside-down FRAME photograph textures with correct top-to-bottom UV mapping for browser-camera images.",
+    "Frame photos now crop a live browser-camera JPEG using the hand-drawn rectangle projected through WebXR viewer matrices, with an aspect-preserving bounded crop, rather than stretching the whole camera image.",
+    "The projection approximates the selected field of view; a separate browser camera is not calibrated to Quest passthrough and cannot supply pixel-perfect crops.",
+    "Pinching anywhere inside or near the filled spatial photo now grabs and moves/rotates its linked frame; releasing pins the photograph at the new pose.",
+    "Erasing or expiring a frame now discards its attached photo and GPU texture/buffer; up to 12 image panels remain resident.",
+    "Normal XR eye capture still saves an independent full camera frame and selected image state is not overwritten by rectangle photo captures."
   ],
   "history": [
+    {
+      "version": "0.10.22",
+      "title": "FREELAB v0.10.22 — Inline editing, live models and spatial camera frames",
+      "datetime": "2026-11-14",
+      "changes": [
+        "Send in Capture Studio now edits or refines the selected image directly; no second text-entry modal. The gallery has its own inline editor.",
+        "3D jobs are monitored globally when the site is visible, with distinct queued/running/completed/failed states. Completed GLBs load into an interactive private Three.js scene with geometry fallback.",
+        "Private model cache limit raised from 12 to 32 MB with SHA/GLB checks, size cap, provider URL allowlist and authenticated access. Models above the new limit still depend on the provider link.",
+        "Profiles accept self-contained GLB avatars under 2 MB; XR guests and browser-room spectators receive static decimated 3D avatar previews where supported. Rigging is preserved in storage; no body-pose streaming yet.",
+        "Desktop and mobile capture/gallery/collection menus include Download photo. The three XR roundels move higher, the LIB/PIN/LOG bar lower and cinema controls form a compact grouped row.",
+        "Placing an experimental FRAME saves a photo only if a separately permissioned, readable browser camera stream exists; it maps the snapshot on the frame. Standard Quest XR passthrough framebuffer pixels cannot be captured.",
+        "Watcher v0.9.2 uses NUL-delimited Git status so allowed update ZIP filenames containing spaces do not falsely block preflight."
+      ]
+    },
     {
       "version": "0.10.22",
       "title": "FREELAB v0.10.22 — Watcher-safe release identity",

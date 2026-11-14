@@ -336,13 +336,32 @@ async function init(){
 
 // Spatial cloud interface: no background inference, all writes are profile-scoped.
 function cameraFrameReady(){const v=$('cameraVideo'),track=state.stream?.getVideoTracks?.()[0];return Boolean(track&&track.readyState==='live'&&!track.muted&&v?.videoWidth&&v?.videoHeight);}
-async function saveXRFrame(onLocal){
- // XR capture always samples the current live camera, never an earlier uploaded JPEG.
- if(cameraFrameReady())snapshot();
- if(!state.snapshot)throw Error('No readable frame. Press the central eye to enable the camera, or upload an image in the desktop view.');
- if(typeof onLocal==='function')onLocal(state.snapshot);
- const r=await api('/captures',{method:'POST',body:JSON.stringify({image:state.snapshot})});
- return {...r,image:state.snapshot};
+async function saveXRFrame(options=null){
+ // Framed photos use a CROPPED camera frame, not the full view stretched over
+ // the rectangle. Do not mutate state.snapshot or another selected source.
+ const crop=options&&typeof options==='object'&&Number.isFinite(options.width)?options:null;
+ let image;
+ if(crop){
+  if(!cameraFrameReady())throw Error('A live readable browser-camera stream is required for FRAME PHOTO');
+  const video=$('cameraVideo'),bounds=window.FreeLabFramePhoto?.cropRect(crop,video.videoWidth,video.videoHeight);
+  if(!bounds)throw Error('Invalid projected frame crop');
+  const canvas=document.createElement('canvas'),ratio=bounds.sw/bounds.sh;
+  canvas.width=Math.max(96,Math.min(768,Math.round(bounds.sw)));
+  canvas.height=Math.max(64,Math.min(768,Math.round(canvas.width/ratio)));
+  canvas.getContext('2d',{alpha:false}).drawImage(video,bounds.sx,bounds.sy,bounds.sw,bounds.sh,0,0,canvas.width,canvas.height);
+  image=canvas.toDataURL('image/jpeg',.76);
+  if(image.length>610000)image=canvas.toDataURL('image/jpeg',.51);
+  if(image.length>610000)throw Error('Cropped frame exceeds the camera image limit');
+ }else{
+  // XR capture always samples the current live camera when available.
+  // The normal XR eye action uses the full live camera image.
+  if(cameraFrameReady())snapshot();
+  if(!state.snapshot)throw Error('No readable frame. Enable the camera, or import a photo in the desktop view.');
+  image=state.snapshot;
+ }
+ if(typeof options==='function')options(image);
+ const r=await api('/captures',{method:'POST',body:JSON.stringify({image})});
+ return {...r,image};
 }
 async function createXR3D(cid,oid,prompt=''){
  const payload={capture_id:cid,object_id:oid??null,confirm_paid:true};if(prompt.trim())payload.prompt=prompt.trim();
@@ -504,7 +523,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.22');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.23');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{

@@ -714,35 +714,46 @@ function trackedHandCorners(frame){const hands={left:{},right:{}};
  return hands;
 }
 let framePhotoBusy=false;let framePhotos=[];
-async function captureFrameCamera(frame){
+async function captureFrameCamera(frame,crop){
  if(framePhotoBusy||!session||!frame?.corners||frame.corners.length!==4)return;
  if(!window.FreeLab?.cameraFrameReady?.()){
   setStatus('FRAME PLACED · NO PHOTO: Quest WebXR hides passthrough pixels. Enable a real camera in CAMERA first.',12000);
   window.FreeLab?.traceEvent?.('FRAME CAMERA: camera stream unavailable. XR framebuffer is not a camera.', 'warn');return;
  }
- framePhotoBusy=true;setStatus('FRAME CAMERA SNAPSHOT · saving camera image, not XR passthrough',9000);
- try{const saved=await window.FreeLab.saveXRFrame();if(!session)return;
+ // The WebXR eye projection estimates the rectangle's visible footprint.
+ // An independent browser camera is not calibrated to Quest passthrough,
+ // so cropping is bounded and approximate, never a guaranteed pixel match.
+ const region=crop||{x:.30,y:.30,width:.40,height:.40,aspect:window.FreeLabFramePhoto?.frameAspect(frame.corners)||1.5};
+ framePhotoBusy=true;setStatus('FRAME PHOTO · cropping the camera toward your frame…',9000);
+ try{const saved=await window.FreeLab.saveXRFrame(region);if(!session)return;
   const img=new Image();img.onload=()=>{
-   if(!session||!gl||gl.isContextLost())return;
-   const [cv,ctx]=canvas2d(768,512);ctx.drawImage(img,0,0,cv.width,cv.height);
+   if(!session||!gl||gl.isContextLost()||!frameLab?.frames?.includes(frame))return;
+   const aspect=clamp(region.aspect||1.5,.35,4.5),width=aspect>=1?768:Math.round(768*aspect),height=aspect>=1?Math.round(768/aspect):768;
+   const [cv,ctx]=canvas2d(width,height);ctx.drawImage(img,0,0,cv.width,cv.height);
    const tex=texture(cv),buffer=gl.createBuffer();framePhotos.push({frame,texture:tex,buffer,captureId:saved.id});
    while(framePhotos.length>12){const old=framePhotos.shift();gl.deleteTexture(old.texture);gl.deleteBuffer(old.buffer);}
-   cue('bloom');setStatus('FRAME PHOTO SAVED · source '+saved.id+' · image mapped to the drawn frame; camera alignment approximate',12000);
+   cue('bloom');setStatus('FRAMED PHOTO SAVED · source '+saved.id+' · PINCH INSIDE PHOTO TO MOVE · crop alignment approximate',14000);
   };
   img.onerror=()=>setStatus('FRAME PHOTO STORED, BUT TEXTURE COULD NOT LOAD',8500);img.src=saved.image;
  }catch(e){setStatus('FRAME SNAPSHOT FAILED: '+e.message,15000);window.FreeLab?.traceEvent?.('FRAME SNAPSHOT '+e.message,'error');}
  finally{framePhotoBusy=false;}
 }
 function drawFramePhotos(vp){if(!framePhotos.length)return;
+ // Erasing/expiring a frame must also remove its textured panel and GPU resources.
+ for(let i=framePhotos.length-1;i>=0;i--){const item=framePhotos[i];if(frameLab?.frames?.includes(item.frame))continue;
+  gl.deleteTexture(item.texture);gl.deleteBuffer(item.buffer);framePhotos.splice(i,1);}
+ if(!framePhotos.length)return;
  gl.useProgram(program);
  const posLoc=gl.getAttribLocation(program,'aPos'),uvLoc=gl.getAttribLocation(program,'aUV');
  gl.enableVertexAttribArray(posLoc);gl.enableVertexAttribArray(uvLoc);
  for(const item of framePhotos){const c=item.frame.corners;if(!Array.isArray(c)||c.length!==4)continue;
-  const data=[];for(const [idx,u,v] of [[0,0,1],[1,1,1],[2,1,0],[0,0,1],[2,1,0],[3,0,0]])data.push(...c[idx],u,v);
+  // Canvas texels start at the top; v=0 maps the TOP frame corners.
+  // The old v=1 at the top made every captured photograph upside down.
+  const data=[];for(const [idx,u,v] of [[0,0,0],[1,1,0],[2,1,1],[0,0,0],[2,1,1],[3,0,1]])data.push(...c[idx],u,v);
   gl.bindBuffer(gl.ARRAY_BUFFER,item.buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.DYNAMIC_DRAW);
   gl.vertexAttribPointer(posLoc,3,gl.FLOAT,false,20,0);gl.vertexAttribPointer(uvLoc,2,gl.FLOAT,false,20,12);
   gl.uniformMatrix4fv(gl.getUniformLocation(program,'uMVP'),false,vp);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,item.texture);
-  gl.uniform1i(gl.getUniformLocation(program,'uTex'),0);gl.uniform1i(gl.getUniformLocation(program,'uFlip'),0);gl.uniform1f(gl.getUniformLocation(program,'uOpacity'),.95);
+  gl.uniform1i(gl.getUniformLocation(program,'uTex'),0);gl.uniform1i(gl.getUniformLocation(program,'uFlip'),0);gl.uniform1f(gl.getUniformLocation(program,'uOpacity'),.98);
   gl.drawArrays(gl.TRIANGLES,0,6);
  }
 }
@@ -761,7 +772,8 @@ function pollFrameLab(frame,t){if(!frameLab?.enabled)return;
   const placed=state.frames[state.frames.length-1];const mode=labSelector?.mode||'frames';
   const game=frameGames?.onFrame(placed,mode,t);
   if(game?.removeFrame){frameLab.frames=frameLab.frames.filter(f=>f!==placed);cue('release');setStatus(`CUBOID DROPPED · ${frameGames.boxes.length} blocks`,3500);}
-  else{cue('bloom');setStatus(mode==='chain'?'FRAME READY · overlap another while holding it':mode==='throw'?'FRAME READY · grab then throw':`FRAME PLACED · ${state.frames.length} room frame(s)`,4500);if(mode==='frames')void captureFrameCamera(placed);}
+  else{cue('bloom');setStatus(mode==='chain'?'FRAME READY · overlap another while holding it':mode==='throw'?'FRAME READY · grab then throw':`FRAME PLACED · ${state.frames.length} room frame(s) · pinch the panel or edge to move`,6000);
+   if(mode==='frames'){const bounds=window.FreeLabFramePhoto?.projectedCrop(placed.corners,latestPose?.views||[]);void captureFrameCamera(placed,bounds);}}
  }
  if(state.event==='lost')setStatus('FRAME TRACKING LOST · join tips again',5500);
  if(!tips.left.index&&t-lastFrameWarning>17000){lastFrameWarning=t;setStatus('FRAME LAB · enable both tracked hands (put controllers down)',6800);}
@@ -772,7 +784,15 @@ function distancePointToSegment(p,a,b){const e=vsub(b,a),den=length(e)**2||1;
 function frameNearestEdge(p){let best=null;
  for(const f of frameLab?.frames||[])for(let i=0;i<f.corners.length;i++){
   const dist=distancePointToSegment(p,f.corners[i],f.corners[(i+1)%f.corners.length]);
-  if(dist<.085&&(!best||dist<best.dist))best={frame:f,dist};
+  if(dist<.10&&(!best||dist<best.dist))best={frame:f,dist};
+ }return best;
+}
+function frameNearestGrab(p){let best=frameNearestEdge(p);
+ // XR users naturally pinch the photograph, not an invisible 8-cm border.
+ // Test the FULL filled rectangle in world space and attach it to the fingers.
+ for(const f of frameLab?.frames||[]){if(f.corners.length!==4)continue;
+  const hit=window.FreeLabFramePhoto?.panelContact(p,f.corners,.15);
+  if(hit&&(!best||hit.distance<best.dist))best={frame:f,dist:hit.distance,interior:true};
  }return best;
 }
 function pollPlacedFrameTouch(frame,t){if(!frameLab?.frames?.length||!session||!frame.getJointPose)return;
@@ -813,11 +833,11 @@ function pollPlacedFrameTouch(frame,t){if(!frameLab?.frames?.length||!session||!
    }
    continue;
   }
-  if(pinch&&frameLab.enabled&&!frameTouch){const nearest=frameNearestEdge(index);if(nearest){
+  if(pinch&&frameLab.enabled&&!frameTouch){const nearest=frameNearestGrab(index);if(nearest){
    let orientation=null;try{const q=frame.getJointPose(src.hand.get('wrist'),refSpace)?.transform.orientation;
     if(q)orientation=[q.x,q.y,q.z,q.w];}catch{}
    frameTouch={src,id:nearest.frame.id,corners:nearest.frame.corners.map(c=>[...c]),index:[...index],orientation,lastIndex:[...index],lastT:t,velocity:[0,0,0]};
-   cue('grab',src);setStatus('FRAME HELD · move and rotate your hand; release to leave in space',6200);continue;}}
+   cue('grab',src);setStatus('PHOTO / FRAME GRABBED · move or rotate your hand, then release to pin it',6200);continue;}}
   if(!pinch&&pinky&&frameLab.enabled){const hit=frameNearestEdge(pinky);
    if(hit&&hit.dist<.035){if(!frameErase||frameErase.id!==hit.frame.id)frameErase={id:hit.frame.id,since:t};
     else if(t-frameErase.since>650){frameLab.frames=frameLab.frames.filter(f=>f.id!==hit.frame.id);frameErase=null;cue('paper',src);setStatus('SPATIAL FRAME REMOVED · little finger held at edge',5800);}

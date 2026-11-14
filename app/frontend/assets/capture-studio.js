@@ -1,4 +1,4 @@
-/* FREELAB v0.10.22. Capture is independent from the live camera preview.
+/* FREELAB v0.10.23. Capture is independent from the live camera preview.
  * Source/branch actions call the same authenticated XR API functions. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id),FL=()=>window.FreeLab;
