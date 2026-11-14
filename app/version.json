@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.19",
-  "description": "Unified AI controls, AHOLO direct-image generation and durable 3D results"
+  "version": "0.10.21",
+  "description": "Release identity correction for v0.10.20 UI hotfix; no feature changes"
 }

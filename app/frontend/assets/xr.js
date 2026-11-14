@@ -18,15 +18,15 @@ let pointerHover=null,lastFrame=0,lastUi=0,lastAction=0,latestPose=null,nextPaid
 let followMode=true,followBase=null,eyeBase=null,captureEye=null,voiceButton=null,extractButton=null,extractVisualActive=null,eyeResource=null,eyeState='idle',eyeUntil=0,rootYaw=0,menuYaw=0,promptPanel=null,promptContext=null,promptText='',xrDomOverlay=false;
 let cameraHint=null,cameraHintState='',lastHintCheck=0;
 let debugPanel=null,debugShowing=false,debugLast=0,serverPoll=0,serverDiagnostic=[],descriptionPanel=null,meshPreviews=[],meshPreviewLoading=false,mascotPointer=null,mascotTex=null,lastAvatar=0,mixBucket=[],xrKeyboard=null,visitorBadges=[],visitorPollAt=0;
-let followOffset=[0,-.53,-1.16],followWorld=null,eyeWorld=null,depthState='unknown',depthChecked=false,depthFeature=false,depthBinding=null,meshyJob=null,meshyPollAt=0,meshConfirm=null;
+let followOffset=[0,-.77,-1.16],followWorld=null,eyeWorld=null,depthState='unknown',depthChecked=false,depthFeature=false,depthBinding=null,meshyJob=null,meshyPollAt=0,meshConfirm=null;
 let voiceRecord=null,voiceRecordStarted=0,voiceMeterLast=0,cameraHintUntil=0,meshJobOrigin=null;
 let particles=[],handPinch=new WeakMap(),lastNative=new WeakMap(),clickState=new WeakMap(),lastEyeUpdate=0,lastMicUpdate=0,inferenceCard=null,inferenceStarted=0;
 const PW=600,PH=420,MAX_CLOUD=10,TAU=2*Math.PI;
 // One navigation pill. Image-specific actions belong only to the selected card.
 const tools=[['gallery','▣'],['follow','◎'],['debug','≡'],['config','⚙'],['exit','×']];
 // A context menu only exists after clicking the image's ···, never in parallel by default.
-const sourceTools=[['describe','☷'],['segment','✳'],['refine','✦'],['prompt','✎'],['voice','♫'],['3d','⬡'],['closemenu','×']];
-const objectTools=[['describe','☷'],['segment','✳'],['refine','✦'],['prompt','✎'],['voice','♫'],['3d','⬡'],['closemenu','×']];
+const sourceTools=[['describe','☷'],['segment','✳'],['refine','✦'],['prompt','✎'],['voice','🎤'],['3d','⬡'],['closemenu','×']];
+const objectTools=[['describe','☷'],['segment','✳'],['refine','✦'],['prompt','✎'],['voice','🎤'],['3d','⬡'],['closemenu','×']];
 function currentTools(){return tools;}
 function imageTools(){
  const base=(selected?.kind==='source'?sourceTools:objectTools).filter(([id])=>id!=='voice'||uiSettings.voice!==false);
@@ -397,7 +397,7 @@ function syncRoundels(pose){
   extractButton.visible=voicePhase!=='listening'&&voicePhase!=='processing';const active=extractionAvailable();
   if(active!==extractVisualActive){extractVisualActive=active;if(gl)refreshRoundel(extractButton,'extract');}
   extractButton.pos=vadd(captureEye.pos,offset(.163,0,0));extractButton.q=quatY(yaw);}
- if(voicePending){const center=point(poseForwardAnchor(pose,.92,-.23),[0,0,0]);
+ if(voicePending){const center=point(poseForwardAnchor(pose,.92,-.30),[0,0,0]);
   if(voiceOk){voiceOk.pos=vadd(center,offset(-.087,0,0));voiceOk.q=quatY(yaw);}
   if(voiceCancel){voiceCancel.pos=vadd(center,offset(.087,0,0));voiceCancel.q=quatY(yaw);}
  }
@@ -912,7 +912,7 @@ function syncTrackedUI(pose,t){
  }
  if(toolbar&&followMode){menuYaw=smoothYaw(menuYaw,yaw,Math.min(.24,1-Math.exp(-Math.min(.08,(t-lastFrame||16)/1000)*8.5)));toolbar.q=quatY(menuYaw);}
  // Eye is deliberately smaller and trails the gaze instead of being cemented to the face.
- if(captureEye){const target=point(poseForwardAnchor(pose,1.04,-.55),[0,0,0]);
+ if(captureEye){const target=point(poseForwardAnchor(pose,1.04,-.60),[0,0,0]);
   const a=1-Math.exp(-Math.min(.08,(t-lastFrame||16)/1000)*3.1);
   captureEye.pos=blend(captureEye.pos,target,a);captureEye.q=quatY(yaw);syncRoundels(pose);
   if(cameraHint){cameraHint.pos=vadd(captureEye.pos,point(rotateY(yaw),[0,.148,0],0));cameraHint.q=quatY(yaw);}}
@@ -1018,7 +1018,7 @@ function sparkles(vp,t){const cool=[],warm=[],trailBright=[],trailDim=[];particl
 }
 function place(pose){root=viewerAnchor(pose,-.04,1.45);rootYaw=yawFromMatrix(pose.transform.matrix);poseReady=true;
  if(!toolbar){menuYaw=cameraYaw(pose);const h=pose.transform.matrix,world=point(h,[0,0,0]),off=point(rotateY(cameraYaw(pose)),followOffset,0);toolbar={id:'toolbar',kind:'toolbar',size:[.67,.135],pos:vadd(world,off),q:quatY(cameraYaw(pose)),scale:1,visible:true,front:toolbarTexture('main'),back:null,resources:[]};toolbar.back=toolbar.front;toolbar.resources=[toolbar.front];}
- if(!captureEye){eyeResource=eyeTexture();captureEye={id:'captureeye',kind:'captureeye',size:[.099,.099],pos:point(poseForwardAnchor(pose,1.02,-.55),[0,0,0]),q:quatY(cameraYaw(pose)),scale:1,visible:true,front:eyeResource.tex,back:eyeResource.tex,resources:[eyeResource.tex]};paintEye(performance.now());}
+ if(!captureEye){eyeResource=eyeTexture();captureEye={id:'captureeye',kind:'captureeye',size:[.099,.099],pos:point(poseForwardAnchor(pose,1.02,-.60),[0,0,0]),q:quatY(cameraYaw(pose)),scale:1,visible:true,front:eyeResource.tex,back:eyeResource.tex,resources:[eyeResource.tex]};paintEye(performance.now());}
  if(!voiceButton)voiceButton=makeRoundel('voice-roundel','voiceroundel',.089);
  if(!extractButton)extractButton=makeRoundel('extract-roundel','extractroundel',.089);
  if(!cameraHint){const tex=cameraHintTexture('off');cameraHint={id:'camera-hint',kind:'status',size:[.47,.071],pos:[0,0,0],q:[0,0,0,1],scale:1,visible:true,front:tex,back:tex,resources:[tex]};cameraHintState='off';}

@@ -1,4 +1,4 @@
-/* FREELAB v0.10.19. Capture is independent from the live camera preview.
+/* FREELAB v0.10.21. Capture is independent from the live camera preview.
  * Source/branch actions call the same authenticated XR API functions. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id),FL=()=>window.FreeLab;
@@ -64,7 +64,7 @@ function node(container,item,depth=0){const wrapper=document.createElement('div'
  const date=document.createElement('small');date.textContent=String(item.record.created_at||'').slice(0,16)||(item.type==='capture'?'Source':'Segment');
  caption.append(name,date);button.append(img,caption);button.onclick=()=>inspect(item);
  const menu=document.createElement('details');menu.className='capture-node-menu';const summary=document.createElement('summary');summary.textContent='⋯';summary.title='Actions for '+label(item);summary.setAttribute('aria-label','Actions for '+label(item));menu.append(summary);
- const actions=document.createElement('div');actions.className='capture-node-popover';for(const [text,id] of [['Inspect','inspect'],['Extract','extract'],['Describe','describe'],['Refine','refine'],['Edit','prompt'],['Voice','voice'],['3D','3d'],['Fullscreen','theater']]){const action=document.createElement('button');action.textContent=text;action.type='button';action.onclick=e=>{e.stopPropagation();menu.open=false;inspect(item);void activate(id);};actions.append(action);}menu.append(actions);wrapper.append(button,menu);container.append(wrapper);
+ const actions=document.createElement('div');actions.className='capture-node-popover';for(const [text,id] of [['Inspect','inspect'],['Extract','extract'],['Describe','describe'],['Extract object','segment'],['Refine image','refine'],['Edit','prompt'],['Voice','voice'],['3D','3d'],['Fullscreen','theater']]){const action=document.createElement('button');action.textContent=text;action.type='button';action.onclick=e=>{e.stopPropagation();menu.open=false;inspect(item);void activate(id);};actions.append(action);}menu.append(actions);wrapper.append(button,menu);container.append(wrapper);
 }
 function render(){const box=$('captureTree');box.replaceChildren();if(!clouds.length){const note=document.createElement('p');note.className='capture-tree-empty';note.textContent='Your sources will appear here. Capture an image to begin.';box.append(note);}
  for(const cloud of clouds){const group=document.createElement('section');group.className='capture-cloud';const heading=document.createElement('div');heading.className='capture-cloud-head';heading.textContent='SOURCE '+cloud.id+' · '+(cloud.objects||[]).length+' SEGMENTS';group.append(heading);
@@ -78,7 +78,7 @@ function render(){const box=$('captureTree');box.replaceChildren();if(!clouds.le
 }
 async function load(choose=null){if(!FL()?.getState()?.user)return;const data=await FL().listXRClouds();clouds=(data||[]).filter(c=>c.id>0&&!c.hidden);if(choose)chosen=choose;if(chosen&&!getItem(chosen)){chosen=null;inspecting=false;}render();}
 async function execute(job,message){if(busy)return;busy=true;
- const panel=$('captureViewport'),chip=$('captureWorking');panel.classList.add('processing');panel.setAttribute('aria-busy','true');chip.textContent=message||'Processing…';chip.classList.remove('hidden');
+ const panel=$('captureViewport'),chip=$('captureWorking');panel.classList.add('processing');panel.setAttribute('aria-busy','true');chip.innerHTML='<span class="ai-live-text">'+(message||'Processing…')+'</span>';chip.classList.remove('hidden');
  for(const id of ['captureShutter','captureRecognize','captureRefineApply','captureDescribe','captureMake3D','captureChatSend','captureQuickExtract']){const b=$(id);if(b)b.disabled=true;}
  try{if(message)$('captureStatus').textContent=message;await job();}catch(e){resultPanel('Request failed',e.message||String(e));inform(e.message||String(e));}
  finally{busy=false;panel.classList.remove('processing');panel.removeAttribute('aria-busy');chip.classList.add('hidden');
@@ -94,8 +94,9 @@ async function saveSource(){const app=FL(),state=app.getState();let frame=state.
 }
 async function recognize(){const item=selected();if(!await paid('EXTRACT'))return;
  await execute(async()=>{await ensureFrame(item);const result=await FL().recognizeXR(item.cid,item.oid||null,true);expanded=true;await load(chosen);inform('Extracted '+(result.items||[]).length+' segments. Open Library to inspect them.');},'Extracting objects…');}
-async function segment(noun=null){const item=selected();const text=(noun||$('captureRefineText').value||'').trim();if(text.length<2){inform('Name an object to refine, for example chair');return;}if(!await paid('REFINE'))return;
- await execute(async()=>{await ensureFrame(item);const r=await FL().segmentXR(item.cid,text,item.oid||null,true);expanded=true;await load(chosen);inform('Created '+(r.items||[]).length+' child segments.');},'Refining selected image…');}
+async function segment(noun=null){const item=selected();const text=(noun||$('captureRefineText').value||'').trim();if(text.length<2){inform('Name one object to extract, for example chair');return;}if(!await paid('EXTRACT OBJECT'))return;
+ await execute(async()=>{await ensureFrame(item);const r=await FL().segmentXR(item.cid,text,item.oid||null,true);expanded=true;$('captureRefineRow').classList.add('hidden');await load(chosen);inform('Created '+(r.items||[]).length+' named cutouts.');},'Extracting named object…');}
+function refineImage(instruction=''){const seed=String(instruction||'').trim()||'Improve image quality, reduce noise, sharpen details, and improve lighting.';promptEditor(false,seed);inform('Refine opens the image editor. Adjust the prompt if needed, then apply it.');}
 async function describe(query=''){const item=selected();
  if(!query.trim()){
   try{const saved=await FL().api('/media/descriptions?capture_id='+item.cid+(item.oid?'&object_id='+item.oid:''));
@@ -107,7 +108,7 @@ async function describe(query=''){const item=selected();
  await execute(async()=>{const result=await FL().describeXR(item.cid,item.oid||null,query,false);
  resultPanel(result.cached?'Saved description':'Description saved to this image',result.description||'No description returned');
  inform(result.cached?'Loaded saved description':'Description saved');},'Describing selected image…');}
-function promptEditor(voice=false,instruction=''){const item=selected();FL().openPromptEditor({captureId:item.cid,objectId:item.oid||null,label:item.record.label||'source'},instruction,async()=>{expanded=true;await load(chosen);inform('Image generated. Find it in Library.');});if(voice){$('xrPromptVoice')?.focus();inform('Record your instruction, then explicitly confirm the edit.');}}
+function promptEditor(voice=false,instruction=''){const item=selected();$('captureRefineRow').classList.add('hidden');FL().openPromptEditor({captureId:item.cid,objectId:item.oid||null,label:item.record.label||'source'},instruction,async()=>{expanded=true;await load(chosen);inform('Image generated. Find it in Library.');});if(voice){$('xrPromptVoice')?.focus();inform('Record your instruction, then explicitly confirm the edit.');}}
 async function generate3D(instruction=''){
  const item=selected(),prompt=String(instruction||'').trim();
  if(prompt.length>750)return inform('3D guidance must be 750 characters or fewer');
@@ -116,8 +117,8 @@ async function generate3D(instruction=''){
  if(!await paid('GENERATE 3D',`Provider: ${check.provider.toUpperCase()} · ${prompt?'Text-guided model + reference image':'Image-to-3D model'} · Each submission is a separate paid task.`))return;
  await execute(async()=>{
   const result=await FL().createXR3D(item.cid,item.oid||null,prompt);
-  resultPanel('3D task submitted · '+result.provider,'Task '+result.id+' is queued. FREELAB will check it while this studio remains open.',null,result.id);
-  monitorJob(result.id,chosen);inform('3D task '+result.id+' submitted. Its progress will appear under the photo.');
+  resultPanel('3D task submitted · '+result.provider,'Task '+result.id+' is queued in the background. Keep working while FREELAB checks its status.',null,result.id);
+  monitorJob(result.id,chosen);inform('3D task '+result.id+' queued in the background. You can keep using the studio while it runs.');
  },'Submitting 3D task…');
 }
 async function connection3D(){try{const check=await FL().api('/media/3d/check');
@@ -134,10 +135,10 @@ async function recordVoice(){if(voiceRecorder){const old=voiceRecorder;voiceReco
 }
 function resizeComposer(){const field=$('captureCommandText');field.style.height='auto';field.style.height=Math.min(field.scrollHeight,150)+'px';}
 function theater(){const item=selected();const id=item.type==='object'?item.oid:null;return FL().openGallery(id,item.type==='capture'?item.cid:null);}
-async function activate(id){try{if(id==='inspect')return;if(id==='extract')return recognize();if(id==='describe')return describe();if(id==='refine'){$('captureRefineRow').classList.remove('hidden');return $('captureRefineText').focus();}if(id==='prompt')return promptEditor();if(id==='voice')return recordVoice();if(id==='3d')return generate3D();if(id==='check3d')return connection3D();if(id==='source')return beginNew();if(id==='import')return $('fileInput').click();if(id==='theater')return theater();}catch(e){inform(e.message);}}
+async function activate(id){try{if(id==='inspect')return;if(id==='extract')return recognize();if(id==='describe')return describe();if(id==='segment'){$('captureRefineRow').classList.remove('hidden');return $('captureRefineText').focus();}if(id==='refine')return refineImage();if(id==='prompt')return promptEditor();if(id==='voice')return recordVoice();if(id==='3d')return generate3D();if(id==='check3d')return connection3D();if(id==='source')return beginNew();if(id==='import')return $('fileInput').click();if(id==='theater')return theater();}catch(e){inform(e.message);}}
 function beginNew(){const state=FL().getState();requestedCapture=null;chosen=null;inspecting=false;expanded=false;if(state.stream?.getVideoTracks?.().some(t=>t.readyState==='live'&&!t.muted)){FL().resumeCamera();render();}else{$('fileInput').click();} $('captureResult').replaceChildren();$('captureResult').classList.add('hidden');stopJobMonitor();}
 async function chatSubmit(e){e.preventDefault();const mode=$('captureCommandMode').value,text=$('captureCommandText').value.trim();
- try{if(!selected())return;switch(mode){case 'extract':await recognize();break;case 'describe':await describe(text);break;case 'refine':await segment(text);break;case '3d':await generate3D(text);break;default:promptEditor(false,text);break;}}catch(error){inform(error.message);} }
+ try{if(!selected())return;switch(mode){case 'extract':await recognize();break;case 'describe':await describe(text);break;case 'segment':await segment(text);break;case 'refine':refineImage(text);break;case '3d':await generate3D(text);break;default:promptEditor(false,text);break;}}catch(error){inform(error.message);} }
 function setup(){if(!$('captureShutter'))return;
  const legacy=$('captureAdvancedTools'),panel=$('captureMorePanel');if(legacy&&panel)panel.append(legacy);
  $('captureShutter').onclick=()=>execute(saveSource,'Saving source privately…');$('captureNewSource').onclick=beginNew;$('captureUpload').onclick=()=>$('fileInput').click();
@@ -148,7 +149,7 @@ function setup(){if(!$('captureShutter'))return;
  $('captureCommandText').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();$('captureCommandForm').requestSubmit();}});
  document.querySelectorAll('[data-capture-tool]').forEach(btn=>btn.onclick=()=>{$('captureMore').open=false;void activate(btn.dataset.captureTool);});
  $('captureModeButton').onclick=()=>{$('captureCommandMode').focus();$('captureCommandMode').click();};
- $('captureCommandMode').onchange=()=>{$('captureCommandText').placeholder=({prompt:'Ask AI to change this image…',describe:'Ask a question about the image…',extract:'Extract objects from this source',refine:'Which object should be segmented?', '3d':'Generate a 3D model of the selected image'})[$('captureCommandMode').value];};
+ $('captureCommandMode').onchange=()=>{$('captureRefineRow').classList.add('hidden');$('captureCommandText').placeholder=({prompt:'Ask AI to change this image…',describe:'Ask a question about the image…',extract:'Extract all obvious objects from this source',segment:'Name one object to extract, e.g. chair',refine:'Describe how the image quality should be improved', '3d':'Generate a 3D model of the selected image'})[$('captureCommandMode').value];};
  $('captureViewportHint').textContent='LIVE CAMERA · READY TO CAPTURE';
  window.addEventListener('freelab-photo-ready',()=>{requestedCapture=null;inspecting=false;expanded=false;render();$('previewImage').classList.remove('hidden');$('cameraVideo').classList.add('hidden');$('captureViewportHint').textContent='PHOTO IMPORTED · PRESS SHUTTER TO SAVE';});
  $('cameraButton')?.addEventListener('click',()=>load().catch(e=>inform(e.message)));

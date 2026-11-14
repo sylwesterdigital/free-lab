@@ -207,9 +207,9 @@
  * DOM transforms track projection; label font sizes never change with distance. */
 #roomViewer{isolation:isolate}
 #roomLabels{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden}
-.room-world-label{position:absolute;left:0;top:0;display:flex;flex-direction:column;gap:4px;min-width:110px;max-width:min(230px,25vw);padding:7px 11px 8px;border-radius:9px;background:rgba(12,20,24,.66);border-left:2px solid #a6dcce;box-shadow:0 3px 16px #0008;backdrop-filter:blur(9px);color:#fff;will-change:transform;font-family:system-ui,sans-serif;line-height:1.25;text-align:left}
-.room-world-label strong{font-size:clamp(13px,1.1vw,16px);font-weight:730;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.room-world-label span{font-size:clamp(11px,.83vw,13px);line-height:1.35;color:#d6e4df;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.room-world-label{position:absolute;left:0;top:0;display:flex;flex-direction:column;gap:5px;min-width:128px;max-width:min(280px,31vw);padding:9px 13px 10px;border-radius:10px;background:rgba(12,20,24,.72);border-left:3px solid #a6dcce;box-shadow:0 3px 16px #0008;backdrop-filter:blur(9px);color:#fff;will-change:transform;font-family:system-ui,sans-serif;line-height:1.3;text-align:left}
+.room-world-label strong{font-size:clamp(14px,1.28vw,18px);font-weight:740;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.room-world-label span{font-size:clamp(12px,.98vw,14px);line-height:1.42;color:#d6e4df;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .room-world-label.selected{border-color:#ff95c2;background:rgba(25,20,33,.85)}
 .room-world-label.selected strong{color:#ff95c2}
 .room-inspect-picture{position:relative!important;padding:0!important;border:0!important;background:transparent!important;overflow:hidden;display:grid;place-items:center;min-height:180px;max-height:42vh}
@@ -437,10 +437,14 @@
 .capture-processing-chip{position:absolute;top:8px;left:50%;transform:translateX(-50%);max-width:78%;padding:7px 13px;background:#0b1819e5;color:#f2f9f5;border-radius:28px;border:1px solid #aee7d87f;z-index:15;font-size:12px;text-align:center;pointer-events:none;display:flex;align-items:center;gap:7px}
 .capture-processing-chip::before{content:'';height:8px;width:8px;background:#a2efc5;border-radius:50%;box-shadow:0 0 12px #8adcb9;animation:fl-pulse 1.1s infinite alternate}
 @keyframes fl-pulse{to{opacity:.3;transform:scale(.72)}}
+@keyframes fl-rainbow-text{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+.ai-live-text{background-image:linear-gradient(90deg,#c9ffe7 0%,#8ce4ff 18%,#f5a8cf 37%,#ffe78d 56%,#9bf2c6 74%,#d1c2ff 100%);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:fl-rainbow-text 2.8s linear infinite}
+.capture-result.working{border-color:#f4add38a;box-shadow:0 0 0 1px #ffbbe338,0 0 26px #7bf0c225;animation:fl-processing-glow 1.6s ease-in-out infinite}
+.capture-result.working strong,.capture-result.working p,#galleryAIStatus.working,#xrPromptResult.working{background-image:linear-gradient(90deg,#c9ffe7 0%,#8ce4ff 18%,#f5a8cf 37%,#ffe78d 56%,#9bf2c6 74%,#d1c2ff 100%);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:fl-rainbow-text 2.8s linear infinite}
 #captureViewport .capture-quick-actions{bottom:13px}
 .capture-viewport.inspecting ~ .capture-rail{display:none}
 #cameraPanel:has(.capture-viewport.inspecting) .capture-rail{display:none!important}
-.capture-chat textarea{flex:1;min-width:0;max-height:152px;min-height:42px;height:48px;resize:vertical;background:transparent;color:#fff;font:inherit;font-size:15px;border:0;outline:0;padding:10px 4px;line-height:1.5;box-sizing:border-box}
+.capture-chat textarea{flex:1;min-width:0;max-height:184px;min-height:56px;height:64px;resize:vertical;background:transparent;color:#fff;font:inherit;font-size:15px;border:0;outline:0;padding:10px 4px;line-height:1.5;box-sizing:border-box}
 .capture-chat textarea::placeholder{color:#b8cac5}
 .capture-chat form{align-items:end}
 .capture-chat #captureChatVoice{font-size:0}
@@ -452,3 +456,5 @@
 @media(max-width:650px){.capture-chat textarea{min-height:42px;font-size:14px}.fl-dialog{padding:19px}.capture-more-panel{max-width:calc(100vw - 35px)}}
 
 #desktopGallery #galleryAIStatus.working{border:1px solid #f4add38a;background:#182a24;border-radius:12px;padding:9px;animation:fl-processing-glow 1.6s ease-in-out infinite}
+
+.room-image-lightbox{position:fixed;inset:0;z-index:41;background:rgba(3,6,9,.94);display:grid;place-items:center;padding:32px}.room-image-lightbox img{max-width:min(92vw,1400px);max-height:84vh;object-fit:contain;box-shadow:0 20px 80px #000b;border-radius:14px}.room-image-toolbar{position:absolute;top:18px;right:18px;display:flex;gap:12px}.room-image-toolbar button{width:52px;height:52px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:#fff;color:#0d1317;font-size:26px;font-weight:700;box-shadow:0 8px 30px rgba(0,0,0,.28)}.room-image-toolbar button:hover{filter:brightness(1.06)}

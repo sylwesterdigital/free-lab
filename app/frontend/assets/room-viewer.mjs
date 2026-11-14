@@ -114,6 +114,8 @@ export async function createRoomViewer({canvas,inspector,viewer,status,count,bac
   inspector.classList.remove('hidden');
  }
  function addRelation(container,label,key){const b=document.createElement('button');b.textContent=label;b.onclick=()=>{select(key);focusOn(key);};container.append(b);}
+ function orderedKeys(){return [...cards.keys()];}
+ function cycleSelected(step=1){const ks=orderedKeys();if(!ks.length)return;const pos=Math.max(0,ks.indexOf(selected));const next=ks[(pos+step+ks.length)%ks.length];select(next);focusOn(next);if(!$('roomImageLightbox').classList.contains('hidden'))$('roomImageLarge').src=$('roomInspectImage').src;}
  function parentKey(c){return c.kind==='object'&&(Number.isInteger(c.parent_object_id)?c.parent_object_id>0:false)?'object:'+c.parent_object_id:
   c.kind==='object'&&Number.isInteger(c.capture_id)&&c.capture_id>0?'capture:'+c.capture_id:null;}
  function focusOn(key){const g=cards.get(key);if(!g)return;
@@ -255,7 +257,8 @@ export async function createRoomViewer({canvas,inspector,viewer,status,count,bac
   if(e.key.toLowerCase()==='f'){fit();return;}
   if(e.key.toLowerCase()==='v'){changeMode(mode==='orbit'?'fly':'orbit');return;}
   if(e.key==='ArrowLeft'||e.key==='ArrowRight'){
-   if(!inspector.classList.contains('hidden')){const ks=[...cards.keys()];const pos=ks.indexOf(selected);select(ks[(pos+(e.key==='ArrowLeft'?-1:1)+ks.length)%ks.length]);e.preventDefault();return;}
+   if(!$('roomImageLightbox').classList.contains('hidden')){cycleSelected(e.key==='ArrowLeft'?-1:1);e.preventDefault();return;}
+   if(!inspector.classList.contains('hidden')){cycleSelected(e.key==='ArrowLeft'?-1:1);e.preventDefault();return;}
   }
   keys.add(e.key.length===1?e.key.toLowerCase():e.key);
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();
@@ -268,6 +271,8 @@ export async function createRoomViewer({canvas,inspector,viewer,status,count,bac
  button('roomControlMode',()=>changeMode(mode==='orbit'?'fly':'orbit'));
  button('roomControlFit',()=>fit());button('roomInspectorClose',()=>select(null));
  button('roomInspectFull',()=>{$('roomImageLightbox').classList.remove('hidden');$('roomImageLarge').src=$('roomInspectImage').src;});
+ button('roomImagePrev',()=>cycleSelected(-1));
+ button('roomImageNext',()=>cycleSelected(1));
  button('roomImageClose',()=>{$('roomImageLightbox').classList.add('hidden');});
  button('roomInspectFocus',()=>selected&&focusOn(selected));
  function start(){if(active)return;active=true;resize();lastFrame=0;raf=requestAnimationFrame(tick);}

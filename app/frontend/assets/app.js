@@ -104,8 +104,9 @@ async function galleryAI(action){const item=galleryItems[galleryIndex];if(!item)
   status.textContent='Running '+action+'…';status.classList.add('working');let result;
   if(action==='extract'){result=await recognizeXR(item.cid,item.oid||null,true);status.textContent='Extracted '+(result.items||[]).length+' segments. Open Collection to see them.';}
   else if(action==='describe'){result=await describeXR(item.cid,item.oid||null,'',false);status.textContent=result.description||'No description returned';}
-  else if(action==='refine'){const noun=await window.FreeLabDialog.input('Object to extract from this image (e.g. chair):');if(!noun||noun.trim().length<2){status.classList.add('hidden');return;}result=await segmentXR(item.cid,noun.trim(),item.oid||null,true);status.textContent='Created '+(result.items||[]).length+' new segments.';}
-  else if(action==='3d'){result=await createXR3D(item.cid,item.oid||null);status.textContent='3D job '+result.id+' queued. Check Collection → Your 3D Models for status. No task is resubmitted automatically.';}
+  else if(action==='segment'){const noun=await window.FreeLabDialog.input('Name one object to extract from this image (for example: chair).','',{title:'Extract named object'});if(!noun||noun.trim().length<2){status.classList.add('hidden');return;}result=await segmentXR(item.cid,noun.trim(),item.oid||null,true);status.textContent='Created '+(result.items||[]).length+' new cutouts.';}
+  else if(action==='refine'){openPromptEditor({captureId:item.cid,objectId:item.oid||null,label:item.label},'Improve image quality, reduce noise, sharpen details, and improve lighting.',()=>{status.textContent='Refined image saved. Reopen Collection to inspect it.';});status.textContent='Refine opens the editor. Adjust the prompt if needed, then apply it.';}
+  else if(action==='3d'){result=await createXR3D(item.cid,item.oid||null);status.textContent='3D job '+result.id+' queued in the background. Keep working and check Collection → Your 3D Models for status.';}
   else {openPromptEditor({captureId:item.cid,objectId:item.oid||null,label:item.label},'',()=>{status.textContent='New image saved. Reopen Collection to inspect it.';});if(action==='voice')$('xrPromptVoice')?.focus();status.textContent='Use the editor to submit your image instruction.';}
  }catch(error){status.textContent='Request failed: '+error.message;}finally{status.classList.remove('working');}
 }
@@ -460,7 +461,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.19');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.21');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{
@@ -488,7 +489,7 @@ function openPromptEditor(context,initialText='',onApply=null){
  pendingPrompt={...context,onApply};const modal=document.getElementById('xrPromptEditor');
  document.getElementById('xrPromptTarget').textContent='EDIT '+(context?.label||'SELECTED PHOTO');
  document.getElementById('xrPromptText').value=initialText;
- document.getElementById('xrPromptResult').textContent='Original image will be preserved. One paid image edit is submitted only on Apply.';
+ document.getElementById('xrPromptResult').textContent='Type or speak an instruction, then apply it.';
  modal.classList.remove('hidden');document.getElementById('xrPromptText').focus();
 }
 function wirePromptEditor(){
@@ -496,22 +497,23 @@ function wirePromptEditor(){
  let promptRecording=null;
  document.getElementById('xrPromptVoice').onclick=async()=>{
   const status=document.getElementById('xrPromptResult'),btn=document.getElementById('xrPromptVoice');
-  if(!promptRecording){try{if(!micReady())await armMicrophone();promptRecording=startWavPrompt();btn.textContent='STOP RECORDING';status.textContent='Recording voice… press STOP when finished';}
+  if(!promptRecording){try{if(!micReady())await armMicrophone();promptRecording=startWavPrompt();btn.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg><span>Stop</span>';status.textContent='Recording voice… press Stop when finished';}
    catch(e){status.textContent='Microphone: '+e.message;}return;}
-  const recording=promptRecording;promptRecording=null;btn.textContent='VOICE';status.textContent='Transcribing with Meta (paid)…';
-  try{const wav=await recording.stop();const transcript=await transcribeXR(wav);document.getElementById('xrPromptText').value=transcript;status.textContent='Transcript ready. Press Apply to edit.';}
+  const recording=promptRecording;promptRecording=null;btn.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg><span>Speak / Stop</span>';status.textContent='Transcribing with Meta…';status.classList.add('working');
+  try{const wav=await recording.stop();const transcript=await transcribeXR(wav);document.getElementById('xrPromptText').value=transcript;status.textContent='Transcript ready. Press Apply when you are happy with it.';}
   catch(e){status.textContent=e.message;}
+  finally{status.classList.remove('working');}
  };
  document.getElementById('xrPromptApply').onclick=async()=>{
   if(!pendingPrompt)return;const context=pendingPrompt;
   const value=document.getElementById('xrPromptText').value.trim();
   if(value.length<3)return notify('Enter a prompt of at least 3 characters');
   const button=document.getElementById('xrPromptApply');button.disabled=true;
-  document.getElementById('xrPromptResult').textContent='Generating one image with Meta…';
+  const status=document.getElementById('xrPromptResult');status.classList.add('working');status.textContent='Generating a new image…';
   try{const item=await promptXR(context.captureId,context.objectId,value);
     closePrompt();if(context.onApply)await context.onApply(item);notify('Generated image saved privately');}
-  catch(e){document.getElementById('xrPromptResult').textContent=e.message;}
-  finally{button.disabled=false;}
+  catch(e){status.textContent=e.message;}
+  finally{status.classList.remove('working');button.disabled=false;}
  };
 }
 

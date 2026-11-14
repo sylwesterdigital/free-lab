@@ -66,7 +66,7 @@ if(fn([{...control('left',true),hand:{}}]))throw Error('Hand must not toggle');
    self.assertIn(token,XR)
   for token in ('fingerAttach','fingerUpdate','fingerSnap','fingerStop','fingersStopAll'):
    self.assertIn(token,SOUND)
-  self.assertIn('finger-lab.js?v=0.10.19',HTML)
+  self.assertIn('finger-lab.js?v=0.10.21',HTML)
   self.assertNotIn('fetch(',MODULE)
 
 if __name__=='__main__':unittest.main()

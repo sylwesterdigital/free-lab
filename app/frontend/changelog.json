@@ -1,20 +1,43 @@
 {
-  "version": "0.10.19",
-  "title": "FREELAB v0.10.19 — Unified AI controls & reliable 3D",
+  "version": "0.10.21",
+  "title": "FREELAB v0.10.21 — Watcher-safe release identity",
   "datetime": "2026-11-14",
   "changes": [
-    "Desktop/mobile and gallery now use one in-page confirmation/entry overlay; no browser-native confirm, prompt or alert dialogs for AI and account actions.",
-    "Capture actions reuse three roundels (microphone, describe, extract) over selected photo, with extra tools including 3D under a contextual three-dot menu; a second shutter row is hidden while inspecting.",
-    "Multiline, expandable instruction composer supports image edits, questions, extraction, targeted segment refinement and image-guided 3D prompt submissions. The microphone uses an actual microphone icon.",
-    "Live AI requests show an animated active border and progress chip, keeping results below the photo rather than disappearing in notifications.",
-    "Read-only saved-description history is restored to capture and gallery views without new paid inference calls.",
-    "3D connection check distinguishes configured provider key from a successful generation and shows recent job states without charging credits. Paid submissions require explicit confirmation.",
-    "AHOLO Lux3D receives encoded JPEG pixels directly instead of a temporary private image URL; creative prompts select its text-to-3D route with an optional reference image, not silently ignored.",
-    "3D status checks display real provider state and error text, with polling only while the capture view is open. Completed GLBs are downloaded into a 12 MB bounded private server cache when the provider download host is allowlisted; owners can retrieve saved assets after link expiry.",
-    "Audio recording uses AudioWorkletNode when available, with legacy ScriptProcessor fallback only for older browsers.",
-    "XR capture roundels moved slightly lower to reduce panel overlap. Live AHOLO billing, task success and Quest positioning require production/device verification."
+    "Repackaged the v0.10.20 UX hotfix under a unique v0.10.21 release identity so the watcher can pick it up.",
+    "Retains the refine/extract separation, bottom image editor, asynchronous 3D task UI, gradient feedback and XR/theater layout changes.",
+    "No provider configuration, database reset, watcher replacement or paid API operation is introduced."
   ],
   "history": [
+    {
+      "version": "0.10.20",
+      "title": "FREELAB v0.10.20 — Refine flow, spatial controls and packaging repair",
+      "datetime": "2026-11-14",
+      "changes": [
+        "Refine image now opens a multiline image-quality editor rather than asking for an object to segment; named-object extraction remains a separate command.",
+        "Bottom-aligned image editor keeps the original photo visible. Removed redundant instructions and added animated rainbow text during processing.",
+        "3D tasks remain asynchronous; clearer queued-status messages explain users can continue working while the model is generated.",
+        "XR navigation now sits lower beneath the capture roundels; microphone icons and captions are adjusted for headset legibility.",
+        "Desktop room fullscreen groups previous, next and close controls. Cards use larger captions.",
+        "Deployment ZIP excludes Python bytecode and test caches; release manifest lists only application source files."
+      ]
+    },
+    {
+      "version": "0.10.19",
+      "title": "FREELAB v0.10.19 — Unified AI controls & reliable 3D",
+      "datetime": "2026-11-14",
+      "changes": [
+        "Desktop/mobile and gallery now use one in-page confirmation/entry overlay; no browser-native confirm, prompt or alert dialogs for AI and account actions.",
+        "Capture actions reuse three roundels (microphone, describe, extract) over selected photo, with extra tools including 3D under a contextual three-dot menu; a second shutter row is hidden while inspecting.",
+        "Multiline, expandable instruction composer supports image edits, questions, extraction, targeted segment refinement and image-guided 3D prompt submissions. The microphone uses an actual microphone icon.",
+        "Live AI requests show an animated active border and progress chip, keeping results below the photo rather than disappearing in notifications.",
+        "Read-only saved-description history is restored to capture and gallery views without new paid inference calls.",
+        "3D connection check distinguishes configured provider key from a successful generation and shows recent job states without charging credits. Paid submissions require explicit confirmation.",
+        "AHOLO Lux3D receives encoded JPEG pixels directly instead of a temporary private image URL; creative prompts select its text-to-3D route with an optional reference image, not silently ignored.",
+        "3D status checks display real provider state and error text, with polling only while the capture view is open. Completed GLBs are downloaded into a 12 MB bounded private server cache when the provider download host is allowlisted; owners can retrieve saved assets after link expiry.",
+        "Audio recording uses AudioWorkletNode when available, with legacy ScriptProcessor fallback only for older browsers.",
+        "XR capture roundels moved slightly lower to reduce panel overlap. Live AHOLO billing, task success and Quest positioning require production/device verification."
+      ]
+    },
     {
       "version": "0.10.18",
       "title": "FREELAB v0.10.18 — Quest renderer and compact capture experience",

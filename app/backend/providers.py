@@ -114,14 +114,22 @@ def identify(jpeg, model=None, api_key=None):
     }
     request=urllib.request.Request(API_URL,data=json.dumps(payload).encode('utf-8'),
         headers={'Authorization':'Bearer '+api_key,'Content-Type':'application/json','User-Agent':'FreeLab/0.1'},method='POST')
-    try:
-        with urllib.request.urlopen(request,timeout=38) as response:
-            result=json.load(response)
-    except urllib.error.HTTPError as e:
-        # Do not leak response bodies or secret tokens into logs/browser.
-        raise RuntimeError(f'Meta API returned HTTP {e.code}') from e
-    except (TimeoutError,urllib.error.URLError) as e:
-        raise RuntimeError('Meta API temporarily unreachable') from e
+    result=None;last_error=None
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(request,timeout=38) as response:
+                result=json.load(response);last_error=None;break
+        except urllib.error.HTTPError as e:
+            # Do not leak response bodies or secret tokens into logs/browser.
+            if e.code in (502,503,504) and attempt==0:
+                time.sleep(.35);last_error=e;continue
+            raise RuntimeError(f'Meta API returned HTTP {e.code}') from e
+        except (TimeoutError,urllib.error.URLError) as e:
+            if attempt==0:
+                time.sleep(.35);last_error=e;continue
+            raise RuntimeError('Meta API temporarily unreachable') from e
+    if result is None and last_error is not None:
+        raise RuntimeError('Meta API temporarily unreachable') from last_error
     try:
         content=result['choices'][0]['message']['content']
         return parse_detections(json.loads(content)),result.get('usage',{})
