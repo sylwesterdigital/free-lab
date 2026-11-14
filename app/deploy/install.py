@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Root-only verified Ubuntu deploy, with symlink + nginx rollback on error."""
-import argparse,hashlib,json,os,pwd,secrets,shutil,subprocess,sys,time,urllib.request
+import argparse,hashlib,json,os,pwd,re,secrets,shutil,subprocess,sys,time,urllib.request
 from pathlib import Path
 
 DOMAIN='free-lab.cam'
@@ -49,8 +49,18 @@ server {
        proxy_read_timeout 50s;
        client_max_body_size 4500k;
     }
-    # Ubuntu nginx mime.types may not define .mjs. Browsers refuse octet-stream
-    # as an ES module. Apply this MIME override to every present/future .mjs.
+    # Explicitly type browser ES modules. nginx's stock mime.types on some
+    # Ubuntu installations does not map .mjs to JavaScript.
+    location = /assets/room-viewer.mjs {
+       types { application/javascript mjs; }
+       default_type application/javascript;
+       try_files $uri =404;
+    }
+    location = /assets/scene.mjs {
+       types { application/javascript mjs; }
+       default_type application/javascript;
+       try_files $uri =404;
+    }
     location ~ \.mjs$ {
        types { application/javascript mjs; }
        default_type application/javascript;
@@ -115,6 +125,55 @@ def switch(target):
     if temp.is_symlink() or temp.exists():temp.unlink()
     temp.symlink_to(target)
     os.replace(temp,CURRENT)
+
+def active_vhost_files(nginx_dump, host=DOMAIN):
+    """Find files actually loaded by nginx for this hostname (`nginx -T`).
+
+    A sites-available file is *not necessarily enabled*. Writing it and
+    passing `nginx -t` does not mean the active server configuration changed.
+    Return ordered unique filenames from the config dump, without DNS access.
+    """
+    header=re.compile(r'^# configuration file (.+?):\s*$', re.M)
+    markers=list(header.finditer(nginx_dump))
+    found=[]
+    for i,marker in enumerate(markers):
+        chunk=nginx_dump[marker.end():markers[i+1].start() if i+1<len(markers) else len(nginx_dump)]
+        # Ignore full/inline nginx comments, not just commented-out locations.
+        uncommented='\n'.join(line.split('#',1)[0] for line in chunk.splitlines())
+        for names in re.findall(r'(?m)^\s*server_name\s+([^;]+);',uncommented):
+            if host in names.split():
+                filename=marker.group(1).strip()
+                if filename not in found:found.append(filename)
+                break
+    return found
+
+def active_nginx_target():
+    """Resolve the existing loaded vhost, refusing to edit unrelated sites.
+
+    We do not blindly change sites-available: the active config may be a
+    separate file in sites-enabled, conf.d, or a symlink to another target.
+    """
+    p=subprocess.run(['nginx','-T'],capture_output=True,text=True,timeout=22,check=True)
+    candidates=active_vhost_files(p.stdout)
+    paths=[]
+    for candidate in candidates:
+        path=Path(candidate).resolve(strict=True)
+        # Never overwrite the master config or anything outside nginx's tree.
+        if path==Path('/etc/nginx/nginx.conf') or not path.is_relative_to('/etc/nginx'):
+            raise RuntimeError('FREE LAB active nginx configuration is not a standalone /etc/nginx site: '+str(path))
+        if path not in paths:paths.append(path)
+    if len(paths)!=1:
+        raise RuntimeError('Expected exactly one active nginx vhost config for '+DOMAIN+
+                           ', found '+repr([str(p) for p in paths])+'. Refusing to modify unrelated sites.')
+    active=paths[0]
+    content=active.read_text()
+    names=set()
+    for match in re.findall(r'(?m)^\s*server_name\s+([^;]+);',content):
+        names.update(match.split())
+    if names-{DOMAIN}:
+        raise RuntimeError('Active FREE LAB nginx config also contains unrelated server names: '+
+                           ', '.join(sorted(names-{DOMAIN}))+'. Refusing destructive overwrite.')
+    return active
 
 def verify_local_es_modules():
     """Fail/rollback an installation if nginx serves ES modules as octet-stream.
@@ -275,18 +334,36 @@ def install(stage,version):
     # Do not alter a preconfigured API key or persistent credentials.
     ensure_admin(dest)
     run('runuser','-u','free-lab','--',str(VENV/'bin/python'),'-m','unittest','discover','-s','tests','-v',cwd=dest,env=env_values(),timeout=65)
+    # Detect which file nginx actually includes before writing anything.
+    # Earlier releases updated sites-available even when the live vhost was
+    # loaded from a different file, leaving .mjs at application/octet-stream.
+    live_site=active_nginx_target()
     prev_target=CURRENT.resolve() if CURRENT.is_symlink() else None
     stamp=time.strftime('%Y%m%d-%H%M%S')+'-'+version.replace('.','-')
     backup=BACKUP/stamp;backup.mkdir(parents=True,exist_ok=True)
-    prev_site=SITE.read_bytes() if SITE.exists() else None
+    backup.chmod(0o700)
+    site_target=SITE.resolve() if SITE.is_symlink() else SITE
+    config_files=list(dict.fromkeys((site_target,live_site)))
+    prior_configs={file:file.read_bytes() if file.exists() else None for file in config_files}
     prev_unit=UNIT.read_bytes() if UNIT.exists() else None
-    (backup/'metadata.json').write_text(json.dumps({'previous':str(prev_target) if prev_target else None,'version':version},indent=2))
-    if prev_site is not None:(backup/'nginx.conf').write_bytes(prev_site)
+    (backup/'metadata.json').write_text(json.dumps({'previous':str(prev_target) if prev_target else None,
+         'version':version,'live_nginx_config':str(live_site)},indent=2))
+    for i,(file,data) in enumerate(prior_configs.items()):
+        if data is not None:(backup/f'nginx-{i}.conf').write_bytes(data)
     if prev_unit is not None:(backup/'unit.service').write_bytes(prev_unit)
     changed=False
     try:
         atomic_write(UNIT,UNIT_TEXT);run('systemctl','daemon-reload')
-        atomic_write(SITE,NGINX);run('nginx','-t')
+        # Update the canonical file AND the included file, if they differ.
+        # Do not replace the symlink itself with a regular file.
+        for path in config_files:atomic_write(path,NGINX)
+        run('nginx','-t')
+        # Confirm that nginx -T sees our new JS MIME directives, not a stale
+        # duplicate or disabled vhost from an old configuration.
+        check=subprocess.run(['nginx','-T'],capture_output=True,text=True,timeout=22,check=True)
+        active_files=[Path(p).resolve(strict=True) for p in active_vhost_files(check.stdout)]
+        if active_files != [live_site] or 'location = /assets/room-viewer.mjs {' not in live_site.read_text():
+            raise RuntimeError('Active nginx vhost did not accept updated ES module MIME routing')
         switch(dest);changed=True
         run('systemctl','enable','free-lab')
         run('systemctl','restart','free-lab')
@@ -294,11 +371,13 @@ def install(stage,version):
         run('systemctl','reload','nginx')
         verify_local_es_modules()
         print('DEPLOYED '+version)
-        print('SERVER UNIT TESTS + LOCAL HEALTH PASSED')
+        print('SERVER UNIT TESTS + LOCAL HEALTH + ES MODULE MIME PASSED')
         print('PUBLIC URL https://free-lab.cam/')
     except Exception:
-        if prev_site is None:SITE.unlink(missing_ok=True)
-        else:SITE.write_bytes(prev_site)
+        # Recover *every* file changed, including the truly active nginx vhost.
+        for path,data in prior_configs.items():
+            if data is None:path.unlink(missing_ok=True)
+            else:path.write_bytes(data)
         if prev_unit is None:UNIT.unlink(missing_ok=True)
         else:UNIT.write_bytes(prev_unit)
         if changed:

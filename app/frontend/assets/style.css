@@ -185,7 +185,7 @@
 .room-inspector h3{font-size:23px;font-weight:680;letter-spacing:-.025em;color:#ebf6ef;line-height:1.25;margin:0;overflow-wrap:anywhere}.room-inspect-picture{border:0!important;padding:0!important;background:#091512!important;display:grid;place-items:center;flex:0 0 auto;min-height:180px;max-height:42vh;overflow:hidden;border-radius:12px!important}.room-inspect-picture img{max-width:100%;max-height:40vh;object-fit:contain;display:block}.room-inspect-desc{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.62;font-size:13px;color:#d6e6dd;margin:0}.room-inspect-meta{font-size:11px;color:#8ca799;margin:0}.room-inspect-relatives{display:flex;gap:7px;flex-wrap:wrap;border-top:1px solid #96ab9d32;padding-top:14px}.room-inspect-relatives button{font-size:11px!important;padding:8px 11px!important}.room-inspect-focus{margin-top:auto;align-self:flex-start}.room-image-lightbox{position:absolute;inset:0;background:#030908f7;z-index:12;display:grid;place-items:center;padding:55px}.room-image-lightbox img{max-width:100%;max-height:100%;object-fit:contain}.room-image-lightbox>button{position:absolute;top:18px;right:20px;background:#213a32!important;color:#fff!important;border-radius:30px!important;font-size:32px!important;z-index:2}
 @media(max-width:760px){.room-hud{padding:12px;align-items:flex-start}.room-eyebrow{font-size:8px}.room-state-line{font-size:11px;gap:5px}.room-hud-actions button{padding:7px 9px!important;font-size:10px!important}.room-hud-actions{max-width:53vw}.room-guide{left:10px;right:10px;transform:none;white-space:normal;bottom:9px;text-align:center;font-size:8px;padding:8px}.room-inspector{right:9px;top:115px;bottom:42px;width:min(350px,calc(100vw - 18px));padding:13px;gap:9px}}
 
-/* 0.10.15 — cohesive UMI-like masthead, large accessible controls, subtle accents. */
+/* 0.10.16 — cohesive UMI-like masthead, large accessible controls, subtle accents. */
 .brand-word{font-size:clamp(25px,2.8vw,35px);font-weight:850;letter-spacing:-.067em;background:linear-gradient(110deg,#c5b7f3 4%,#ebbdc2 28%,#b7f5d6 52%,#f6c1ba 77%,#c5b7f3 96%);background-size:260% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:freelabPastel 12s ease-in-out infinite}
 @keyframes freelabPastel{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
 .brand-version{font-size:clamp(13px,1vw,16px);font-weight:500;letter-spacing:.05em;color:#aeb6ba;margin-left:18px}
@@ -223,7 +223,7 @@
 .room-inspect-desc{font-size:clamp(14px,1.1vw,17px);line-height:1.55}
 .room-inspector .room-inspect-focus{font-size:14px!important}
 @media(max-width:760px){.room-world-label{max-width:170px;padding:5px 7px}.room-world-label strong{font-size:12px}.room-world-label span{font-size:11px}.room-hud{gap:10px}.room-hud-actions button{font-size:12px!important;min-height:35px!important}}
-/* 0.10.15 mobile-first camera studio: full camera surface, bottom shutter,
+/* 0.10.16 mobile-first camera studio: full camera surface, bottom shutter,
  * recursive source dandelions and XR-parity actions. Legacy controls stay in details. */
 #cameraPanel.camera-panel{position:fixed!important;inset:0!important;z-index:100!important;width:100vw!important;max-width:none!important;height:100dvh!important;max-height:none!important;border-radius:0!important;background:#0d1116!important;overflow-y:auto!important;overscroll-behavior:contain!important;padding:0!important}
 .capture-shell{min-height:100dvh;max-width:980px;margin:auto;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}

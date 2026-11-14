@@ -1,10 +1,12 @@
 {
-  "version": "0.10.15",
-  "title": "FREELAB v0.10.15 — Server-layout deployment fix",
+  "version": "0.10.16",
+  "title": "FREELAB v0.10.16 — Active nginx virtual host repair",
   "datetime": "2026-11-13",
   "changes": [
-    "Correct deployment test to work without the repository-root watcher in Ubuntu release directories",
-    "Preserve v0.10.14 desktop room, mobile capture, XR typography and branding improvements",
-    "Keep nginx JavaScript MIME verification and rollback protection for ES modules"
+    "Fix ES module MIME on the nginx vhost that is actually loaded, even if sites-available differs from sites-enabled",
+    "Add active-vhost discovery and safe refusal for multiple or unrelated virtual hosts",
+    "Back up and roll back both nginx config files when live and canonical locations differ",
+    "Make room-viewer.mjs and scene.mjs explicit application/javascript locations and verify via real HTTPS before completing",
+    "Retain the v0.10.15 desktop rooms, mobile capture studio, XR accessibility and brand updates"
   ]
 }

@@ -266,7 +266,7 @@ are unchanged; raw XR passthrough camera pixels are not shared. Three.js require
 access to the pinned CDN; the viewer shows an explicit loading error if the
 module is unavailable. WebGL framerate depends on spectator hardware.
 
-## v0.10.15 release note
+## v0.10.16 release note
 
 - Nginx `.mjs` MIME override and public module signature check protect desktop rooms.
 - Full-window desktop 3D room uses requestAnimationFrame; GPU/browser frame rate is measured, not guaranteed. Spatial labels are HTML overlays to maintain readable screen-space text across depths.
@@ -274,7 +274,7 @@ module is unavailable. WebGL framerate depends on spectator hardware.
 - Profile photo is private JPEG/PNG data in SQLite, served only to the signed-in user.
 - No existing credentials, images, Git, watcher environment or TLS files are cleared.
 
-## v0.10.15 hotfix
+## v0.10.16 hotfix
 
 Fix Ubuntu release testing: the repository-root `watch-free-lab.sh` is packaged with
 the ZIP but intentionally is not copied into `/var/www/free-lab.cam/releases/vX.Y.Z`.
@@ -282,3 +282,14 @@ Tests validate watcher details only when that file is present in local staging.
 The server-side application checks still run without it, including nginx ES module
 MIME checks. The release is bumped because previous v0.10.14 files may remain
 on disk after a rejected install and cannot be safely overwritten.
+
+## v0.10.16 — active nginx MIME repair
+
+On previous deployments `/etc/nginx/sites-available/free-lab.cam` could be
+different from the configuration that nginx actually serves. `nginx -t` only
+checks syntax; it does not establish that the active virtual host was updated.
+This release discovers the active config from `nginx -T` and updates both the
+canonical and active files when separate. It refuses to overwrite a shared
+config for unrelated hosts or multiple conflicting site configs. It checks
+`room-viewer.mjs` and `scene.mjs` over local HTTPS and rolls back the release,
+nginx and service files if their HTTP responses are not valid JavaScript.
