@@ -1,16 +1,29 @@
 {
-  "version": "0.10.23",
-  "title": "FREELAB v0.10.23 — Upright framed photos, bounded crop and spatial grab",
+  "version": "0.10.24",
+  "title": "FREELAB v0.10.24 — Textured XR models linked to source captures",
   "datetime": "2026-11-14",
   "changes": [
-    "Fixed upside-down FRAME photograph textures with correct top-to-bottom UV mapping for browser-camera images.",
-    "Frame photos now crop a live browser-camera JPEG using the hand-drawn rectangle projected through WebXR viewer matrices, with an aspect-preserving bounded crop, rather than stretching the whole camera image.",
-    "The projection approximates the selected field of view; a separate browser camera is not calibrated to Quest passthrough and cannot supply pixel-perfect crops.",
-    "Pinching anywhere inside or near the filled spatial photo now grabs and moves/rotates its linked frame; releasing pins the photograph at the new pose.",
-    "Erasing or expiring a frame now discards its attached photo and GPU texture/buffer; up to 12 image panels remain resident.",
-    "Normal XR eye capture still saves an independent full camera frame and selected image state is not overwritten by rectangle photo captures."
+    "XR-generated models now use a bounded texture-aware GLB decoder that preserves embedded base-colour images, material colour, UVs and scene-node transforms.",
+    "Dense generated meshes are simplified by spatial vertex clustering instead of skipping faces that appeared as disjoint green star fragments; geometry that cannot be simplified coherently produces a clear fallback message.",
+    "3D previews are normalised and displayed at a compact ~30 cm largest-axis scale beside their parent source or object, moving with the source card.",
+    "Completed models are retrieved read-only from the source-linked job history when the source is reopened; no paid job is re-submitted.",
+    "Closing, hiding, binning or navigating away from a capture removes linked model geometry and textures from the active XR scene; the 3D job and full original GLB remain saved in Collection.",
+    "Existing static guest-avatar previews and desktop full-GLB viewer remain available. Headset renderer performance and unusual GLB formats require Quest verification."
   ],
   "history": [
+    {
+      "version": "0.10.23",
+      "title": "FREELAB v0.10.23 — Upright framed photos, bounded crop and spatial grab",
+      "datetime": "2026-11-14",
+      "changes": [
+        "Fixed upside-down FRAME photograph textures with correct top-to-bottom UV mapping for browser-camera images.",
+        "Frame photos now crop a live browser-camera JPEG using the hand-drawn rectangle projected through WebXR viewer matrices, with an aspect-preserving bounded crop, rather than stretching the whole camera image.",
+        "The projection approximates the selected field of view; a separate browser camera is not calibrated to Quest passthrough and cannot supply pixel-perfect crops.",
+        "Pinching anywhere inside or near the filled spatial photo now grabs and moves/rotates its linked frame; releasing pins the photograph at the new pose.",
+        "Erasing or expiring a frame now discards its attached photo and GPU texture/buffer; up to 12 image panels remain resident.",
+        "Normal XR eye capture still saves an independent full camera frame and selected image state is not overwritten by rectangle photo captures."
+      ]
+    },
     {
       "version": "0.10.22",
       "title": "FREELAB v0.10.22 — Inline editing, live models and spatial camera frames",

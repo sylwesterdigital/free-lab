@@ -33,7 +33,7 @@ class XRTests(unittest.TestCase):
   self.assertIn('id="armXRMic"',HTML)
  def test_card_close_and_bin_restore(self):
   self.assertIn("text(ctx,'×',fullWidth-57",XR)
-  self.assertIn('Card hidden in XR · still saved privately',XR)
+  self.assertIn('Card and linked 3D models hidden in XR · still saved privately',XR)
   self.assertIn('async function binSource()',XR)
   self.assertIn("kind==='bincloud'",XR)
   self.assertIn("cue('paper')",XR)

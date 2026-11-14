@@ -6,7 +6,7 @@ from functools import wraps
 from flask import Flask,abort,g,jsonify,request,send_file,session
 from itsdangerous import URLSafeTimedSerializer,BadSignature,SignatureExpired
 from werkzeug.middleware.proxy_fix import ProxyFix
-from . import db,providers,secrets as keyvault,sam,provider_checks,media,meshy3d,aholo3d,glb_preview,model_cache
+from . import db,providers,secrets as keyvault,sam,provider_checks,media,meshy3d,aholo3d,glb_preview,glb_xr,model_cache
 
 APP_ROOT=Path(__file__).resolve().parents[1]
 DATA_DIR=Path(os.getenv('FREE_LAB_DATA_DIR',APP_ROOT/'var')).resolve()
@@ -877,7 +877,7 @@ def private_3d_asset(jid):
 @app.get('/api/media/3d/<int:jid>/preview')
 @require_user
 def media_3d_preview(jid):
-    """Return small bounded geometry, not a 20-100MB textured model to Quest."""
+    """Return compact, continuous textured geometry; never forward full GLB to Quest."""
     row=g.con.execute('SELECT status,provider,glb_url,model_path FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
     if not row:abort(404)
     if row['status']!='SUCCEEDED' or not (row['model_path'] or (meshy3d.safe_file_url(row['glb_url']) if row['provider']=='meshy' else aholo3d.safe_preview_url(row['glb_url']))):
@@ -893,7 +893,7 @@ def media_3d_preview(jid):
                 if response.headers.get('Content-Length') and int(response.headers['Content-Length'])>glb_preview.MAX_FILE:
                     return jsonify(error='3D model larger than the safe XR preview limit; use Library download'),413
                 raw=response.read(glb_preview.MAX_FILE+1)
-        geometry=glb_preview.decode(raw)
+        geometry=glb_xr.decode_visual(raw)
         return jsonify(**geometry)
     except urllib.error.HTTPError as e:return jsonify(error=f'3D model download HTTP {e.code}; renew the link in Library'),502
     except (ValueError,OSError,KeyError,IndexError,TypeError) as e:return jsonify(error=str(e)),422

@@ -9,7 +9,7 @@ class WebXRBootTests(unittest.TestCase):
     def test_all_texture_parameters_use_three_arguments(self):
         src=(APP/'frontend/assets/xr.js').read_text()
         matches=re.findall(r'gl\.texParameteri\(([^()]*)\)',src)
-        self.assertEqual(len(matches),4)
+        self.assertGreaterEqual(len(matches),4)
         for call in matches:
             self.assertEqual(len(call.split(',')),3,call)
         self.assertIn('gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE',src)
@@ -26,6 +26,6 @@ class WebXRBootTests(unittest.TestCase):
         self.assertIn('location /assets/',install.NGINX)
         self.assertIn('try_files $uri =404;',install.NGINX)
     def test_release_includes_041_version(self):
-        self.assertEqual(__import__('json').loads((APP/'version.json').read_text())['version'],'0.10.23')
+        self.assertEqual(__import__('json').loads((APP/'version.json').read_text())['version'],'0.10.24')
 
 if __name__=='__main__':unittest.main()

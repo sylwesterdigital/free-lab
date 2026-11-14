@@ -48,7 +48,7 @@ class SpatialWorkbench(unittest.TestCase):
         self.assertIn("@app.get('/api/media/3d/<int:jid>/preview')",SERVER)
         self.assertIn("row['status']!='SUCCEEDED'",SERVER)
         self.assertIn('glb_preview.MAX_FILE',SERVER)
-        self.assertIn('spawnMeshPreview(job.id,item.origin)',XR)
+        self.assertIn('void spawnMeshPreview(job)',XR)
         self.assertIn('createXR3D(target.captureId,target.objectId)',XR)
         self.assertEqual(glb_preview.MAX_TRIANGLES,3600)
     def test_non_xr_upload_and_elevenlabs_opt_in(self):
