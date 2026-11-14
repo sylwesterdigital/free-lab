@@ -1,13 +1,13 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.16">
+<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.17">
 <title>FREELAB — Step into the spatial world</title>
-<link rel="stylesheet" href="/assets/style.css?v=0.10.16">
+<link rel="stylesheet" href="/assets/style.css?v=0.10.17">
 </head><body>
 <div id="app" class="app-shell">
 <header class="header" aria-label="Site navigation">
-  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.16</span></a>
+  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.17</span></a>
   <nav class="header-right" aria-label="Workspace">
     <span class="live-pill"><span class="server-dot" id="connectionDot"></span><span id="healthStatus">Connecting</span></span>
     <button id="roomButton" class="nav-pill" type="button">Rooms</button>
@@ -22,7 +22,7 @@
     <div class="scene-vignette"></div>
     <div class="stage-copy"><p class="eyebrow"><span class="pulse-dot"></span> YOUR WORLD IS WAITING</p><h1>Make the<br><em>invisible</em><br>discoverable<span class="period">.</span></h1><p>Capture your room. Watch objects bloom into a spatial collection. Keep the things worth remembering.</p></div>
     <div class="mascot-tag"><span class="mascot-tag-dot"></span><span>FREELAB</span><span class="mascot-tag-sub">YOUR LITTLE EXPLORER</span></div>
-    <div class="stage-portal"><button class="xr-portal" id="enterXR" aria-label="Enter immersive spatial reality" title="Enter SR — immersive spatial reality"><span class="xr-ring"></span><span class="xr-letter"><small>ENTER</small><strong>XR</strong></span><span class="xr-icon">↗</span></button><div><strong>ENTER SPATIAL REALITY</strong><span>QUEST 3 · WEBXR PASSTHROUGH</span></div></div>
+    <div class="stage-portal"><button class="xr-portal" id="enterXR" aria-label="Enter immersive spatial reality" title="Enter SR — immersive spatial reality"><span class="xr-ring"></span><span class="xr-letter"><small>ENTER</small><strong>XR</strong></span><span class="xr-icon">↗</span></button><div><strong>ENTER SPATIAL REALITY</strong><span>QUEST 3 · WEBXR PASSTHROUGH</span><button type="button" id="depthXR" class="depth-portal" title="Request WebXR depth when entering. Requires headset/browser support and permission.">TRY XR WITH DEPTH</button></div></div>
     <nav class="feature-bloom" id="featureBloom" aria-label="Exploration actions">
       <button class="feature-seed" id="cameraButton" type="button" style="--dx:-264px;--dy:-153px;--delay:0s" aria-label="Activate camera and test preview"><span class="seed-icon">◎</span><span>Camera</span></button>
       <button class="feature-seed" id="cameraDiagnostic" type="button" style="--dx:247px;--dy:-148px;--delay:.13s" aria-label="Check camera and headset capabilities"><span class="seed-icon">◇</span><span>Check XR</span></button>
@@ -104,7 +104,7 @@
   </div>
   <div class="profile-scroll" id="profileScroll">
    <section id="profileExperience" role="tabpanel" data-profile-view="experience">
-    <p class="profile-account" id="profileSummary"></p><label class="profile-avatar-picker" for="profileAvatarInput">PROFILE PICTURE <input type="file" id="profileAvatarInput" accept="image/png,image/jpeg"><span>Square JPEG or PNG · saved to your private profile</span></label>
+    <p class="profile-account" id="profileSummary"></p><div class="profile-photo-setting"><span>PROFILE PICTURE</span><label for="profileAvatarInput" class="profile-avatar-round" title="Upload or take a profile photo" aria-label="Upload or take profile photo"><img id="settingsAvatar" class="hidden" alt="Current profile picture"><span id="settingsAvatarInitials">+</span></label><input type="file" id="profileAvatarInput" accept="image/png,image/jpeg" class="visually-hidden"><span class="small-muted">Tap the circle to upload or take a photograph</span></div>
     <div class="experience-preferences"><p class="eyebrow">XR / PERSONALIZATION</p>
      <label for="pref-mascotMode">MASCOT IN XR<select id="pref-mascotMode"><option value="3d">3D character</option><option value="2d">2D character</option><option value="none">Off</option></select></label>
      <label for="pref-frameHoldSeconds">FRAME DETACH TIMER<select id="pref-frameHoldSeconds"><option value="1.5">1.5 seconds</option><option value="3" selected>3 seconds</option><option value="5">5 seconds</option></select></label>
@@ -115,6 +115,7 @@
      <button type="button" class="secondary-btn" id="loadElevenVoices">Load available voices</button>
      <p class="small-muted" id="voiceLookupResult">Select ElevenLabs above to use a server-configured voice.</p>
      <label><input type="checkbox" id="pref-troll"> Playful commentary on found objects</label>
+     <label><input type="checkbox" id="pref-shareExperimental"> Share experimental frames and shapes with people in my room (off by default)</label>
      <button type="button" class="secondary-btn" id="armXRMicSettings" onclick="document.getElementById('armXRMic').click()">Enable XR microphone</button>
     </div>
    </section>
@@ -132,7 +133,7 @@
       <label>Display name<input id="newDisplayName" placeholder="Display name" maxlength="64"></label>
       <label>Password<input id="newPassword" placeholder="At least 12 characters" type="password" minlength="12" required autocomplete="new-password"></label>
       <button class="primary-btn" type="submit">Create user</button>
-     </form>
+     </form><div class="profile-section-heading"><h3>Existing users</h3><p>Only administrators can manage accounts. Password resets and blocks revoke previous sessions.</p></div><div id="adminUsers" class="admin-users" aria-live="polite"></div>
     </section>
    </section>
    <div class="profile-footer"><button class="secondary-btn" id="logout">Sign out</button></div>
@@ -146,21 +147,21 @@
 <p class="small-muted">To capture the actual room: enable the camera and verify the preview shows the room, not an avatar. Leave the stream running, then enter XR. Quest Browser availability depends on firmware and camera permission.</p>
 </div></div>
 <div id="scanConsent" class="modal hidden"><div class="modal-card"><p class="eyebrow">COST CONFIRMATION</p><h2>Enable periodic scans?</h2><p class="small-muted">One JPEG every 20 seconds can consume a paid Meta Muse API request. This is disabled by default and stops when the page becomes hidden. It counts against FREE LAB's daily request quotas, which are not dollar limits.</p><div class="provider-actions"><button id="cancelScan" class="secondary-btn">Cancel</button><button id="confirmScan" class="primary-btn">Start paid scan</button></div></div></div>
-<div id="changelog" class="modal hidden"><div class="modal-card changelog-card"><div class="modal-title"><div><p class="eyebrow">WHAT'S NEW / DEVELOPMENT LOG</p><h2 id="logTitle">Release notes</h2><p id="logDate" class="small-muted"></p></div><button class="round-btn" id="dismissChangelog" aria-label="Close development log">×</button></div><ul id="logItems"></ul><button class="primary-btn" id="continueChangelog">Start exploring ↗</button></div></div>
+<div id="changelog" class="modal hidden"><div class="modal-card changelog-card"><div class="modal-title"><div><p class="eyebrow">WHAT'S NEW / DEVELOPMENT LOG</p><h2 id="logTitle">Release notes</h2><p id="logDate" class="small-muted"></p></div><button class="round-btn" id="dismissChangelog" aria-label="Close development log">×</button></div><div class="log-tabs" role="tablist" aria-label="Release notes"><button type="button" id="logLatest" class="active" role="tab" aria-selected="true">Latest</button><button type="button" id="logHistory" role="tab" aria-selected="false">History</button></div><div class="log-scroll"><ul id="logItems"></ul><div id="logArchive" class="hidden"></div></div><button class="primary-btn" id="continueChangelog">Start exploring ↗</button></div></div>
 <div id="toast" class="toast hidden" role="status"></div>
-<script src="/assets/sound.js?v=0.10.16" defer></script>
-<script src="/assets/gestures.js?v=0.10.16" defer></script>
-<script src="/assets/strand-geometry.js?v=0.10.16" defer></script>
-<script src="/assets/string-lab.js?v=0.10.16" defer></script>
-<script src="/assets/finger-lab.js?v=0.10.16" defer></script>
-<script src="/assets/frame-lab.js?v=0.10.16" defer></script>
-<script src="/assets/lab-selector.js?v=0.10.16" defer></script>
-<script src="/assets/frame-games.js?v=0.10.16" defer></script>
-<script src="/assets/shape-sort.js?v=0.10.16" defer></script>
-<script src="/assets/rooms.js?v=0.10.16" defer></script>
-<script src="/assets/cloud-tree.js?v=0.10.16" defer></script>
-<script src="/assets/xr-ui.js?v=0.10.16" defer></script>
-<script src="/assets/app.js?v=0.10.16" defer></script><script src="/assets/xr.js?v=0.10.16" defer></script>
-<script src="/assets/capture-studio.js?v=0.10.16" defer></script>
-<script src="/assets/scene.mjs?v=0.10.16" type="module"></script>
+<script src="/assets/sound.js?v=0.10.17" defer></script>
+<script src="/assets/gestures.js?v=0.10.17" defer></script>
+<script src="/assets/strand-geometry.js?v=0.10.17" defer></script>
+<script src="/assets/string-lab.js?v=0.10.17" defer></script>
+<script src="/assets/finger-lab.js?v=0.10.17" defer></script>
+<script src="/assets/frame-lab.js?v=0.10.17" defer></script>
+<script src="/assets/lab-selector.js?v=0.10.17" defer></script>
+<script src="/assets/frame-games.js?v=0.10.17" defer></script>
+<script src="/assets/shape-sort.js?v=0.10.17" defer></script>
+<script src="/assets/rooms.js?v=0.10.17" defer></script>
+<script src="/assets/cloud-tree.js?v=0.10.17" defer></script>
+<script src="/assets/xr-ui.js?v=0.10.17" defer></script>
+<script src="/assets/app.js?v=0.10.17" defer></script><script src="/assets/xr.js?v=0.10.17" defer></script>
+<script src="/assets/capture-studio.js?v=0.10.17" defer></script>
+<script src="/assets/scene.mjs?v=0.10.17" type="module"></script>
 </body></html>

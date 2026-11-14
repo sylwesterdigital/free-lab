@@ -2,9 +2,9 @@
  * state polling does not control the graphics frame rate. No camera pixels are shared. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
-let own=null, selected=0, pollTimer=null, inFlight=false, publishing=false, lastSent=0;
+let own=null, selected=0, pollTimer=null, heartbeatTimer=null, inFlight=false, publishing=false, lastSent=0;
 let viewer=null, viewerLoad=null;
-let lastScene={pose:[0,1.5,0],q:[0,0,0,1],cards:[]};
+let lastScene={pose:[0,1.5,0],q:[0,0,0,1],cards:[],shapes:[]};
 async function req(path,opts={}){
  const r=await fetch('/api'+path,{credentials:'same-origin',headers:{'X-Free-Lab':'1',...(opts.body?{'Content-Type':'application/json'}:{})},...opts});
  const d=await r.json();if(!r.ok)throw Error(d.error||'Room HTTP '+r.status);return d;
@@ -12,10 +12,10 @@ async function req(path,opts={}){
 async function start(visibility='private'){
  const r=await req('/rooms/mine',{method:'PUT',body:JSON.stringify({visibility})});own=r.room;return own;
 }
-function end(){if(!own)return;req('/rooms/mine/state',{method:'PUT',body:JSON.stringify({active:false,...lastScene})}).catch(()=>{});}
-async function publish(pose,cards,orientation){
+function end(){if(!own)return;req('/rooms/mine/state',{method:'PUT',body:JSON.stringify({active:false,...lastScene,shapes:[]})}).catch(()=>{});}
+async function publish(pose,cards,orientation,shapes=[]){
  if(!own||publishing||Date.now()-lastSent<250)return;
- lastSent=Date.now();lastScene={pose,q:orientation||[0,0,0,1],cards:cards.slice(0,72)};publishing=true;
+ lastSent=Date.now();lastScene={pose,q:orientation||[0,0,0,1],cards:cards.slice(0,72),shapes:shapes.slice(0,32)};publishing=true;
  try{await req('/rooms/mine/state',{method:'PUT',body:JSON.stringify({active:true,...lastScene})});}
  catch(e){console.warn('Room update:',e.message);}finally{publishing=false;}
 }
@@ -37,7 +37,7 @@ async function invite(){const profiles=(await req('/rooms/users')).users;const b
 }}
 async function ensureViewer(){
  if(viewer)return viewer;
- if(!viewerLoad)viewerLoad=import('/assets/room-viewer.mjs?v=0.10.16').then(m=>m.createRoomViewer({
+ if(!viewerLoad)viewerLoad=import('/assets/room-viewer.mjs?v=0.10.17').then(m=>m.createRoomViewer({
   canvas:$('roomCanvas'),inspector:$('roomInspector'),viewer:$('roomViewer'),
   status:$('roomState'),count:$('roomImageCount'),back:()=>leave(),
  })).catch(e=>{viewerLoad=null;throw e;});
@@ -52,13 +52,14 @@ async function refresh(id){if(selected!==id||inFlight)return;inFlight=true;
  finally{inFlight=false;}
 }
 async function watch(id){
- selected=id;$('roomViewer').classList.remove('hidden');$('roomLobby').classList.add('hidden');
+ selected=id;await req('/rooms/'+id+'/presence',{method:'POST'});$('roomViewer').classList.remove('hidden');$('roomLobby').classList.add('hidden');
  $('roomsPanel').classList.add('room-in-session');$('roomState').textContent='Loading 3D room…';
  try{const v=await ensureViewer();if(selected!==id)return;v.start();await refresh(id);
   if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(()=>{if(document.visibilityState!=='hidden')void refresh(id);},350);
+  if(heartbeatTimer)clearInterval(heartbeatTimer);heartbeatTimer=setInterval(()=>{if(document.visibilityState!=='hidden'&&selected===id)void req('/rooms/'+id+'/presence',{method:'POST'}).catch(()=>{});},8000);
  }catch(e){$('roomState').textContent='3D viewer unavailable: '+e.message;console.error(e);}
 }
-function leave(){selected=0;if(pollTimer)clearInterval(pollTimer);pollTimer=null;
+function leave(){const old=selected;selected=0;if(pollTimer)clearInterval(pollTimer);pollTimer=null;if(heartbeatTimer)clearInterval(heartbeatTimer);heartbeatTimer=null;if(old)void req('/rooms/'+old+'/presence',{method:'DELETE'}).catch(()=>{});
  viewer?.stop();$('roomViewer').classList.add('hidden');$('roomLobby').classList.remove('hidden');
  $('roomsPanel').classList.remove('room-in-session');void list().catch(()=>{});
 }
@@ -69,10 +70,10 @@ function init(){if(!$('roomButton'))return;
  $('roomPublic').onclick=()=>{chooser.dataset.visibility='public';$('roomPublic').classList.add('chosen');$('roomPrivate').classList.remove('chosen');};
  $('roomConfirm').onclick=()=>{const visibility=chooser.dataset.visibility||'private';chooser.classList.add('hidden');
   const creating=start(visibility).catch(e=>window.FreeLab?.notify?.('Room setup: '+e.message));
-  window.FreeLabXR.start().catch(e=>{end();window.FreeLab?.notify?.(e.message);});void creating;
+  window.FreeLabXR.start({requireDepth:chooser.dataset.depth==='true'}).catch(e=>{end();window.FreeLab?.notify?.(e.message);});void creating;
  };
  $('roomCancel').onclick=()=>chooser.classList.add('hidden');
 }
-function chooseXR(){const p=$('roomChooser');p.dataset.visibility='private';$('roomPrivate').classList.add('chosen');$('roomPublic').classList.remove('chosen');p.classList.remove('hidden');}
+function chooseXR(requireDepth=false){const p=$('roomChooser');p.dataset.depth=String(Boolean(requireDepth));p.dataset.visibility='private';$('roomPrivate').classList.add('chosen');$('roomPublic').classList.remove('chosen');p.classList.remove('hidden');}
 window.FreeLabRooms={init,chooseXR,start,end,publish,list};
 })();

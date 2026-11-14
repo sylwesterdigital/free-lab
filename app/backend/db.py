@@ -98,6 +98,15 @@ def init(path):
     with connect(path) as con:
         con.executescript(SCHEMA)
         # Non-destructive migration: preserve existing profiles, objects and vault.
+        user_fields={row['name'] for row in con.execute('PRAGMA table_info(users)')}
+        if 'blocked_until' not in user_fields:con.execute('ALTER TABLE users ADD COLUMN blocked_until INTEGER NOT NULL DEFAULT 0')
+        if 'auth_revision' not in user_fields:con.execute('ALTER TABLE users ADD COLUMN auth_revision INTEGER NOT NULL DEFAULT 0')
+        con.execute('''CREATE TABLE IF NOT EXISTS room_presence (
+          room_id INTEGER NOT NULL REFERENCES live_rooms(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          last_seen INTEGER NOT NULL,
+          PRIMARY KEY(room_id,user_id))''')
+
         fields={row['name'] for row in con.execute('PRAGMA table_info(inference_calls)')}
         if 'usage_json' not in fields:
             con.execute("ALTER TABLE inference_calls ADD COLUMN usage_json TEXT NOT NULL DEFAULT '{}' ")
@@ -140,7 +149,7 @@ def create_user(con, username, password, display_name=None, role='member'):
                            (username,name,hash_password(password),role)).lastrowid
 
 def user_from_id(con,uid):
-    return con.execute('SELECT id,username,display_name,role FROM users WHERE id=?',(uid,)).fetchone()
+    return con.execute('SELECT id,username,display_name,role,blocked_until,auth_revision FROM users WHERE id=?',(uid,)).fetchone()
 
 def user_from_name(con,name):
     return con.execute('SELECT * FROM users WHERE username=?',(name,)).fetchone()

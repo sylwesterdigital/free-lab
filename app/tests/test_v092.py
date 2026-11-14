@@ -14,7 +14,7 @@ class XR092(unittest.TestCase):
  def test_voice_text_transparent_and_expanding(self):
   self.assertIn("ctx.strokeStyle='#080b08'",XR)
   self.assertIn("ctx.fillStyle='#ffe64b'",XR)
-  self.assertIn("const w=1024,h=Math.max(98,30+lines.length*62)",XR)
+  self.assertIn("const w=1024,h=Math.max(54,18+lines.length*34)",XR)
   self.assertNotIn("'HEARD',92",XR)
   self.assertIn('window.FreeLab.startWavPrompt()',XR)
   self.assertIn('async function finishVoiceRecording()',XR)

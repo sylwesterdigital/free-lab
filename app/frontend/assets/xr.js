@@ -12,12 +12,12 @@ let toolbar=null,editbar=null,statusCard=null,cloud=null,clouds=[],cards=[],zone
 let branchFocusId=null,branchPage=0; // Parent-based tree browsing, no fixed generation/depth limit.
 let imageMenuOpen=false,voiceBadge=null,voicePhase='idle',voiceMessage='',voiceUntil=0,voicePending=null,voiceOk=null,voiceCancel=null,voiceResultStamp=0;
 let mascotProgram=null,mascotBuffer=null,mascotVertexCount=0,mascotMood='curious',mascotMoodUntil=0,mascotVelocity=[.25,.22,.19],lastMascotTick=0,mascotSpeechBorn=0;
-let gestureDebounce=new Map(),lastGesturePoll=0,gestureDisplay='',lastGestureAnnouncement=-100000;
+let gestureDebounce=new Map(),lastGesturePoll=0,gestureDisplay='',lastGestureAnnouncement=-100000,mascotHistory=new Map(),mascotQuipIndex=0;
 let mascotSpeech=null,mascotSpeechUntil=0,gestureSpeechTimes=new Map(),mascotReaction='',mascotReactionUntil=0,mascotReactionTarget=null,mascotRayPokeAt=0,handGesturePositions={};
 let pointerHover=null,lastFrame=0,lastUi=0,lastAction=0,latestPose=null,nextPaidAt=0,busy=false,mode='capture',statusText='Capture your space',statusUntil=0;
 let followMode=true,followBase=null,eyeBase=null,captureEye=null,voiceButton=null,extractButton=null,extractVisualActive=null,eyeResource=null,eyeState='idle',eyeUntil=0,rootYaw=0,menuYaw=0,promptPanel=null,promptContext=null,promptText='',xrDomOverlay=false;
 let cameraHint=null,cameraHintState='',lastHintCheck=0;
-let debugPanel=null,debugShowing=false,debugLast=0,serverPoll=0,serverDiagnostic=[],descriptionPanel=null,meshPreviews=[],meshPreviewLoading=false,mascotPointer=null,mascotTex=null,lastAvatar=0,mixBucket=[],xrKeyboard=null;
+let debugPanel=null,debugShowing=false,debugLast=0,serverPoll=0,serverDiagnostic=[],descriptionPanel=null,meshPreviews=[],meshPreviewLoading=false,mascotPointer=null,mascotTex=null,lastAvatar=0,mixBucket=[],xrKeyboard=null,visitorBadges=[],visitorPollAt=0;
 let followOffset=[0,-.53,-1.16],followWorld=null,eyeWorld=null,depthState='unknown',depthChecked=false,depthFeature=false,depthBinding=null,meshyJob=null,meshyPollAt=0,meshConfirm=null;
 let voiceRecord=null,voiceRecordStarted=0,voiceMeterLast=0,cameraHintUntil=0,meshJobOrigin=null;
 let particles=[],handPinch=new WeakMap(),lastNative=new WeakMap(),clickState=new WeakMap(),lastEyeUpdate=0,lastMicUpdate=0,inferenceCard=null,inferenceStarted=0;
@@ -161,13 +161,13 @@ function voiceIndicatorTexture(t){
   if(probe.measureText(maybe).width>maxWidth&&current){lines.push(current);current=word;}else current=maybe;
  }
  if(current)lines.push(current);
- const w=1024,h=Math.max(98,30+lines.length*62);
+ const w=1024,h=Math.max(54,18+lines.length*34);
  const [c,ctx]=canvas2d(w,h);ctx.clearRect(0,0,w,h);
- ctx.font='bold 43px system-ui';ctx.textBaseline='middle';ctx.textAlign='center';
+ ctx.font='bold 23px system-ui';ctx.textBaseline='middle';ctx.textAlign='center';
  for(let i=0;i<lines.length;i++){
-  ctx.strokeStyle='#080b08';ctx.lineWidth=9;ctx.lineJoin='round';
-  ctx.strokeText(lines[i],w/2,47+i*62);
-  ctx.fillStyle='#ffe64b';ctx.fillText(lines[i],w/2,47+i*62);
+  ctx.strokeStyle='#080b08';ctx.lineWidth=5;ctx.lineJoin='round';
+  ctx.strokeText(lines[i],w/2,27+i*34);
+  ctx.fillStyle='#ffe64b';ctx.fillText(lines[i],w/2,27+i*34);
  }
  return {tex:texture(c),aspect:h/w};
 }
@@ -178,12 +178,12 @@ function setVoicePhase(type,message,ms=7500){
 function tickVoiceIndicator(t,pose){
  if(voicePhase==='idle'||voicePhase==='listening')return;
  if(!voiceBadge&&voiceUntil>t){const v=voiceIndicatorTexture(t);
-  voiceBadge={id:'voice-status',kind:'status',pos:[0,0,0],q:[0,0,0,1],size:[.93,.93*v.aspect],scale:1,visible:true,front:v.tex,back:v.tex};}
+  voiceBadge={id:'voice-status',kind:'status',pos:[0,0,0],q:[0,0,0,1],size:[.22,.22*v.aspect],scale:1,visible:true,front:v.tex,back:v.tex};}
  if(!voiceBadge)return;
  if(voiceUntil<t){if(gl)gl.deleteTexture(voiceBadge.front);voiceBadge=null;voicePhase='idle';return;}
  if(voicePhase==='processing'&&t%480<38){const v=voiceIndicatorTexture(t);
   gl.deleteTexture(voiceBadge.front);voiceBadge.front=v.tex;voiceBadge.back=v.tex;}
- const anchor=point(poseForwardAnchor(pose,1.0,.14),[0,0,0]);
+ const anchor=point(poseForwardAnchor(pose,.89,-.12),[0,0,0]);
  voiceBadge.pos=blend(voiceBadge.pos,anchor,.22);voiceBadge.q=quatY(cameraYaw(pose));
 }
 function uiPalette(){return window.FreeLabXRUI?.palette?.(uiSettings)||{panel:'#343d38',panel2:'#26332d',text:'#f0f9f1',muted:'#b8cfc0',accent:'#ff91b5',edge:'#92b8a2',bottom:'#14251c',font:'system-ui'};}
@@ -199,7 +199,7 @@ function uiUpdate(setting,value){uiSettings=window.FreeLabXRUI?.save?.({...uiSet
  if(setting==='experimental'&&value===false){experimentalMode('off');labSelector?.reset();if(labMenu){labMenu.visible=false;}}
  if(setting==='voice'&&value===false){voiceRecord?.cancel?.();dismissVoice();}
  if(setting==='voice')updateEditbar();
- if(setting==='mascot'&&value===false){mascotSpeech=null;}
+ if(setting==='mascot'&&value===false){mascotSpeech=null;window.FreeLab?.silenceXRVoice?.();}
  rebuildTheme();}
 function rebuildTheme(){if(!gl)return;
  if(toolbar)refreshToolbar();if(configPanel)refreshConfig();
@@ -224,7 +224,7 @@ function cardTexture(imageSrc,labelText,sub='PRIVATE CAPTURE',back=false,onDimen
  const resource={tex:null,canvas:null};
  const paint=(image=null)=>{const fullWidth=600,frameWidth=566;
   const frameHeight=image?clamp(Math.round(frameWidth*image.height/image.width),112,1000):310;
-  const h=back?420:frameHeight+110;const [c,ctx]=canvas2d(fullWidth,h);resource.canvas=c;
+  const h=back?420:frameHeight+67;const [c,ctx]=canvas2d(fullWidth,h);resource.canvas=c;
   if(!cutout||back)panelSkin(ctx,fullWidth,h,29);
   if(back){text(ctx,'FREELAB / OBJECT',40,65,19,uiPalette().muted,670);text(ctx,labelText.slice(0,25),40,130,37,uiPalette().text,690);wrapping(ctx,sub,40,175,fullWidth-86,32,6);}
   else{
@@ -233,8 +233,8 @@ function cardTexture(imageSrc,labelText,sub='PRIVATE CAPTURE',back=false,onDimen
     ctx.drawImage(image,17+(frameWidth-w)*.5,17+(frameHeight-hh)*.5,w,hh);}
    else text(ctx,'◎',fullWidth/2,frameHeight/2+53,102,'#9baea2',250,'center');
    if(showExtract){rrect(ctx,35,30,182,54,24,'#d6f3dc');text(ctx,'✳ EXTRACT',126,66,21,'#213b2b',690,'center');}
-   if(cutout&&uiSettings.backgrounds!==false)rrect(ctx,14,h-103,fullWidth-28,102,22,'rgba(29,42,35,.74)');
-   text(ctx,labelText.slice(0,34),28,h-58,27,uiPalette().text,680);text(ctx,sub.slice(0,56),28,h-23,15,uiPalette().muted,540);/* Theater control has no opaque background. */text(ctx,'⛶',fullWidth-59,h-53,41,'#effff2',550,'center');
+   /* Names and subtitles are rendered once in the world-space distance-compensated caption. */
+   /* Theater control is transparent, at the bottom-right corner of each photo. */text(ctx,'⛶',fullWidth-59,h-31,41,'#effff2',550,'center');
   }
   if(!back){rrect(ctx,fullWidth-150,27,55,55,26,'#28352f');text(ctx,'···',fullWidth-122,64,31,'#ffffff',630,'center');
    rrect(ctx,fullWidth-84,27,55,55,26,'#28352f');text(ctx,'×',fullWidth-57,68,37,'#ffffff',440,'center');}
@@ -397,7 +397,7 @@ function syncRoundels(pose){
   extractButton.visible=voicePhase!=='listening'&&voicePhase!=='processing';const active=extractionAvailable();
   if(active!==extractVisualActive){extractVisualActive=active;if(gl)refreshRoundel(extractButton,'extract');}
   extractButton.pos=vadd(captureEye.pos,offset(.163,0,0));extractButton.q=quatY(yaw);}
- if(voicePending){const center=point(poseForwardAnchor(pose,.97,-.045),[0,0,0]);
+ if(voicePending){const center=point(poseForwardAnchor(pose,.92,-.23),[0,0,0]);
   if(voiceOk){voiceOk.pos=vadd(center,offset(-.087,0,0));voiceOk.q=quatY(yaw);}
   if(voiceCancel){voiceCancel.pos=vadd(center,offset(.087,0,0));voiceCancel.q=quatY(yaw);}
  }
@@ -440,9 +440,9 @@ function descriptionTexture(value,label,retryable=false){
 function hideDescription(){if(descriptionPanel?.front)gl.deleteTexture(descriptionPanel.front);descriptionPanel=null;descriptionContext=null;}
 function showDescription(card,value,retryable=false){if(descriptionPanel?.front)gl.deleteTexture(descriptionPanel.front);
  const tex=descriptionTexture(value,card.data?.label||'IMAGE',retryable);
- const pos=point(cardModel(card),[.63,-.02,.07]);
+ const pos=point(cardModel(card),[.79,-.04,.11]);
  const viewer=latestPose?.transform?.matrix||null;
- descriptionPanel={id:'description-popup',kind:'description',retryable,message:value,pos,q:viewer?lookingQuat(pos,[viewer[12],viewer[13],viewer[14]]):worldCardQuat(card),size:[.58,.257],scale:1,visible:true,front:tex,back:tex};
+ descriptionPanel={id:'description-popup',kind:'description',retryable,message:value,pos,q:viewer?lookingQuat(pos,[viewer[12],viewer[13],viewer[14]]):worldCardQuat(card),size:[.37,.264],scale:1,visible:true,front:tex,back:tex};
  descriptionContext={card,captureId:cloud?.id,objectId:card.kind==='object'?card.data.id:null};
 }
 async function askDescription(question=''){
@@ -502,8 +502,8 @@ function navigationTexture(title){const [c,ctx]=canvas2d(600,175),p=uiPalette();
 function spatialCaptionTexture(label,subtitle,active=false){
  const [canvas,ctx]=canvas2d(600,128);ctx.clearRect(0,0,600,128);
  ctx.textBaseline='middle';ctx.shadowColor='#050709';ctx.shadowBlur=11;ctx.shadowOffsetY=2;
- text(ctx,String(label||'IMAGE').slice(0,40),16,51,37,active?'#ff9dc5':'#ffffff',730);
- text(ctx,String(subtitle||'').slice(0,64),16,98,23,active?'#ffd1e2':'#dee9e5',590);
+ text(ctx,String(label||'IMAGE').slice(0,40),16,51,37,'#ffffff',730);
+ text(ctx,String(subtitle||'').slice(0,64),16,98,23,'#dce8e3',590);
  return texture(canvas);
 }
 function addCard(id,kind,data,loc,size){let c;
@@ -899,8 +899,8 @@ function tween(t){const now=performance.now();for(const c of cards){if(c.duratio
  }}
 function launchParticles(center){for(let i=0;i<45;i++){const a=Math.random()*TAU,s=Math.random()*.85+.14;particles.push({p:vadd(center,[Math.cos(a)*.12,Math.sin(a)*.12,Math.random()*.2]),v:[Math.cos(a)*s,Math.sin(a)*s,(Math.random()-.5)*s],born:performance.now(),ttl:750+Math.random()*650});}}
 function clearCards(){if(!gl)return;closeImageMenu();for(const c of cards)for(const t of c.resources||[])gl.deleteTexture(t);cards=[];selected=null;}
-function rootPos(c){return cloud&&!['config','toolbar','status','captureeye','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics','description','labmenu','darkroom','darkroomexit','cinema-floor'].includes(c.kind)?vadd(c.pos,cloud.offset||[0,0,0]):c.pos;}
-function baseFor(c){if(c.kind==='pointer-mascot'||['config','toolbar','status','captureeye','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics','description','labmenu','darkroom','darkroomexit','cinema-floor'].includes(c.kind))return translate();return root;}
+function rootPos(c){return cloud&&!['config','toolbar','status','captureeye','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics','description','labmenu','darkroom','darkroomexit','cinema-floor','visitor'].includes(c.kind)?vadd(c.pos,cloud.offset||[0,0,0]):c.pos;}
+function baseFor(c){if(c.kind==='pointer-mascot'||['config','toolbar','status','captureeye','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics','description','labmenu','darkroom','darkroomexit','cinema-floor','visitor'].includes(c.kind))return translate();return root;}
 function cameraYaw(pose){return yawFromMatrix(pose.transform.matrix);}
 function syncTrackedUI(pose,t){
  const yaw=cameraYaw(pose),head=pose.transform.matrix;
@@ -912,10 +912,11 @@ function syncTrackedUI(pose,t){
  }
  if(toolbar&&followMode){menuYaw=smoothYaw(menuYaw,yaw,Math.min(.24,1-Math.exp(-Math.min(.08,(t-lastFrame||16)/1000)*8.5)));toolbar.q=quatY(menuYaw);}
  // Eye is deliberately smaller and trails the gaze instead of being cemented to the face.
- if(captureEye){const target=point(poseForwardAnchor(pose,1.02,-.305),[0,0,0]);
+ if(captureEye){const target=point(poseForwardAnchor(pose,1.04,-.47),[0,0,0]);
   const a=1-Math.exp(-Math.min(.08,(t-lastFrame||16)/1000)*3.1);
   captureEye.pos=blend(captureEye.pos,target,a);captureEye.q=quatY(yaw);syncRoundels(pose);
   if(cameraHint){cameraHint.pos=vadd(captureEye.pos,point(rotateY(yaw),[0,.148,0],0));cameraHint.q=quatY(yaw);}}
+ if(configShowing&&configPanel&&!held?.card?.kind?.includes('config'))configPanel.q=quatSlerp(configPanel.q,lookingQuat(configPanel.pos,[head[12],head[13],head[14]]),.26);
  if(statusCard&&captureEye){
   // Follow the same eased pose as the capture eye; never a second drifting velocity.
   statusCard.pos=vadd(captureEye.pos,point(rotateY(yaw),[0,.080,0],0));
@@ -1041,7 +1042,7 @@ function imageButtonAt(card,x,y){
  // Image aspect ratios change canvas height; fixed normalized-Y thresholds do not work.
  if(!card||!['source','object'].includes(card.kind))return null;
  const px=(x+.5)*600,py=(.5-y)*(card.canvasHeight||420);
- if(py>(card.canvasHeight||420)-105&&px>490&&px<585)return 'darkroom';
+ if(py>(card.canvasHeight||420)-75&&px>490&&px<585)return 'darkroom';
  if(py<21||py>93)return null; // generous 9px tolerance for Quest hand-point rays
  if(card.kind==='source'&&px>=27&&px<=225)return 'extract';
  if(px>=442&&px<=512)return 'imagemenu';
@@ -1151,7 +1152,7 @@ function pinchPoll(frame,src){if(!src.hand||typeof frame.getJointPose!=='functio
  else if(prev&&dist>.047){handPinch.set(src,false);if(held?.src===src)grabEnd(src,frame);}
  }catch{}}
 function updateHover(frame){let found=null,source=null;for(const src of session.inputSources){const hit=pick(ray(frame,src));if(hit){found=buttonFromHit(hit)||hit.card.id;source=src;break;}}
- if(pointerHover===found)return;pointerHover=found;if(found){window.FreeLabSound?.hover();haptic(source,.17,25);}refreshToolbar();}
+ if(pointerHover===found)return;pointerHover=found;if(found){window.FreeLabSound?.hover();haptic(source,.17,25);}refreshToolbar();if(imageMenuOpen)updateEditbar();}
 
 const handBones=[['wrist','thumb-metacarpal'],['thumb-metacarpal','thumb-phalanx-proximal'],['thumb-phalanx-proximal','thumb-phalanx-distal'],['thumb-phalanx-distal','thumb-tip'],
  ...['index','middle','ring','pinky'].flatMap(n=>[['wrist',n+'-finger-metacarpal'],[n+'-finger-metacarpal',n+'-finger-phalanx-proximal'],[n+'-finger-phalanx-proximal',n+'-finger-phalanx-intermediate'],[n+'-finger-phalanx-intermediate',n+'-finger-phalanx-distal'],[n+'-finger-phalanx-distal',n+'-finger-tip']])];
@@ -1175,7 +1176,7 @@ function checkStableGesture(side,gesture,t){const prev=gestureDebounce.get(side)
  // Mark this pose handled, even if the global cooldown is still active.
  gestureDebounce.set(side,{...prev,said:t});
  const key=side+':'+gesture;
- if(t-lastGestureAnnouncement<6000||t-(gestureSpeechTimes.get(key)||-100000)<15000)return;
+ if(t-lastGestureAnnouncement<6000||t-(gestureSpeechTimes.get(key)||-100000)<100000)return;
  lastGestureAnnouncement=t;gestureSpeechTimes.set(key,t);
  mascotEmotion(gesture==='Thumbs down'?'confused':'happy',2900);
  if(gesture==='Open palm'||gesture==='Fist'||gesture==='Forward'){
@@ -1183,11 +1184,18 @@ function checkStableGesture(side,gesture,t){const prev=gestureDebounce.get(side)
   mascotReactionTarget=handGesturePositions[side]||null;
  }
  window.FreeLab?.traceEvent?.('XR gesture '+side+': '+gesture,'info');
- const funny={'Thumbs up':'Tiny scientist approves!','Thumbs down':'Oof. Tough review.','OK':'All okay, captain.','Heart':'Even a lab needs love.',
-  'Forward':'Forward, explorer!','Point':'I see your point.','Fist':'Imaginary fist bump!','Open palm':'High five!'};
- mascotSay(gesture);
- // Audio speaks from the mascot's reaction, not from a giant flashing eye-level banner.
- if(window.FreeLab?.pref?.('spoken'))window.FreeLab.speakUpdate?.(window.FreeLab?.pref?.('troll')?(funny[gesture]||gesture):gesture);
+ const funny={'Thumbs up':['Excellent signal. The collection looks promising.','Acknowledged. One tiny vote for science.'],
+  'Thumbs down':['Noted. A different approach, then.','A revision sounds useful.'],
+  'OK':['Confirmed. Ready for your next instruction.','Understood. Exploring on.'],
+  'Heart':['A little appreciation for the experiment.','A lovely way to mark a discovery.'],
+  'Forward':['Exploration continues.','Following your lead.'],
+  'Point':['Which detail shall we examine?','Point received.'],
+  'Fist':['Gesture noted. Keeping the scene steady.','Ready for the next spatial move.'],
+  'Open palm':['A friendly greeting, noted.','Hello from the spatial lab.']};
+ const choices=funny[gesture]||[gesture];const spoken=choices[Math.floor(t/89000)%choices.length];
+ mascotSay(spoken);
+ // Only the visible mascot speaks, never over a command or another voice.
+ if(mascotMode()!=='none'&&window.FreeLab?.pref?.('spoken')&&voicePhase==='idle')window.FreeLab.speakUpdate?.(window.FreeLab?.pref?.('troll')?spoken:gesture);
 }
 function mascotSpeechTexture(message){
  const [c,ctx]=canvas2d(760,220);ctx.clearRect(0,0,c.width,c.height);
@@ -1202,6 +1210,9 @@ function mascotSpeechTexture(message){
  return texture(c);
 }
 function mascotSay(message,ms=3600){
+ if(mascotMode()==='none'||voicePhase!=='idle')return;
+ const now=performance.now(),key=String(message).toLowerCase();if(now-(mascotHistory.get(key)||-200000)<120000)return;
+ mascotHistory.set(key,now);if(mascotHistory.size>100)mascotHistory.delete(mascotHistory.keys().next().value);
  if(mascotSpeech?.front&&gl)gl.deleteTexture(mascotSpeech.front);
  mascotSpeech=null;mascotSpeechBorn=performance.now();mascotSpeechUntil=mascotSpeechBorn+ms;
  if(mascotMode()==='none'||!gl)return;
@@ -1222,15 +1233,20 @@ function tickMascotSpeech(t){
  mascotSpeech.pos=vadd(mascotPointer.pos,point(rotateY(yaw),[0,.225,.035],0));
  mascotSpeech.q=quatY(yaw);
 }
-function depthCapability(frame,view){if(depthChecked)return;depthChecked=true;
- try{if(typeof XRWebGLBinding==='function'&&session?.enabledFeatures?.has?.('depth-sensing')){
-  depthBinding=new XRWebGLBinding(session,gl);const info=depthBinding.getDepthInformation(view);
-  depthState=info?'GPU depth available (occlusion not enabled)':'Depth feature enabled; waiting for texture';
- }else if(typeof frame.getDepthInformation==='function'&&session?.enabledFeatures?.has?.('depth-sensing')){
-  const info=frame.getDepthInformation(view);depthState=info?'CPU depth available (occlusion not enabled)':'Depth feature enabled; waiting for data';
- }else depthState='No depth-sensing permission or API';
- }catch(e){depthState='Depth query unavailable: '+e.message;}
- window.FreeLab?.traceEvent?.('XR depth: '+depthState,'api');}
+let depthProbeAt=0,depthLastReport='';
+function depthEnabled(){const f=session?.enabledFeatures;return Boolean(f?.includes?.('depth-sensing')||f?.has?.('depth-sensing'));}
+function depthCapability(frame,view){
+ const now=performance.now();if(now-depthProbeAt<1600||!session)return;depthProbeAt=now;
+ if(!depthEnabled()){depthState='DEPTH: headset/browser did not grant depth-sensing';depthChecked=true;}
+ else{
+  let info=null,error=null;
+  try{if(typeof XRWebGLBinding==='function'){depthBinding=depthBinding||new XRWebGLBinding(session,gl);info=depthBinding.getDepthInformation(view);}}catch(e){error=e;}
+  if(!info&&typeof frame.getDepthInformation==='function')try{info=frame.getDepthInformation(view);}catch(e){error=e;}
+  if(info){depthState='Depth available ('+(info.texture?'GPU':'CPU')+'); occlusion not enabled';depthChecked=true;}
+  else{depthState=error?'Depth requested; no usable data: '+error.message:'Depth granted; waiting for sensor data';depthChecked=false;}
+ }
+ if(depthLastReport!==depthState){depthLastReport=depthState;window.FreeLab?.traceEvent?.('XR '+depthState,'api');}
+}
 function updateView(t,frame){if(!session)return;
  try {renderView(t,frame);}catch(e){console.error('FREELAB XR render error:',e);window.FreeLab?.traceEvent?.('XR renderer: '+(e?.message||String(e)),'error');
  // Do not destroy the entire immersive session for one bad visual. Release any held interaction.
@@ -1291,23 +1307,36 @@ function updateMascot(frame,t){const mode=mascotMode();if(mode==='none'){if(masc
  const targetQ=flight>.030?quatFromTo([0,1,0],norm(velocity)):quatY(yaw);
  mascotPointer.flightQ=quatSlerp(mascotPointer.flightQ||quatY(yaw),targetQ,1-Math.exp(-dt*2.3));
  mascotPointer.q=quatY(yaw);mascotPointer.visible=true;
- if(t-lastMascotQuip>47000&&uiSettings.voice!==false&&window.FreeLab?.pref?.('spoken')&&!busy&&voicePhase==='idle'){
-  lastMascotQuip=t;const phrases=['I am orbiting your imagination.','New things to discover!','Even pixels need a little company.'];
-  const msg=phrases[Math.floor(t/47000)%phrases.length];mascotSay(msg,3400);window.FreeLab?.speakUpdate?.(msg);window.FreeLabSound?.play('squeak');
+ if(t-lastMascotQuip>110000+mascotQuipIndex%3*15000&&mode!=='none'&&uiSettings.voice!==false&&window.FreeLab?.pref?.('spoken')&&!busy&&voicePhase==='idle'&&t>statusUntil+3000){
+  lastMascotQuip=t;const phrases=['That branch has room for more discoveries.','Each saved object gets its own place.','Try describing one of the smaller details.','Your collection can grow in more than one direction.','If you are searching for something, ask me to find it.','Some shapes are worth looking at from another side.','A little space makes the picture easier to inspect.','Your source photos stay privately in this room.','The next extraction might reveal an unexpected detail.','Try moving closer to the image tree.','Sometimes the smallest object tells the best story.','A fresh viewpoint can change the whole composition.'];
+  const msg=phrases[(mascotQuipIndex++)%phrases.length];mascotSay(msg,3400);window.FreeLab?.speakUpdate?.(msg);
  }
 
  if(t>mascotMoodUntil){mascotMood=(Math.floor(t/34000)%5===4)?'sleepy':'curious';}
 }
 
+function visitorTexture(name){const [cv,ctx]=canvas2d(640,140);panelSkin(ctx,640,140,28);
+ ctx.beginPath();ctx.arc(68,70,38,0,TAU);ctx.fillStyle='#8bdab2';ctx.fill();text(ctx,'◉',68,84,45,'#172b24',730,'center');
+ text(ctx,'ROOM GUEST',130,49,19,uiPalette().muted,700);text(ctx,String(name).slice(0,35),130,103,34,uiPalette().text,720);return texture(cv);}
+async function pollRoomVisitors(t){if(!session||t-visitorPollAt<4500)return;visitorPollAt=t;
+ try{const result=await window.FreeLab.api('/rooms/mine/visitors');const next=(result.visitors||[]).slice(0,4);
+  const signature=next.map(v=>v.id+':'+v.display_name).join('|');if(signature===visitorBadges.signature)return;
+  for(const b of visitorBadges){if(b.front&&gl)gl.deleteTexture(b.front);}visitorBadges=[];visitorBadges.signature=signature;
+  for(const v of next){const tex=visitorTexture(v.display_name);visitorBadges.push({id:'room-guest-'+v.id,kind:'visitor',pos:[0,0,0],size:[.35,.075],scale:1,visible:true,front:tex,back:tex,resources:[tex]});}
+ }catch(e){window.FreeLab?.traceEvent?.('Room presence: '+e.message,'warn');}}
+function placeRoomVisitors(pose){const m=pose.transform.matrix,eye=[m[12],m[13],m[14]],q=quatY(cameraYaw(pose));
+ visitorBadges.forEach((b,i)=>{const pos=point(poseForwardAnchor(pose,.95,.14-i*.09),[0,0,0]);b.pos=vadd(pos,quatVec(q,[.48,0,0]));b.q=lookingQuat(b.pos,eye);});}
 function renderView(t,frame){const pose=frame.getViewerPose(refSpace);if(!pose){session.requestAnimationFrame(updateView);return;}latestPose=pose;if(!poseReady)place(pose);if(darkroom){renderCinema(frame,pose);session.requestAnimationFrame(updateView);return;}syncTrackedUI(pose,t);
  if(window.FreeLabRooms){const m=pose.transform.matrix;
  const liveCards=cards.filter(c=>['source','object'].includes(c.kind)&&c.data?.id>0&&c.visible!==false).slice(0,72).map(c=>({kind:c.kind==='source'?'capture':'object',id:c.data.id,p:point(root,rootPos(c)).map(x=>Math.round(x*1000)/1000),q:worldCardQuat(c).map(x=>Math.round(x*10000)/10000)}));
- const q=pose.transform.orientation;window.FreeLabRooms.publish([m[12],m[13],m[14]],liveCards,[q.x,q.y,q.z,q.w]);
+ const q=pose.transform.orientation;
+ const shared=window.FreeLab?.pref?.('shareExperimental')? (frameLab?.frames||[]).slice(0,32).map(f=>({kind:f.corners.length===3?'triangle':'frame',corners:f.corners})):[];
+ window.FreeLabRooms.publish([m[12],m[13],m[14]],liveCards,[q.x,q.y,q.z,q.w],shared);
  }
- poll3d(t);pollLabSelector(frame,t,pose);pollStringLab(frame,t);pollFingerLab(frame,t);pollFrameLab(frame,t);pollPlacedFrameTouch(frame,t);pollFrameGames(t,pose);advanceGrab(frame);for(const src of session.inputSources)pinchPoll(frame,src);pollGestures(frame,t);tween(t);faceCloudCards(pose,t);updateMascot(frame,t);tickMascotSpeech(t);tickVoiceIndicator(t,pose);typeStatus(t);updateMicVisual(t);updateDebugCard(t);if(captureEye&&t-lastEyeUpdate>67){if(eyeState!=='idle'&&t>eyeUntil)eyeState='idle';paintEye(t);lastEyeUpdate=t;}if(cameraHint&&t-lastHintCheck>180){lastHintCheck=t;const label=cameraHintMode();if(label!==cameraHintState){cameraHintState=label;cameraHintUntil=t+(label==='off'||label==='ready'?10000:7000);gl.deleteTexture(cameraHint.front);cameraHint.front=cameraHintTexture(label);cameraHint.back=cameraHint.front;cameraHint.resources=[cameraHint.front];}cameraHint.visible=t<cameraHintUntil&&voicePhase!=='listening'&&voicePhase!=='processing';}if(t-lastUi>150){updateHover(frame);lastUi=t;}
+ pollRoomVisitors(t);placeRoomVisitors(pose);poll3d(t);pollLabSelector(frame,t,pose);pollStringLab(frame,t);pollFingerLab(frame,t);pollFrameLab(frame,t);pollPlacedFrameTouch(frame,t);pollFrameGames(t,pose);advanceGrab(frame);for(const src of session.inputSources)pinchPoll(frame,src);pollGestures(frame,t);tween(t);faceCloudCards(pose,t);updateMascot(frame,t);tickMascotSpeech(t);tickVoiceIndicator(t,pose);typeStatus(t);updateMicVisual(t);updateDebugCard(t);if(captureEye&&t-lastEyeUpdate>67){if(eyeState!=='idle'&&t>eyeUntil)eyeState='idle';paintEye(t);lastEyeUpdate=t;}if(cameraHint&&t-lastHintCheck>180){lastHintCheck=t;const label=cameraHintMode();if(label!==cameraHintState){cameraHintState=label;cameraHintUntil=t+(label==='off'||label==='ready'?10000:7000);gl.deleteTexture(cameraHint.front);cameraHint.front=cameraHintTexture(label);cameraHint.back=cameraHint.front;cameraHint.resources=[cameraHint.front];}cameraHint.visible=t<cameraHintUntil&&voicePhase!=='listening'&&voicePhase!=='processing';}if(t-lastUi>150){updateHover(frame);lastUi=t;}
  gl.bindFramebuffer(gl.FRAMEBUFFER,session.renderState.baseLayer.framebuffer);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
  for(const view of pose.views){const vp0=session.renderState.baseLayer.getViewport(view);gl.viewport(vp0.x,vp0.y,vp0.width,vp0.height);const vp=matmul(view.projectionMatrix,view.transform.inverse.matrix);
- decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(statusCard?.visible)drawCard(statusCard,vp);if(editbar)drawCard(editbar,vp);if(captureEye&&voicePhase!=='listening'&&voicePhase!=='processing')drawCard(captureEye,vp);if(cameraHint)drawCard(cameraHint,vp);if(voiceButton&&uiSettings.voice!==false)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(configShowing&&configPanel)drawCard(configPanel,vp);/* description is composited after mascot for legibility */for(const m of meshPreviews)drawMeshPreview(m,vp,t);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);drawStringLab(vp,t,pose);drawFingerLab(vp,t,pose);drawSpatialFrames(vp,t,pose);drawShapeTargets(vp,t,pose);drawFrameCubes(vp);if(labMenu?.visible)drawCard(labMenu,vp);depthCapability(frame,view);
+ decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(statusCard?.visible)drawCard(statusCard,vp);if(editbar)drawCard(editbar,vp);if(captureEye&&voicePhase!=='listening'&&voicePhase!=='processing')drawCard(captureEye,vp);if(cameraHint)drawCard(cameraHint,vp);if(voiceButton&&uiSettings.voice!==false)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(configShowing&&configPanel)drawCard(configPanel,vp);/* description is composited after mascot for legibility */for(const m of meshPreviews)drawMeshPreview(m,vp,t);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);drawStringLab(vp,t,pose);drawFingerLab(vp,t,pose);drawSpatialFrames(vp,t,pose);drawShapeTargets(vp,t,pose);drawFrameCubes(vp);if(labMenu?.visible)drawCard(labMenu,vp);for(const visitor of visitorBadges)drawCard(visitor,vp);depthCapability(frame,view);
  for(const src of session.inputSources){const r=ray(frame,src);if(!r)continue;const h=pick(r),end=vadd(r.o,vmul(r.d,h?.dist||1.2));const colour=src.hand?[.72,1,.75,.7]:[.77,.88,1,.72];line(vp,[r.o,end],colour);line(vp,[end],colour,true,h?16:9);}
  if(mascotPointer?.visible){if(mascotMode()==='2d'){
    if(!mascotPointer.front){mascotTex=mascotTexture();mascotPointer.front=mascotTex;mascotPointer.back=mascotTex;}
@@ -1558,8 +1587,17 @@ async function respondFind(name){const word=name.toLowerCase();const visible=car
  let matches=visible.filter(c=>{const searchable=(c.data?.label||'')+' '+(c.data?.description||'');return searchable.toLowerCase().includes(word)||word.split(' ').some(w=>w.length>3&&searchable.toLowerCase().includes(w));});
  if(!matches.length){const location=clouds.find(c=>c.objects?.some(o=>o.shelf!=='bin'&&((o.label||'')+' '+(o.description||'')).toLowerCase().includes(word)));
   if(location){await showCloud(location.id);matches=cards.filter(c=>c.kind==='object'&&c.data?.shelf!=='bin'&&((c.data?.label||'')+' '+(c.data?.description||'')).toLowerCase().includes(word));}}
- for(const c of matches){launchParticles(rootPos(c));c.highlightUntil=performance.now()+4500;}
- if(matches.length){selected=matches[0];updateEditbar();}
+ for(const c of matches){launchParticles(rootPos(c));c.highlightUntil=performance.now()+8500;}
+ if(matches.length){selected=matches[0];updateEditbar();const c=matches[0];
+  const eye=latestPose?.transform.matrix;
+  if(eye){const focus=point(poseForwardAnchor(latestPose,.92,-.02),[0,0,0]),inv=inverse(root);
+   const local=inv?point(inv,focus):focus;
+   c.preFindPose=c.preFindPose||{pos:[...c.pos],scale:c.scale};
+   animate(c,vsub(local,cloud?.offset||[0,0,0]),0,700);
+   c.scale=Math.min(3,Math.max(1.2,c.scale*1.25));
+   setTimeout(()=>{if(!session||!c.preFindPose)return;animate(c,c.preFindPose.pos,0,820);c.scale=c.preFindPose.scale;c.preFindPose=null;},9000);
+  }
+ }
  const msg=matches.length?`Found ${matches.length} ${name} match${matches.length===1?'':'es'} · sparkling cards are highlighted`:`No matching ${name} in the visible collection. Try EXTRACT.`;
  setStatus(msg,11000);window.FreeLab?.speakUpdate?.(matches.length?`Found ${matches.length} matching images`:`I did not find ${name}`);
  if(matches.length&&window.FreeLab?.pref?.('troll'))window.FreeLab?.speakUpdate?.('There it is. Excellent hiding skills, very suspicious.');
@@ -1567,17 +1605,52 @@ async function respondFind(name){const word=name.toLowerCase();const visible=car
 function dismissVoice(){
  voicePending=null;for(const c of [voiceOk,voiceCancel])if(c?.front&&gl)gl.deleteTexture(c.front);voiceOk=null;voiceCancel=null;setVoicePhase('idle','',0);
 }
+function parseGlobalStyle(utterance){
+ const cleaned=String(utterance).toLowerCase().trim().replace(/[.!?]+$/,'');
+ const match=cleaned.match(/^(?:make|turn|transform|change|restyle) (?:all(?: of)? (?:them|these|the (?:images|objects|segments))|everything|them all|them|all)(?: (?:into|in|look like|as|to))? (.+)$/);
+ if(!match)return null;
+ const style=match[1].replace(/^(?:a |an )/,'').trim();return style.length>=3&&style.length<=65?style:null;
+}
+async function applyGlobalStyle(batch){
+ if(busy||!cloud||cloud.legacy)return setStatus('Open a captured collection before editing a group',9500);
+ const {ids,style,sourceId}=batch;const current=cloud;
+ if(current.id!==sourceId)return setStatus('Collection changed; global restyle cancelled',9000);
+ busy=true;inferenceStarted=performance.now();inferenceCard=selected;
+ let completed=0;let failed=0;const output=[];
+ for(const objectId of ids){
+  setStatus(`PAID RESTYLE ${completed+failed+1}/${ids.length} · ${style} · ${completed} saved`,12000);
+  try{const result=await window.FreeLab.promptXR(sourceId,objectId,`Restyle the selected object in a ${style} aesthetic. Preserve its recognizable identity and main composition.`);
+   if(result?.id){current.objects.push(result);output.push(result);completed++;}else failed++;
+  }catch(e){failed++;window.FreeLab?.traceEvent?.('BATCH RESTYLE '+objectId+' failed: '+e.message,'error');}
+ }
+ const existing=clouds.find(c=>c.id===sourceId);if(existing)existing.objects=current.objects;
+ busy=false;inferenceCard=null;
+ if(output.length){try{await showCloud(sourceId,ids[0]||null,0);}catch(e){window.FreeLab?.traceEvent?.(e.message,'warn');}}
+ setStatus(`${completed} restyled image${completed===1?'':'s'} saved as branches · ${failed} failed`,12000);
+}
 async function confirmVoice(){
  if(!voicePending||busy)return;
- const transcript=voicePending.text;const context=voicePending.context;
+ const pending=voicePending;
+ if(pending.batch){dismissVoice();cue('ready');return applyGlobalStyle(pending.batch);}
+ const transcript=pending.text;const context=pending.context;
  dismissVoice();cue('ready');if(descriptionQuestionMode&&descriptionContext){descriptionQuestionMode=false;return askDescription(transcript);}
  const finding=findLabel(transcript);if(finding)return respondFind(finding);
+ const style=parseGlobalStyle(transcript);
+ if(style){
+  const objects=cloud?.objects?.filter(o=>o.shelf!=='bin'&&Number.isInteger(o.id))||[];
+  const ids=[...new Set(objects.map(o=>o.id))].slice(0,6);
+  if(!ids.length)return setStatus('No extracted objects available to restyle. Extract your source first.',9500);
+  voicePending={text:`PAID · Generate ${ids.length} ${style} variation${ids.length===1?'':'s'}? Press OK again to charge for each. Cancel to abort.`,batch:{style,ids,sourceId:cloud.id}};
+  setVoicePhase('heard',voicePending.text,Infinity);
+  voiceOk=makeRoundel('voice-accept','voiceok',.080);refreshRoundel(voiceOk,'ok');
+  voiceCancel=makeRoundel('voice-reject','voicecancel',.080);refreshRoundel(voiceCancel,'cancel');
+  if(latestPose)syncRoundels(latestPose);setStatus('CONFIRM BATCH · each image is billed separately · OK again or cancel',18000);return;
+ }
  const direct=transcript.toLowerCase().trim();
  if(/^(extract|segment|recognize)( the (image|picture|objects?))?[.!]?$/.test(direct))return runExtract();
  if(/^(take (a )?(photo|picture|snapshot)|capture)( now)?[.!]?$/.test(direct))return makeCapture();
  if(!context){setStatus('HEARD · '+transcript+' · select an image to use this instruction',13000);return;}
  promptContext=context;promptText=transcript;
- // The user accepted with OK: submit without opening a keyboard or second menu.
  return applyPrompt();
 }
 async function voicePrompt(){
@@ -1736,8 +1809,8 @@ function enterDarkroom(targetCard=null){
  const close=cinemaExitTexture();
  darkClose={id:'cinema-exit',kind:'darkroomexit',front:close,back:close,visible:true,
    pos:vadd(pos,quatVec(facing,[width*.5+.20,width*ratio*.5+.14,.035])),q:facing,size:[.23,.23],scale:1,resources:[close]};
- const arrow=(symbol,kind,x)=>{const [c,ctx]=canvas2d(196,196);rrect(ctx,6,6,184,184,82,'rgba(37,54,46,.97)');text(ctx,symbol,98,140,99,'#c5f1d6',580,'center');const tex=texture(c);return {id:'cinema-'+kind,kind,front:tex,back:tex,visible:true,pos:vadd(pos,quatVec(facing,[x,-.13,.03])),q:facing,size:[.29,.29],scale:1,resources:[tex]};};
- darkPrevious=arrow('‹','cinemaprev',-width*.5-.22);darkNext=arrow('›','cinemanext',width*.5+.22);
+ const arrow=(symbol,kind,x)=>{const [c,ctx]=canvas2d(196,196);rrect(ctx,6,6,184,184,82,'#ffffff');text(ctx,symbol,98,140,99,'#131918',580,'center');const tex=texture(c);return {id:'cinema-'+kind,kind,front:tex,back:tex,visible:true,pos:vadd(pos,quatVec(facing,[x,-.13,.03])),q:facing,size:[.29,.29],scale:1,resources:[tex]};};
+ darkPrevious=arrow('‹','cinemaprev',-.15);darkNext=arrow('›','cinemanext',0);
  const floorSource=target.data?.image||null;
  const floorPos=vadd(head,point(rotateY(yaw),[0,0,-2.35],0));floorPos[1]=floorReference?.02:head[1]-1.35;
  const floorTexture=cinemaFloorTexture(null);
@@ -1753,9 +1826,7 @@ function enterDarkroom(targetCard=null){
    const actualRatio=img.naturalHeight/Math.max(1,img.naturalWidth);
    const actualWidth=Math.min(2.75,1.68/Math.max(.15,actualRatio));
    reference.size=[actualWidth,actualWidth*actualRatio];
-   if(darkClose)darkClose.pos=vadd(pos,quatVec(facing,[actualWidth*.5+.20,actualWidth*actualRatio*.5+.14,.035]));
-   if(darkPrevious)darkPrevious.pos=vadd(pos,quatVec(facing,[-actualWidth*.5-.22,-.13,.035]));
-   if(darkNext)darkNext.pos=vadd(pos,quatVec(facing,[actualWidth*.5+.22,-.13,.035]));
+   // Theater controls are head-relative, independent of image dimensions.
    gl.deleteTexture(reference.front);const t=texture(c);reference.front=t;reference.back=t;
    if(darkFloor){gl.deleteTexture(darkFloor.front);darkFloor.front=cinemaFloorTexture(img);darkFloor.back=darkFloor.front;}
   };
@@ -1770,6 +1841,9 @@ function navigateCinema(direction){
  selected=cinemaCards[cinemaIndex];enterDarkroom(selected);
 }
 function renderCinema(frame,pose){
+ const anchor=point(poseForwardAnchor(pose,.72,-.24),[0,0,0]);const q=lookingQuat(anchor,[pose.transform.matrix[12],pose.transform.matrix[13],pose.transform.matrix[14]]);
+ // All three controls remain near the eyes, below the central visual field.
+ for(const [button,x] of [[darkPrevious,-.14],[darkNext,0],[darkClose,.14]])if(button){button.pos=vadd(anchor,quatVec(q,[x,0,0]));button.q=q;button.size=[.12,.12];}
  const layer=session.renderState.baseLayer;
  gl.bindFramebuffer(gl.FRAMEBUFFER,layer.framebuffer);
  gl.clearColor(0,0,0,1);gl.colorMask(true,true,true,true);
@@ -1810,14 +1884,14 @@ async function action(id){const t=performance.now();if(t-lastAction<200)return;l
  case 'follow':return toggleFollow();case 'gallery':galleryPage=0;return openGallery(0);
  case 'exit':held=null;return darkroom?closeDarkroom():session?.end();}}
 
-async function start(){if(session)return;uiSettings=window.FreeLabXRUI?.read?.()||uiSettings;if(!navigator.xr||!await navigator.xr.isSessionSupported('immersive-ar'))throw Error('Use Meta Quest Browser with immersive-ar support');
- setup();stringLab=new window.FreeLabStringLab.Experiment();stringLabState=null;rightStickDown=false;fingerLab=new window.FreeLabFingerLab.Experiment();fingerLabState=null;leftStickDown=false;frameLab=new window.FreeLabFrameLab.Experiment();frameLabState=null;frameGames=new window.FreeLabFrameGames.Engine();triangleLab=new window.FreeLabShapeSort.TriangleDraw();labSelector=new window.FreeLabLabSelector.Selector();labMenu=null;labMenuIndex=-1;await gl.makeXRCompatible();session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:['local'],optionalFeatures:['local-floor','hand-tracking','plane-detection','anchors','dom-overlay','depth-sensing'],depthSensing:{usagePreference:['gpu-optimized','cpu-optimized'],dataFormatPreference:['luminance-alpha','float32']},domOverlay:{root:document.getElementById('xrPromptEditor')}});xrDomOverlay=Boolean(session.domOverlayState);session.updateRenderState({baseLayer:new XRWebGLLayer(session,gl,{alpha:true,antialias:false})});
- try{refSpace=await session.requestReferenceSpace('local-floor');floorReference=true;}catch{refSpace=await session.requestReferenceSpace('local');floorReference=false;}poseReady=false;depthChecked=false;depthState='not requested';
+async function start(options={}){if(session)return;uiSettings=window.FreeLabXRUI?.read?.()||uiSettings;if(!navigator.xr||!await navigator.xr.isSessionSupported('immersive-ar'))throw Error('Use Meta Quest Browser with immersive-ar support');
+ setup();stringLab=new window.FreeLabStringLab.Experiment();stringLabState=null;rightStickDown=false;fingerLab=new window.FreeLabFingerLab.Experiment();fingerLabState=null;leftStickDown=false;frameLab=new window.FreeLabFrameLab.Experiment();frameLabState=null;frameGames=new window.FreeLabFrameGames.Engine();triangleLab=new window.FreeLabShapeSort.TriangleDraw();labSelector=new window.FreeLabLabSelector.Selector();labMenu=null;labMenuIndex=-1;await gl.makeXRCompatible();session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:options.requireDepth?['local','depth-sensing']:['local'],optionalFeatures:['local-floor','hand-tracking','plane-detection','anchors','dom-overlay',...(options.requireDepth?[]:['depth-sensing'])],depthSensing:{usagePreference:['gpu-optimized','cpu-optimized'],dataFormatPreference:['luminance-alpha','float32']},domOverlay:{root:document.getElementById('xrPromptEditor')}});xrDomOverlay=Boolean(session.domOverlayState);session.updateRenderState({baseLayer:new XRWebGLLayer(session,gl,{alpha:true,antialias:false})});
+ try{refSpace=await session.requestReferenceSpace('local-floor');floorReference=true;}catch{refSpace=await session.requestReferenceSpace('local');floorReference=false;}poseReady=false;depthChecked=false;depthState=depthEnabled()?'Requested and enabled; checking data…':'Not supplied by headset/browser';depthProbeAt=0;depthLastReport='';depthBinding=null;
  session.addEventListener('selectstart',e=>{lastNative.set(e.inputSource,performance.now());if(e.inputSource.handedness==='left'&&labSelector?.open)return;grabStart(e.frame,e.inputSource);});
  session.addEventListener('selectend',e=>{lastNative.set(e.inputSource,performance.now());if(e.inputSource.handedness==='left'&&labSelector?.open)return;grabEnd(e.inputSource,e.frame);});
  session.addEventListener('squeezestart',e=>{lastNative.set(e.inputSource,performance.now());if(e.inputSource.handedness==='left'&&labSelector?.open)return;grabStart(e.frame,e.inputSource);});
  session.addEventListener('squeezeend',e=>{lastNative.set(e.inputSource,performance.now());if(e.inputSource.handedness==='left'&&labSelector?.open)return;grabEnd(e.inputSource,e.frame);});
- session.addEventListener('end',()=>{window.FreeLabRooms?.end?.();if(labMenu?.front)gl.deleteTexture(labMenu.front);labMenu=null;labMenuIndex=-1;labSelector?.reset();labSelector=null;frameLab?.clear();frameLab=null;triangleLab=null;shapeTargets=[];frameGames?.clear();frameGames=null;mascotHitUntil=0;if(mascotImpactSprite){gl.deleteTexture(mascotImpactSprite);mascotImpactSprite=null;}if(frameGameCubeBuffer){gl.deleteBuffer(frameGameCubeBuffer);frameGameCubeBuffer=null;}frameTouch=null;frameErase=null;frameLabState=null;window.FreeLabSound?.fingersStopAll?.();fingerLab?.setEnabled(false);fingerLab=null;fingerLabState=null;leftStickDown=false;window.FreeLabSound?.stringStop?.();stringLab?.setEnabled(false);stringLab=null;stringLabState=null;rightStickDown=false;cue('release');session=null;poseReady=false;held=null;clearCards();if(darkroom?.ownedTexture&&darkroom.front)gl.deleteTexture(darkroom.front);if(darkFloor?.front)gl.deleteTexture(darkFloor.front);if(darkClose?.front)gl.deleteTexture(darkClose.front);darkroom=null;darkBackdrop=null;darkClose=null;darkFloor=null;descriptionQuestionMode=false;if(voiceBadge?.front)gl.deleteTexture(voiceBadge.front);voiceBadge=null;dismissVoice();gestureDebounce.clear();gestureSpeechTimes.clear();lastGestureAnnouncement=-100000;if(mascotSpeech?.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(cameraHint?.front)gl.deleteTexture(cameraHint.front);cameraHint=null;cameraHintState='';if(captureEye?.front)gl.deleteTexture(captureEye.front);if(voiceButton?.front)gl.deleteTexture(voiceButton.front);if(extractButton?.front)gl.deleteTexture(extractButton.front);voiceButton=null;extractButton=null;extractVisualActive=null;inferenceCard=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;document.getElementById('xrPromptEditor')?.classList.add('hidden');document.getElementById('xrPromptEditor')?.classList.remove('xr-native-open');if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;if(configPanel?.front)gl.deleteTexture(configPanel.front);configPanel=null;configShowing=false;if(descriptionPanel?.front)gl.deleteTexture(descriptionPanel.front);descriptionPanel=null;for(const m of meshPreviews)gl.deleteBuffer(m.buffer);meshPreviews=[];voiceRecord?.cancel?.();voiceRecord=null;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
+ session.addEventListener('end',()=>{window.FreeLabRooms?.end?.();for(const v of visitorBadges)if(v.front&&gl)gl.deleteTexture(v.front);visitorBadges=[];visitorPollAt=0;if(labMenu?.front)gl.deleteTexture(labMenu.front);labMenu=null;labMenuIndex=-1;labSelector?.reset();labSelector=null;frameLab?.clear();frameLab=null;triangleLab=null;shapeTargets=[];frameGames?.clear();frameGames=null;mascotHitUntil=0;if(mascotImpactSprite){gl.deleteTexture(mascotImpactSprite);mascotImpactSprite=null;}if(frameGameCubeBuffer){gl.deleteBuffer(frameGameCubeBuffer);frameGameCubeBuffer=null;}frameTouch=null;frameErase=null;frameLabState=null;window.FreeLabSound?.fingersStopAll?.();fingerLab?.setEnabled(false);fingerLab=null;fingerLabState=null;leftStickDown=false;window.FreeLabSound?.stringStop?.();stringLab?.setEnabled(false);stringLab=null;stringLabState=null;rightStickDown=false;cue('release');session=null;poseReady=false;held=null;clearCards();if(darkroom?.ownedTexture&&darkroom.front)gl.deleteTexture(darkroom.front);if(darkFloor?.front)gl.deleteTexture(darkFloor.front);if(darkClose?.front)gl.deleteTexture(darkClose.front);for(const b of [darkPrevious,darkNext])if(b?.front)gl.deleteTexture(b.front);darkPrevious=null;darkNext=null;darkroom=null;darkBackdrop=null;darkClose=null;darkFloor=null;descriptionQuestionMode=false;if(voiceBadge?.front)gl.deleteTexture(voiceBadge.front);voiceBadge=null;dismissVoice();gestureDebounce.clear();gestureSpeechTimes.clear();lastGestureAnnouncement=-100000;if(mascotSpeech?.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(cameraHint?.front)gl.deleteTexture(cameraHint.front);cameraHint=null;cameraHintState='';if(captureEye?.front)gl.deleteTexture(captureEye.front);if(voiceButton?.front)gl.deleteTexture(voiceButton.front);if(extractButton?.front)gl.deleteTexture(extractButton.front);voiceButton=null;extractButton=null;extractVisualActive=null;inferenceCard=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;document.getElementById('xrPromptEditor')?.classList.add('hidden');document.getElementById('xrPromptEditor')?.classList.remove('xr-native-open');if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;if(configPanel?.front)gl.deleteTexture(configPanel.front);configPanel=null;configShowing=false;if(descriptionPanel?.front)gl.deleteTexture(descriptionPanel.front);descriptionPanel=null;for(const m of meshPreviews)gl.deleteBuffer(m.buffer);meshPreviews=[];voiceRecord?.cancel?.();voiceRecord=null;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
  const saved=await window.FreeLab.listXRClouds().catch(()=>[]);clouds=saved;refreshToolbar();
  // Session-scoped XR placements are temporary, but every private JPEG and job remains in SQLite.
  // Resume queued cloud jobs after headset/browser restarts, without submitting a new paid request.
@@ -1828,4 +1902,5 @@ setStatus('CAPTURE → EXTRACT → PROMPT · camera pixels required',8500);
  session.requestAnimationFrame(updateView);
 }
 window.FreeLabXR={start,isRunning:()=>!!session};
+window.FreeLabXR.isListening=()=>voicePhase!=='idle';
 })();

@@ -179,21 +179,48 @@ async function xrDiagnostics(){const messages=[];messages.push('Secure context: 
 function setLibrary(open){const p=$('workspace');p.classList.toggle('hidden',!open);$('toggleLibrary').setAttribute('aria-expanded',String(open));if(open)refresh3DJobs();}
 
 function selectTab(tab){state.tab=tab;document.querySelectorAll('.tab').forEach(e=>e.classList.toggle('active',e.dataset.list===tab));}
-function presentLog(force=false){if(!state.user)return;fetch('/changelog.json',{cache:'no-store'}).then(r=>r.json()).then(log=>{const key='free-lab-log:'+state.user.id+':'+log.version;if(!force&&localStorage.getItem(key))return;
- $('logTitle').textContent=log.title;$('logDate').textContent=log.datetime;$('logItems').replaceChildren(...log.changes.map(x=>el('li','',x)));$('changelog').classList.remove('hidden');$('changelog').dataset.key=key;}).catch(()=>{});}
+let currentLog=null;
+function logTab(tab){
+ const latest=tab==='latest';$('logLatest').classList.toggle('active',latest);$('logHistory').classList.toggle('active',!latest);
+ $('logLatest').setAttribute('aria-selected',String(latest));$('logHistory').setAttribute('aria-selected',String(!latest));
+ $('logItems').classList.toggle('hidden',!latest);$('logArchive').classList.toggle('hidden',latest);
+ $('logTitle').textContent=latest?currentLog?.title||'Release notes':'Past releases';
+ $('logDate').textContent=latest?currentLog?.datetime||'':'Browse previous changes';
+ document.querySelector('.log-scroll').scrollTop=0;
+}
+function presentLog(force=false){if(!state.user)return;fetch('/changelog.json',{cache:'no-store'}).then(r=>r.json()).then(log=>{
+ const key='free-lab-log:'+state.user.id+':'+log.version;if(!force&&localStorage.getItem(key))return;
+ currentLog=log;$('logItems').replaceChildren(...(log.changes||[]).map(x=>el('li','',x)));
+ const box=$('logArchive');box.replaceChildren();for(const old of log.history||[]){const entry=el('details','log-history-item'),summary=el('summary','',old.title||old.version),date=el('p','',old.datetime||'');const list=el('ul');list.replaceChildren(...(old.changes||[]).map(x=>el('li','',x)));entry.append(summary,date,list);box.append(entry);}
+ if(!box.children.length)box.append(el('p','small-muted','No earlier notes are included with this release.'));
+ logTab('latest');$('changelog').classList.remove('hidden');$('changelog').dataset.key=key;}).catch(()=>{});}
 function dismissLog(){const key=$('changelog').dataset.key;if(key)localStorage.setItem(key,'seen');$('changelog').classList.add('hidden');}
+async function loadAdminProfiles(){
+ if(state.user?.role!=='admin')return;const box=$('adminUsers');const data=await api('/admin/profiles');box.replaceChildren();
+ for(const u of data.users||[]){const row=el('article','admin-user'),info=el('div'),actions=el('div','admin-user-actions');
+  info.append(el('strong','',u.display_name+' · @'+u.username),el('small','',u.role.toUpperCase()+(u.blocked?' · BLOCKED UNTIL '+new Date(u.blocked_until*1000).toLocaleString():' · Active')+' · '+u.created_at));
+  const reset=el('button','','Reset password');reset.onclick=async()=>{const pw=prompt('Set a new password (12–256 characters) for @'+u.username+':');if(pw===null)return;if(pw.length<12)return notify('Password needs at least 12 characters');if(!confirm('Reset password for @'+u.username+'? This revokes existing sessions.'))return;try{await api('/admin/profiles/'+u.id+'/password',{method:'PUT',body:JSON.stringify({password:pw})});notify('Password updated');await loadAdminProfiles();}catch(e){notify(e.message);}};actions.append(reset);
+  if(u.role!=='admin'){
+   const block=el('button','',u.blocked?'Unblock':'Block temporarily');block.onclick=async()=>{let hours=0;if(!u.blocked){const answer=prompt('Block @'+u.username+' for 1, 24 or 168 hours?','24');if(answer===null)return;hours=Number(answer);if(![1,24,168].includes(hours))return notify('Choose 1, 24 or 168 hours');}if(!confirm((hours?'Block':'Unblock')+' @'+u.username+'?'))return;
+    try{await api('/admin/profiles/'+u.id+'/block',{method:'PUT',body:JSON.stringify({hours})});await loadAdminProfiles();}catch(e){notify(e.message);}};actions.append(block);
+   const remove=el('button','','Remove user');remove.onclick=async()=>{if(!confirm('Permanently remove @'+u.username+' and their saved data? This cannot be undone.'))return;
+    try{await api('/admin/profiles/'+u.id,{method:'DELETE'});notify('Account removed');await loadAdminProfiles();}catch(e){notify(e.message);}};actions.append(remove);
+  }row.append(info,actions);box.append(row);
+ }
+}
 async function afterAuth(user){state.user=user;
  const initials=(user.display_name||user.username||'ME').trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();
  $('profileInitials').textContent=initials||'ME';
- const portrait=$('profileAvatar');portrait.onload=()=>{portrait.classList.remove('hidden');$('profileInitials').classList.add('hidden');};
- portrait.onerror=()=>{portrait.classList.add('hidden');$('profileInitials').classList.remove('hidden');};
- portrait.src='/api/me/avatar?v='+encodeURIComponent(user.id);
+ const portrait=$('profileAvatar');portrait.onload=()=>{portrait.classList.remove('hidden');$('profileInitials').classList.add('hidden');$('settingsAvatar').src=portrait.src;$('settingsAvatar').classList.remove('hidden');$('settingsAvatarInitials').classList.add('hidden');};
+ portrait.onerror=()=>{portrait.classList.add('hidden');$('profileInitials').classList.remove('hidden');$('settingsAvatar').classList.add('hidden');$('settingsAvatarInitials').classList.remove('hidden');};
+ $('settingsAvatarInitials').textContent=initials||'+';portrait.src='/api/me/avatar?v='+encodeURIComponent(user.id);
 $('main').classList.remove('hidden');$('loginView').classList.add('hidden');$('profileSummary').textContent=user.display_name+' · @'+user.username+' · '+user.role;$('adminTools').classList.toggle('hidden',user.role!=='admin');document.querySelectorAll('.admin-tab').forEach(e=>e.classList.toggle('hidden',user.role!=='admin'));await refresh();await loadObjects();presentLog();if(user.role==='admin'){await loadProviderList().catch(e=>notify(e.message));}}
 async function init(){
  wirePromptEditor();
  $('loginForm').onsubmit=async e=>{e.preventDefault();$('loginError').textContent='';try{const data=await api('/login',{method:'POST',body:JSON.stringify({username:$('username').value,password:$('password').value})});$('password').value='';await afterAuth(data.user);}catch(error){$('loginError').textContent=error.message;}};
  const m=await api('/me').catch(()=>({user:null}));if(m.user)await afterAuth(m.user);else{await refresh();$('loginView').classList.remove('hidden');}
  $('enterXR').onclick=()=>{window.FreeLabSound?.unlock();window.FreeLabSound?.play('enter');if(!state.user)return notify('Sign in before entering XR');window.FreeLabRooms.chooseXR();};
+ $('depthXR')?.addEventListener('click',()=>{if(!state.user)return notify('Sign in before entering XR');window.FreeLabRooms.chooseXR(true);notify('Depth is requested on XR entry. If unsupported or denied, use normal XR instead.');});
  $('toggleLibrary').onclick=()=>setLibrary($('workspace').classList.contains('hidden'));$('refresh3DJobs').onclick=refresh3DJobs;
  $('closeLibrary').onclick=()=>setLibrary(false);$('galleryClose').onclick=()=>$('desktopGallery').classList.add('hidden');$('galleryPrev').onclick=()=>browseGallery(-1);$('galleryNext').onclick=()=>browseGallery(1);let swipeX=null;$('galleryImage').addEventListener('pointerdown',e=>swipeX=e.clientX);$('galleryImage').addEventListener('pointerup',e=>{if(swipeX!==null&&Math.abs(e.clientX-swipeX)>45)browseGallery(e.clientX<swipeX?1:-1);swipeX=null;});document.addEventListener('keydown',e=>{if($('desktopGallery').classList.contains('hidden'))return;if(e.key==='Escape')$('galleryClose').click();else if(e.key==='ArrowLeft')browseGallery(-1);else if(e.key==='ArrowRight')browseGallery(1);});
  document.querySelectorAll('.model-option').forEach(btn=>btn.onclick=()=>{$('modelChoice').value=btn.dataset.model;document.querySelectorAll('.model-option').forEach(b=>b.classList.toggle('selected',b===btn));});
@@ -201,14 +228,14 @@ async function init(){
   try{if(!state.snapshot)throw Error('Upload an image first');const result=await api('/captures',{method:'POST',body:JSON.stringify({image:state.snapshot})});
    notify('Image saved to Spatial Library · open LIB in XR to explore it');state.snapshotOrigin='upload';}
   catch(e){notify('Cannot save imported image · '+e.message);}finally{button.disabled=false;}});
- document.querySelectorAll('[data-profile-tab]').forEach(button=>button.onclick=()=>profileTab(button.dataset.profileTab));
+ document.querySelectorAll('[data-profile-tab]').forEach(button=>button.onclick=()=>{profileTab(button.dataset.profileTab);if(button.dataset.profileTab==='users')loadAdminProfiles().catch(e=>notify(e.message));});
  $('segment').onclick=()=>segmentSnapshot();$('toggleScan').onclick=toggleScan;$('cancelScan').onclick=()=>$('scanConsent').classList.add('hidden');$('confirmScan').onclick=startScanConfirmed;document.addEventListener('visibilitychange',()=>{if(document.hidden)stopScan()});
  $('armXRMic')?.addEventListener('click',async()=>{try{const result=await armMicrophone();notify(result)}catch(e){notify('Mic permission: '+e.message)}});
- for(const name of ['spoken','troll']){const el=$('pref-'+name);if(el){el.checked=pref(name);el.onchange=()=>setPref(name,el.checked);}}
+ for(const name of ['spoken','troll','shareExperimental']){const el=$('pref-'+name);if(el){el.checked=pref(name);el.onchange=()=>setPref(name,el.checked);}}
  const engine=$('pref-speechEngine');if(engine){engine.value=pref('speechEngine');engine.onchange=()=>setPref('speechEngine',engine.value);}
  const voice=$('pref-speechVoiceId');if(voice){voice.value=pref('speechVoiceId');voice.onchange=()=>setPref('speechVoiceId',voice.value.trim());}
  $('loadElevenVoices')?.addEventListener('click',async()=>{const result=$('voiceLookupResult');result.textContent='Checking saved ElevenLabs credential…';try{const data=await loadElevenVoices();const choices=$('pref-speechVoiceId');choices.replaceChildren();choices.append(new Option('Select voice',''));for(const v of data.voices||[])choices.append(new Option(v.name,v.id));choices.value=pref('speechVoiceId');result.textContent=data.voices?.length?'Choose your voice above. Requests are billable when ElevenLabs is enabled.':data.notice||'No voices available';}catch(e){result.textContent=e.message;}});
- const mode=$('pref-mascotMode');if(mode){mode.value=pref('mascotMode');mode.onchange=()=>setPref('mascotMode',mode.value);}
+ const mode=$('pref-mascotMode');if(mode){mode.value=pref('mascotMode');mode.onchange=()=>{setPref('mascotMode',mode.value);if(mode.value==='none')silenceXRVoice();};}
  const hold=$('pref-frameHoldSeconds');if(hold){hold.value=String(pref('frameHoldSeconds'));hold.onchange=()=>setPref('frameHoldSeconds',Number(hold.value));}
  $('cameraButton').onclick=()=>{window.FreeLabSound?.play('capture');openCamera();};$('cameraDiagnostic').onclick=()=>{window.FreeLabSound?.play('ready');$('xrReadiness').classList.remove('hidden');xrDiagnostics()};$('refreshXRReadiness').onclick=xrDiagnostics;$('closeXRReadiness').onclick=()=>$('xrReadiness').classList.add('hidden');$('addNameButton').onclick=()=>{window.FreeLabSound?.play('bloom');$('cameraPanel').classList.remove('hidden');$('manualLabel').focus();};$('closeCamera').onclick=closeCamera;$('takeSnapshot').onclick=()=>{try{snapshot();notify('Snapshot ready')}catch(e){notify(e.message)}};
  $('fileInput').onchange=async e=>{window.FreeLabSound?.play('bloom');const file=e.target.files?.[0];if(!file)return;try{if(file.size>12*1024*1024)throw Error('Please choose an image under 12 MB');const bmp=await createImageBitmap(file);const canvas=$('snapshotCanvas');const scale=Math.min(1,960/Math.max(bmp.width,bmp.height));canvas.width=Math.round(scale*bmp.width);canvas.height=Math.round(scale*bmp.height);canvas.getContext('2d').drawImage(bmp,0,0,canvas.width,canvas.height);bmp.close();const preview=new Image();preview.src=canvas.toDataURL('image/jpeg',0.65);await preview.decode();$('cameraPanel').classList.remove('hidden');compress(preview);state.snapshotOrigin='upload';window.dispatchEvent(new CustomEvent('freelab-photo-ready'));notify('Image ready — recognize or save manually');}catch(e){notify(e.message)}e.target.value='';};
@@ -223,8 +250,8 @@ async function init(){
    }catch(err){notify('Profile image: '+err.message);}e.target.value='';};
  $('profileButton').onclick=()=>{$('profilePanel').classList.remove('hidden');profileTab(state.user?.role==='admin'?'apis':'experience');};$('closeProfile').onclick=()=>$('profilePanel').classList.add('hidden');
  $('logout').onclick=async()=>{state.sessionKeys.clear();stopScan();closeCamera();await api('/logout',{method:'POST'});location.reload()};
- $('createProfile').onsubmit=async e=>{e.preventDefault();try{await api('/admin/profiles',{method:'POST',body:JSON.stringify({username:$('newUsername').value,display_name:$('newDisplayName').value,password:$('newPassword').value})});e.target.reset();notify('New private profile created')}catch(error){notify(error.message)}};
- $('showChangelog').onclick=()=>presentLog(true);$('dismissChangelog').onclick=dismissLog;$('continueChangelog').onclick=dismissLog;
+ $('createProfile').onsubmit=async e=>{e.preventDefault();try{await api('/admin/profiles',{method:'POST',body:JSON.stringify({username:$('newUsername').value,display_name:$('newDisplayName').value,password:$('newPassword').value})});e.target.reset();notify('New private profile created');await loadAdminProfiles();}catch(error){notify(error.message)}};
+ $('logLatest').onclick=()=>logTab('latest');$('logHistory').onclick=()=>logTab('history');$('showChangelog').onclick=()=>presentLog(true);$('dismissChangelog').onclick=dismissLog;$('continueChangelog').onclick=dismissLog;
 }
 
 // Spatial cloud interface: no background inference, all writes are profile-scoped.
@@ -322,16 +349,25 @@ async function armMicrophone(){
 }
 function micReady(){return Boolean(state.micStream?.getAudioTracks()?.some(t=>t.readyState==='live'&&!t.muted));}
 let recorder=null;
+let activeMascotAudio=null;
+function silenceXRVoice(){try{window.speechSynthesis?.cancel?.();activeMascotAudio?.pause?.();activeMascotAudio=null;}catch{}}
 function speakBrowser(value){try{if(!('speechSynthesis' in window))return;window.speechSynthesis.cancel();const utter=new SpeechSynthesisUtterance(value.slice(0,500));utter.volume=.55;utter.rate=1.09;window.speechSynthesis.speak(utter);}catch(e){traceEvent('System voice: '+e.message,'warn');}}
+let lastXRSpeech=0;
 function speakUpdate(value){
- if(!pref('spoken')||window.FreeLabXRUI?.read?.().voice===false)return;const phrase=String(value).slice(0,500);
+ if(!pref('spoken')||window.FreeLabXRUI?.read?.().voice===false)return;
+ if(window.FreeLabXR?.isRunning?.()){
+  if(pref('mascotMode')==='none'||window.FreeLabXRUI?.read?.().mascot===false||window.FreeLabXR?.isListening?.())return;
+  if(Date.now()-lastXRSpeech<6000)return;lastXRSpeech=Date.now();
+ }
+ const phrase=String(value).slice(0,500);
  if(pref('speechEngine')!=='elevenlabs'||!pref('speechVoiceId'))return speakBrowser(phrase);
  // ElevenLabs generates billed speech ONLY after it was explicitly enabled in Settings.
  fetch('/api/media/speak',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Free-Lab':'1'},
    body:JSON.stringify({text:phrase,voice_id:pref('speechVoiceId')})}).then(async response=>{
    if(!response.ok)throw Error('ElevenLabs speech HTTP '+response.status);
-   const blob=await response.blob();const url=URL.createObjectURL(blob);const audio=new Audio(url);
-   audio.onended=()=>URL.revokeObjectURL(url);audio.onerror=()=>URL.revokeObjectURL(url);await audio.play();
+   const blob=await response.blob();const url=URL.createObjectURL(blob);const audio=new Audio(url);activeMascotAudio?.pause?.();activeMascotAudio=audio;
+   audio.onended=()=>{URL.revokeObjectURL(url);if(activeMascotAudio===audio)activeMascotAudio=null;};audio.onerror=()=>{URL.revokeObjectURL(url);if(activeMascotAudio===audio)activeMascotAudio=null;};
+   if(window.FreeLabXR?.isRunning?.()&&pref('mascotMode')==='none'){URL.revokeObjectURL(url);return;}await audio.play();
  }).catch(e=>{traceEvent(e.message+'; falling back to system speech','warn');speakBrowser(phrase);});
 }
 function startWavPrompt(){
@@ -420,6 +456,6 @@ function wirePromptEditor(){
  };
 }
 
-window.FreeLab={api,startWavPrompt,currentRecording,describeXR,modelXRPreview,get3DPreference,save3DPreference,list3DJobs,loadElevenVoices,createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,resumeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
+window.FreeLab={silenceXRVoice,api,startWavPrompt,currentRecording,describeXR,modelXRPreview,get3DPreference,save3DPreference,list3DJobs,loadElevenVoices,createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,resumeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
 document.addEventListener('DOMContentLoaded',()=>{window.FreeLabRooms?.init?.();init().catch(e=>notify('Initialization failed: '+e.message));const bloom=$('featureBloom');if(bloom){setTimeout(()=>window.FreeLabSound?.play('arrival'),3000);bloom.querySelectorAll('.feature-seed').forEach(button=>{button.addEventListener('mouseenter',()=>window.FreeLabSound?.hover());button.addEventListener('focus',()=>window.FreeLabSound?.hover());});}});
 })();

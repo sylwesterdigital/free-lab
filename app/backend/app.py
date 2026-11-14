@@ -28,6 +28,8 @@ def before():
         g.con=db.connect(DB)
         uid=session.get('uid')
         g.user=db.user_from_id(g.con,uid) if isinstance(uid,int) else None
+        if g.user and (g.user['blocked_until']>int(time.time()) or session.get('revision',0)!=g.user['auth_revision']):
+            session.clear();g.user=None
         # CSRF: all writes require same-origin custom header + Origin/Referer validation.
         if request.method not in ('GET','HEAD','OPTIONS'):
             origin=request.headers.get('Origin','')
@@ -98,7 +100,8 @@ def login():
     u=db.user_from_name(g.con,name)
     dummy=db.hash_password('dummy-password') if u is None else u['password_hash']
     if not db.verify_password(pw,dummy) or not u: return jsonify(error='Invalid credentials'),401
-    session.clear();session['uid']=u['id']
+    if u['blocked_until']>int(time.time()):return jsonify(error='Account temporarily blocked. Contact your administrator.'),403
+    session.clear();session['uid']=u['id'];session['revision']=u['auth_revision']
     return jsonify(user={'id':u['id'],'username':u['username'],'display_name':u['display_name'],'role':u['role']})
 
 @app.get('/api/me/avatar')
@@ -142,6 +145,50 @@ def create_profile():
                             str(v.get('display_name','')),role='member')
     except (ValueError,sqlite3.IntegrityError) as e:return jsonify(error=str(e)),400
     return jsonify(id=uid),201
+
+
+@app.get('/api/admin/profiles')
+@require_admin
+def admin_list_profiles():
+    rows=g.con.execute('SELECT id,username,display_name,role,created_at,blocked_until FROM users ORDER BY role DESC,id LIMIT 200').fetchall()
+    return jsonify(users=[{**dict(row),'blocked':row['blocked_until']>int(time.time())} for row in rows])
+
+@app.put('/api/admin/profiles/<int:uid>/password')
+@require_admin
+def admin_change_password(uid):
+    v=body();password=v.get('password','')
+    if not isinstance(password,str) or not 12<=len(password)<=256:return jsonify(error='Password must be 12–256 characters'),400
+    if not g.con.execute('SELECT id FROM users WHERE id=?',(uid,)).fetchone():abort(404)
+    with g.con:g.con.execute('UPDATE users SET password_hash=?,auth_revision=auth_revision+1 WHERE id=?',(db.hash_password(password),uid))
+    return jsonify(ok=True,reauthentication_required=uid==g.user['id'])
+
+@app.put('/api/admin/profiles/<int:uid>/block')
+@require_admin
+def admin_block_profile(uid):
+    v=body();hours=v.get('hours')
+    if type(hours) is not int or hours not in (0,1,24,168):return jsonify(error='Choose unblock, 1 hour, 24 hours, or 7 days'),400
+    target=g.con.execute('SELECT id,role FROM users WHERE id=?',(uid,)).fetchone()
+    if not target:abort(404)
+    if uid==g.user['id'] or target['role']=='admin':return jsonify(error='Admin accounts cannot be blocked here'),403
+    until=int(time.time()+hours*3600) if hours else 0
+    with g.con:g.con.execute('UPDATE users SET blocked_until=?,auth_revision=auth_revision+1 WHERE id=?',(until,uid))
+    return jsonify(ok=True,blocked_until=until)
+
+@app.delete('/api/admin/profiles/<int:uid>')
+@require_admin
+def admin_delete_profile(uid):
+    target=g.con.execute('SELECT role FROM users WHERE id=?',(uid,)).fetchone()
+    if not target:abort(404)
+    if target['role']=='admin' or uid==g.user['id']:return jsonify(error='Administrator accounts cannot be removed here'),403
+    # Record filenames before cascade, delete only if the remaining DB has no references.
+    filenames=[row[0] for row in g.con.execute('SELECT image_name FROM captures WHERE owner_id=? UNION SELECT image_name FROM objects WHERE owner_id=?',(uid,uid)) if row[0]]
+    with g.con:g.con.execute('DELETE FROM users WHERE id=?',(uid,))
+    for name in filenames:
+        if not re.fullmatch('[a-f0-9]{32}\.(jpg|png)',name):continue
+        if g.con.execute('SELECT 1 FROM captures WHERE image_name=? UNION SELECT 1 FROM objects WHERE image_name=?',(name,name)).fetchone():continue
+        try:(IMAGE_DIR/name).unlink(missing_ok=True)
+        except OSError:pass
+    return jsonify(ok=True)
 
 @app.get('/api/admin/providers')
 @require_admin
@@ -1002,15 +1049,50 @@ def join_room(rid):
             ON CONFLICT(room_id,user_id) DO UPDATE SET accepted=1''',(rid,g.user['id']))
     return jsonify(joined=True,room_id=rid)
 
+@app.post('/api/rooms/<int:rid>/presence')
+@require_user
+def room_heartbeat(rid):
+    r=_room_access(rid)
+    if not r:abort(404)
+    if r['owner_id']!=g.user['id']:
+        with g.con:g.con.execute('''INSERT INTO room_presence(room_id,user_id,last_seen) VALUES(?,?,?)
+            ON CONFLICT(room_id,user_id) DO UPDATE SET last_seen=excluded.last_seen''',(rid,g.user['id'],int(time.time())))
+    return jsonify(ok=True)
+
+@app.delete('/api/rooms/<int:rid>/presence')
+@require_user
+def room_leave_presence(rid):
+    with g.con:g.con.execute('DELETE FROM room_presence WHERE room_id=? AND user_id=?',(rid,g.user['id']))
+    return jsonify(ok=True)
+
+@app.get('/api/rooms/mine/visitors')
+@require_user
+def room_my_visitors():
+    room=g.con.execute('SELECT id FROM live_rooms WHERE owner_id=?',(g.user['id'],)).fetchone()
+    if not room:return jsonify(visitors=[])
+    rows=g.con.execute('''SELECT u.id,u.display_name,u.username FROM room_presence p
+         JOIN room_members m ON m.room_id=p.room_id AND m.user_id=p.user_id AND m.accepted=1
+         JOIN users u ON u.id=p.user_id WHERE p.room_id=? AND p.last_seen>=? AND u.blocked_until<=?
+         ORDER BY p.last_seen DESC LIMIT 12''',(room['id'],int(time.time())-25,int(time.time()))).fetchall()
+    return jsonify(visitors=[dict(row) for row in rows])
+
 @app.put('/api/rooms/mine/state')
 @require_user
 def update_room_state():
     v=body();active=v.get('active')
     if type(active) is not bool:return jsonify(error='active must be boolean'),400
-    cards=v.get('cards',[]);pose=v.get('pose',[])
+    cards=v.get('cards',[]);pose=v.get('pose',[]);shapes=v.get('shapes',[])
     if not isinstance(cards,list) or len(cards)>72 or not isinstance(pose,list) or len(pose)!=3:return jsonify(error='Invalid room state'),400
     def coords(q):return isinstance(q,list) and len(q)==3 and all(type(x) in (float,int) and abs(x)<100 for x in q)
     if not coords(pose):return jsonify(error='Invalid headset position'),400
+    if not isinstance(shapes,list) or len(shapes)>32:return jsonify(error='Maximum 32 shared shapes'),400
+    clean_shapes=[]
+    for shape in shapes:
+        if not isinstance(shape,dict) or shape.get('kind') not in ('frame','triangle') or not isinstance(shape.get('corners'),list):
+            return jsonify(error='Invalid shared shape'),400
+        corners=shape['corners']
+        if len(corners) not in (3,4) or not all(coords(p) for p in corners):return jsonify(error='Invalid frame corners'),400
+        clean_shapes.append({'kind':shape['kind'],'corners':[[round(float(x),3) for x in point] for point in corners]})
     def quaternion(q):return isinstance(q,list) and len(q)==4 and all(type(x) in (float,int) and abs(x)<=1.001 for x in q) and 0.9<sum(float(x)**2 for x in q)<1.1
     orientation=v.get('q',[0,0,0,1])
     if not quaternion(orientation):return jsonify(error='Invalid headset orientation'),400
@@ -1028,7 +1110,7 @@ def update_room_state():
         clean.append(item)
     r=g.con.execute('SELECT id FROM live_rooms WHERE owner_id=?',(g.user['id'],)).fetchone()
     if not r:return jsonify(error='Create a room before updating'),409
-    payload=json.dumps({'pose':pose,'q':[round(float(x),4) for x in orientation],'cards':clean},separators=(',',':'))
+    payload=json.dumps({'pose':pose,'q':[round(float(x),4) for x in orientation],'cards':clean,'shapes':clean_shapes},separators=(',',':'))
     with g.con:g.con.execute('''UPDATE live_rooms SET state_json=?,active=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?''',(payload,int(active),r['id']))
     return jsonify(ok=True)
 

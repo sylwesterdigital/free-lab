@@ -92,7 +92,7 @@ export async function createRoomViewer({canvas,inspector,viewer,status,count,bac
  const roomEdges=new T.LineSegments(new T.EdgesGeometry(new T.BoxGeometry(5,3.6,5)),new T.LineBasicMaterial({color:0xaabcca,transparent:true,opacity:.40}));scene.add(roomEdges);
  const poseGroup=cameraModel(T);scene.add(poseGroup);poseGroup.position.set(0,1.55,0);
  const avatarTarget=new T.Vector3(0,1.55,0),avatarQuat=new T.Quaternion();
- const cards=new Map(),links=new Map(),hits=[];
+ const cards=new Map(),links=new Map(),hits=[],sharedShapes=[];let shapeKey='';
  const aim=new T.Vector3(0,1.5,0),orbit={yaw:.48,pitch:.22,radius:6.2,vyaw:0,vpitch:0,pan:new T.Vector3()};
  let selected=null,roomId=null,active=false,raf=0,lastFrame=0,mode='orbit',hover=null,pointers=new Map(),dragTravel=0;
  const keys=new Set();const raycaster=new T.Raycaster();const mouse=new T.Vector2();
@@ -162,9 +162,19 @@ export async function createRoomViewer({canvas,inspector,viewer,status,count,bac
  function fit(){const bounds=updateBounds();aim.copy(bounds.center);orbit.radius=clamp(Math.max(4,Math.max(bounds.size.x,bounds.size.z)*1.55+2),3,28);
   if(mode==='fly'){camera.position.copy(bounds.center).add(new T.Vector3(0,1,orbit.radius));camera.lookAt(bounds.center);}
  }
+ function rebuildShapes(shapes){
+  const key=JSON.stringify(Array.isArray(shapes)?shapes:[]);if(shapeKey===key)return;shapeKey=key;
+  for(const item of sharedShapes){scene.remove(item);item.geometry.dispose();item.material.dispose();}sharedShapes.length=0;
+  for(const shape of (Array.isArray(shapes)?shapes:[]).slice(0,32)){
+   if(!Array.isArray(shape.corners)||shape.corners.length<3||!shape.corners.every(validPoint))continue;
+   const points=shape.corners.map(p=>new T.Vector3(...p));
+   const line=new T.LineLoop(new T.BufferGeometry().setFromPoints(points),new T.LineBasicMaterial({color:shape.kind==='triangle'?0xffa6d8:0x5bffdc,transparent:true,opacity:.9,depthTest:true}));
+   sharedShapes.push(line);scene.add(line);
+  }
+ }
  function setState(payload,rid,room){
   if(!payload||!Array.isArray(payload.cards))return;
-  const newRoom=roomId!==rid;roomId=rid;
+  const newRoom=roomId!==rid;roomId=rid;rebuildShapes(payload.shapes);
   if(validPoint(payload.pose))avatarTarget.set(...payload.pose);
   if(Array.isArray(payload.q)&&payload.q.length===4&&payload.q.every(Number.isFinite))avatarQuat.set(...payload.q).normalize();
   const incoming=new Set();let changed=false;
@@ -261,6 +271,6 @@ export async function createRoomViewer({canvas,inspector,viewer,status,count,bac
  button('roomImageClose',()=>{$('roomImageLightbox').classList.add('hidden');});
  button('roomInspectFocus',()=>selected&&focusOn(selected));
  function start(){if(active)return;active=true;resize();lastFrame=0;raf=requestAnimationFrame(tick);}
- function stop(){active=false;cancelAnimationFrame(raf);keys.clear();pointers.clear();select(null);$('roomImageLightbox').classList.add('hidden');}
+ function stop(){active=false;cancelAnimationFrame(raf);rebuildShapes([]);keys.clear();pointers.clear();select(null);$('roomImageLightbox').classList.add('hidden');}
  return {start,stop,setState,fit,select};
 }

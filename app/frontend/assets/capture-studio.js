@@ -1,4 +1,4 @@
-/* FREELAB v0.10.16 — one phone-sized workspace for the same authenticated
+/* FREELAB v0.10.17 — one phone-sized workspace for the same authenticated
  * source/branch operations used in XR. No automatic inference or image upload. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id);

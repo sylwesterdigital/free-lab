@@ -9,7 +9,7 @@ class QuestInteractionRegression(unittest.TestCase):
         self.assertIn("if(h.id){window.FreeLab?.traceEvent?.('XR image action: '+h.id,'info');return action(h.id);}",XR)
         self.assertIn("if(!held||held.id)return",XR)
         self.assertNotIn("setVoicePhase('gesture'",XR)
-        self.assertIn('mascotSay(gesture)',XR)
+        self.assertIn('mascotSay(spoken)',XR)
     def test_button_geometry_and_release_during_rotation(self):
         script=r'''
 const fs=require('fs'),vm=require('vm');

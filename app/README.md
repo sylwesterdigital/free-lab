@@ -266,7 +266,7 @@ are unchanged; raw XR passthrough camera pixels are not shared. Three.js require
 access to the pinned CDN; the viewer shows an explicit loading error if the
 module is unavailable. WebGL framerate depends on spectator hardware.
 
-## v0.10.16 release note
+## v0.10.17 release note
 
 - Nginx `.mjs` MIME override and public module signature check protect desktop rooms.
 - Full-window desktop 3D room uses requestAnimationFrame; GPU/browser frame rate is measured, not guaranteed. Spatial labels are HTML overlays to maintain readable screen-space text across depths.
@@ -274,7 +274,7 @@ module is unavailable. WebGL framerate depends on spectator hardware.
 - Profile photo is private JPEG/PNG data in SQLite, served only to the signed-in user.
 - No existing credentials, images, Git, watcher environment or TLS files are cleared.
 
-## v0.10.16 hotfix
+## v0.10.17 hotfix
 
 Fix Ubuntu release testing: the repository-root `watch-free-lab.sh` is packaged with
 the ZIP but intentionally is not copied into `/var/www/free-lab.cam/releases/vX.Y.Z`.
@@ -283,7 +283,7 @@ The server-side application checks still run without it, including nginx ES modu
 MIME checks. The release is bumped because previous v0.10.14 files may remain
 on disk after a rejected install and cannot be safely overwritten.
 
-## v0.10.16 — active nginx MIME repair
+## v0.10.17 — active nginx MIME repair
 
 On previous deployments `/etc/nginx/sites-available/free-lab.cam` could be
 different from the configuration that nginx actually serves. `nginx -t` only
