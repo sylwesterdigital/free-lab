@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.27",
-  "description": "XR source-linked asynchronous 3D job badges, visible model pop-in, restored multi-model collection previews and explicit error states"
+  "version": "0.10.28",
+  "description": "Stable image-anchored cinematic previous, next and exit controls in XR"
 }

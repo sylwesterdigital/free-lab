@@ -24,6 +24,26 @@ class CinemaTests(unittest.TestCase):
   self.assertIn('if(darkroom){renderCinema(frame,pose);session.requestAnimationFrame(updateView);return;}',render)
   self.assertIn("return darkroom?closeDarkroom():session?.end()",XR)
 
+ def test_control_row_fixed_to_photo_bottom_not_head(self):
+  section=XR.split('function layoutCinemaControls(){',1)[1].split('function cinemaFloorTexture(',1)[0]
+  self.assertIn('const center=darkroom.pos,orientation=darkroom.q;',section)
+  self.assertIn('lowerEdge=-Math.abs(darkroom.size[1])*.5',section)
+  self.assertIn('rowY=lowerEdge+.17',section)
+  self.assertIn('[[darkPrevious,-.29],[darkNext,0],[darkClose,.29]]',section)
+  self.assertIn('button.q=orientation',section)
+  self.assertIn('button.size=[.235,.235]',section)
+  self.assertNotIn('poseForwardAnchor(',section)
+  render=XR.split('function renderCinema(frame,pose){',1)[1].split('async function action(',1)[0]
+  self.assertNotIn('button.pos=',render)
+  self.assertNotIn('poseForwardAnchor(',render)
+  self.assertIn('if(darkPrevious)drawCard(darkPrevious,vp)',render)
+  self.assertIn('if(darkNext)drawCard(darkNext,vp)',render)
+  self.assertIn('if(darkClose)drawCard(darkClose,vp)',render)
+  init=XR.split('function enterDarkroom(targetCard=null){',1)[1].split('function navigateCinema(',1)[0]
+  self.assertEqual(init.count('layoutCinemaControls();'),2)
+  self.assertIn("darkPrevious=arrow('‹','cinemaprev')",init)
+  self.assertIn("darkNext=arrow('›','cinemanext')",init)
+
  def test_world_space_cinema_objects_and_image_source(self):
   b=XR.split('function baseFor(c){',1)[1].split('function',1)[0]
   for name in ('darkroom','darkroomexit','cinema-floor'):
@@ -34,7 +54,7 @@ class CinemaTests(unittest.TestCase):
   self.assertIn('gl.deleteTexture(reference.front)',src)
   self.assertIn('width*ratio',src)
   self.assertIn('Math.atan2(-headM[9]',src)
-  self.assertIn("size:[.23,.23]",src)
+  self.assertIn("size:[.235,.235]",src)
   self.assertNotIn('session.end()',src)
 
  def test_compact_voice_status_is_single_line(self):
@@ -56,8 +76,8 @@ class CinemaTests(unittest.TestCase):
   self.assertIn('mascotReactionTarget=handGesturePositions[side]',XR)
 
  def test_release_version(self):
-  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.27')
-  self.assertIn('xr.js?v=0.10.27',INDEX)
+  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.28')
+  self.assertIn('xr.js?v=0.10.28',INDEX)
 
 class VisionTests(unittest.TestCase):
  def test_explicit_description_refresh_instead_of_stale_dialogue(self):

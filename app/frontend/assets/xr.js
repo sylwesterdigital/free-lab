@@ -2073,6 +2073,20 @@ function closeDarkroom(silent=false){
 function cinemaExitTexture(){const [c,ctx]=canvas2d(192,192);ctx.clearRect(0,0,192,192);
  rrect(ctx,8,8,176,176,88,'rgba(246,249,247,.98)');
  text(ctx,'×',96,130,108,'#18211d',560,'center');return texture(c);}
+// Cinema controls belong to the photo, not the moving headset. Keep all three
+// in one unchanging row near the lower edge of the image plane.
+function layoutCinemaControls(){
+ if(!darkroom)return;
+ const center=darkroom.pos,orientation=darkroom.q;
+ const lowerEdge=-Math.abs(darkroom.size[1])*.5;
+ const rowY=lowerEdge+.17; // visible inside the image, never floating at eye level
+ for(const [button,x] of [[darkPrevious,-.29],[darkNext,0],[darkClose,.29]]){
+  if(!button)continue;
+  button.pos=vadd(center,quatVec(orientation,[x,rowY,.065]));
+  button.q=orientation;
+  button.size=[.235,.235];
+ }
+}
 function cinemaFloorTexture(image){const [c,ctx]=canvas2d(600,480);
  const shade=ctx.createLinearGradient(0,0,0,480);shade.addColorStop(0,'rgba(21,34,31,.46)');shade.addColorStop(.6,'rgba(12,19,17,.14)');shade.addColorStop(1,'rgba(0,0,0,0)');
  if(image){ctx.save();ctx.globalAlpha=.19;ctx.filter='blur(11px)';ctx.translate(0,470);ctx.scale(1,-1);ctx.drawImage(image,115,80,370,260);ctx.restore();}
@@ -2097,9 +2111,10 @@ function enterDarkroom(targetCard=null){
  darkroom={id:'cinema-photo',kind:'darkroom',front:tex,back:tex,visible:true,pos,q:facing,size:[width,width*ratio],scale:1,ownedTexture:true,resources:[tex]};
  const close=cinemaExitTexture();
  darkClose={id:'cinema-exit',kind:'darkroomexit',front:close,back:close,visible:true,
-   pos:vadd(pos,quatVec(facing,[width*.5+.20,width*ratio*.5+.14,.035])),q:facing,size:[.23,.23],scale:1,resources:[close]};
- const arrow=(symbol,kind,x)=>{const [c,ctx]=canvas2d(196,196);rrect(ctx,6,6,184,184,82,'#ffffff');text(ctx,symbol,98,140,99,'#131918',580,'center');const tex=texture(c);return {id:'cinema-'+kind,kind,front:tex,back:tex,visible:true,pos:vadd(pos,quatVec(facing,[x,-.13,.03])),q:facing,size:[.29,.29],scale:1,resources:[tex]};};
- darkPrevious=arrow('‹','cinemaprev',-.15);darkNext=arrow('›','cinemanext',0);
+   pos,q:facing,size:[.235,.235],scale:1,resources:[close]};
+ const arrow=(symbol,kind)=>{const [c,ctx]=canvas2d(196,196);rrect(ctx,8,8,180,180,90,'rgba(246,249,247,.98)');text(ctx,symbol,98,140,104,'#18211d',580,'center');const tex=texture(c);return {id:'cinema-'+kind,kind,front:tex,back:tex,visible:true,pos,q:facing,size:[.235,.235],scale:1,resources:[tex]};};
+ darkPrevious=arrow('‹','cinemaprev');darkNext=arrow('›','cinemanext');
+ layoutCinemaControls();
  const floorSource=target.data?.image||null;
  const floorPos=vadd(head,point(rotateY(yaw),[0,0,-2.35],0));floorPos[1]=floorReference?.02:head[1]-1.35;
  const floorTexture=cinemaFloorTexture(null);
@@ -2115,7 +2130,9 @@ function enterDarkroom(targetCard=null){
    const actualRatio=img.naturalHeight/Math.max(1,img.naturalWidth);
    const actualWidth=Math.min(2.75,1.68/Math.max(.15,actualRatio));
    reference.size=[actualWidth,actualWidth*actualRatio];
-   // Theater controls are head-relative, independent of image dimensions.
+   // Reposition once after the photograph's real dimensions are known.
+   // Never billboard or animate controls in the headset's render loop.
+   layoutCinemaControls();
    gl.deleteTexture(reference.front);const t=texture(c);reference.front=t;reference.back=t;
    if(darkFloor){gl.deleteTexture(darkFloor.front);darkFloor.front=cinemaFloorTexture(img);darkFloor.back=darkFloor.front;}
   };
@@ -2130,9 +2147,8 @@ function navigateCinema(direction){
  selected=cinemaCards[cinemaIndex];enterDarkroom(selected);
 }
 function renderCinema(frame,pose){
- const anchor=point(poseForwardAnchor(pose,.78,-.22),[0,0,0]);const q=lookingQuat(anchor,[pose.transform.matrix[12],pose.transform.matrix[13],pose.transform.matrix[14]]);
- // All three controls remain near the eyes, below the central visual field.
- for(const [button,x] of [[darkPrevious,-.145],[darkNext,0],[darkClose,.145]])if(button){button.pos=vadd(anchor,quatVec(q,[x,0,0]));button.q=q;button.size=[.132,.132];}
+ // Stable world-space theater UI: the control row is attached to darkroom,
+ // never updated from the headset pose as the user looks around.
  const layer=session.renderState.baseLayer;
  gl.bindFramebuffer(gl.FRAMEBUFFER,layer.framebuffer);
  gl.clearColor(0,0,0,1);gl.colorMask(true,true,true,true);

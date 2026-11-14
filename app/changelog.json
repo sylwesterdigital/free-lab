@@ -1,16 +1,27 @@
 {
-  "version": "0.10.27",
-  "title": "FREELAB v0.10.27 — Source-linked 3D pop-in and job visibility",
+  "version": "0.10.28",
+  "title": "FREELAB v0.10.28 — Stationary theater controls at image bottom",
   "datetime": "2026-11-14",
   "changes": [
-    "Each XR 3D generation request now creates a visible spatial job branch anchored to the selected source or segment, showing provider and task progress while generation runs in the background.",
-    "Completed textured GLBs pop outward beside the source with spatial particles and a connecting lineage line; they remain attached when the parent image is moved.",
-    "Quest refreshes active-source job states asynchronously, including tasks submitted from another device. Reopening a source restores up to six XR model previews instead of silently limiting recovery to two.",
-    "When focused deeper in a branch, source-level models can attach to the visible ancestor source thumbnail instead of disappearing because the main source card is hidden.",
-    "Provider task failures and unsupported model previews appear as explicit, source-linked spatial status cards. Models still remain saved in Collection and no extra generation charges are triggered by previews.",
-    "Closing or collapsing a source releases its temporary model meshes, status cards, buffers and textures. Quest device-level verification remains necessary."
+    "XR theater now displays three matching white circular controls in a single stationary left, right, close row directly along the image bottom edge.",
+    "Controls are anchored to the image surface instead of the headset; turning or moving the head no longer relocates or rotates their positions.",
+    "When the image loads with its true aspect ratio, the control row adjusts once to the final image geometry and stays in position.",
+    "Previous, next and close actions remain on the same XR controller ray interactions; no changes to paid provider operations or saved collections."
   ],
   "history": [
+    {
+      "version": "0.10.27",
+      "title": "FREELAB v0.10.27 — Source-linked 3D pop-in and job visibility",
+      "datetime": "2026-11-14",
+      "changes": [
+        "Each XR 3D generation request now creates a visible spatial job branch anchored to the selected source or segment, showing provider and task progress while generation runs in the background.",
+        "Completed textured GLBs pop outward beside the source with spatial particles and a connecting lineage line; they remain attached when the parent image is moved.",
+        "Quest refreshes active-source job states asynchronously, including tasks submitted from another device. Reopening a source restores up to six XR model previews instead of silently limiting recovery to two.",
+        "When focused deeper in a branch, source-level models can attach to the visible ancestor source thumbnail instead of disappearing because the main source card is hidden.",
+        "Provider task failures and unsupported model previews appear as explicit, source-linked spatial status cards. Models still remain saved in Collection and no extra generation charges are triggered by previews.",
+        "Closing or collapsing a source releases its temporary model meshes, status cards, buffers and textures. Quest device-level verification remains necessary."
+      ]
+    },
     {
       "version": "0.10.26",
       "title": "FREELAB v0.10.26 — Tripo generation and Draco GLBs",
