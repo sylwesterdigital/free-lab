@@ -35,7 +35,7 @@ async function api(path,opts={}){
 async function refresh(){try{const h=await api('/health');$('healthStatus').textContent=h.ok?'System online':'Offline';$('connectionDot').classList.toggle('good',h.ok);state.config=await api('/config');const enabled=state.config.inference_enabled||Boolean(sessionMeta());$('modelStatus').textContent=(enabled?'AI ready · on demand':'AI offline · manual mode');$('modelStatus').previousElementSibling.classList.toggle('good',enabled);}
  catch(e){$('healthStatus').textContent='Disconnected';}}
 async function loadObjects(){const path=state.tab==='mine'?'/objects':'/public';const data=await api(path);state.objects=state.tab==='public'?data.objects:data.objects.filter(x=>state.tab==='bin'?x.shelf==='bin':x.shelf!=='bin');renderObjects();}
-let galleryItems=[],galleryIndex=0;
+let galleryItems=[],galleryIndex=0,galleryMetadataRequest=0;
 async function openGallery(objectId=null,captureId=null){
  const source=(await api('/captures')).captures;
  const objects=(await api('/objects')).objects.filter(o=>o.has_image&&o.shelf!=='bin');
@@ -51,6 +51,7 @@ function renderGallery(){const item=galleryItems[galleryIndex];if(!item)return;
  $('galleryTitle').textContent=item.label+' · '+(galleryIndex+1)+' / '+galleryItems.length;
  $('galleryImage').src=item.url;$('galleryDetail').textContent=item.detail;
  $('galleryToolMenu').open=false;$('galleryAIStatus').classList.add('hidden');
+ void gallerySavedMetadata(item,++galleryMetadataRequest);
  const strip=$('galleryFilmstrip');strip.replaceChildren();
  // Limit DOM and image requests to a narrow filmstrip around the current asset.
  for(let offset=-10;offset<=10;offset++){
@@ -61,6 +62,17 @@ function renderGallery(){const item=galleryItems[galleryIndex];if(!item)return;
   b.onclick=()=>{galleryIndex=i;renderGallery();};strip.append(b);
  }
  strip.querySelector('.selected')?.scrollIntoView({block:'nearest',inline:'center'});
+}
+async function gallerySavedMetadata(item,marker){
+ if(!item.cid)return;
+ try{const [notes,jobs]=await Promise.all([
+  api('/media/descriptions?capture_id='+item.cid+(item.oid?'&object_id='+item.oid:'')),list3DJobs()]);
+  if(marker!==galleryMetadataRequest)return;
+  const last=(notes.history||[]).at(-1),job=jobs.find(j=>j.capture_id===item.cid&&(j.object_id||null)===(item.oid||null));
+  const status=$('galleryAIStatus');
+  if(last||job){status.classList.remove('hidden');status.textContent=last?'Saved description: '+last.answer:
+      '3D · '+job.provider+' · '+job.status+(job.error?' · '+job.error:'');}
+ }catch(e){traceEvent('Gallery metadata: '+e.message,'warn');}
 }
 function browseGallery(step){if(!galleryItems.length)return;galleryIndex=(galleryIndex+step+galleryItems.length)%galleryItems.length;renderGallery();}
 function renderObjects(){const box=$('items');box.replaceChildren();if(state.tab==='mine'){$('objectCount').textContent=String(state.objects.length);$('objectCounter').textContent=String(state.objects.length).padStart(2,'0');}
@@ -88,19 +100,19 @@ function renderObjects(){const box=$('items');box.replaceChildren();if(state.tab
 async function galleryAI(action){const item=galleryItems[galleryIndex];if(!item)return;
  $('galleryToolMenu').open=false;const status=$('galleryAIStatus');status.classList.remove('hidden');
  if(!item.cid){status.textContent='This is an older image without a source. Capture/import it as a new source to use AI tools.';return;}
- try{if(['extract','describe','refine','3d'].includes(action)&&!confirm(action.toUpperCase()+' may incur a provider charge. Continue?')){status.classList.add('hidden');return;}
-  status.textContent='Running '+action+'…';let result;
+ try{if(['extract','describe','refine','3d'].includes(action)&&!await window.FreeLabDialog.confirm(action.toUpperCase()+' may incur a provider charge. Continue?')){status.classList.add('hidden');return;}
+  status.textContent='Running '+action+'…';status.classList.add('working');let result;
   if(action==='extract'){result=await recognizeXR(item.cid,item.oid||null,true);status.textContent='Extracted '+(result.items||[]).length+' segments. Open Collection to see them.';}
   else if(action==='describe'){result=await describeXR(item.cid,item.oid||null,'',false);status.textContent=result.description||'No description returned';}
-  else if(action==='refine'){const noun=prompt('Object to extract from this image (e.g. chair):');if(!noun||noun.trim().length<2){status.classList.add('hidden');return;}result=await segmentXR(item.cid,noun.trim(),item.oid||null,true);status.textContent='Created '+(result.items||[]).length+' new segments.';}
-  else if(action==='3d'){result=await createXR3D(item.cid,item.oid||null);status.textContent='3D job '+result.id+' queued. Status is in Collection.';}
+  else if(action==='refine'){const noun=await window.FreeLabDialog.input('Object to extract from this image (e.g. chair):');if(!noun||noun.trim().length<2){status.classList.add('hidden');return;}result=await segmentXR(item.cid,noun.trim(),item.oid||null,true);status.textContent='Created '+(result.items||[]).length+' new segments.';}
+  else if(action==='3d'){result=await createXR3D(item.cid,item.oid||null);status.textContent='3D job '+result.id+' queued. Check Collection → Your 3D Models for status. No task is resubmitted automatically.';}
   else {openPromptEditor({captureId:item.cid,objectId:item.oid||null,label:item.label},'',()=>{status.textContent='New image saved. Reopen Collection to inspect it.';});if(action==='voice')$('xrPromptVoice')?.focus();status.textContent='Use the editor to submit your image instruction.';}
- }catch(error){status.textContent='Request failed: '+error.message;}
+ }catch(error){status.textContent='Request failed: '+error.message;}finally{status.classList.remove('working');}
 }
 async function changeShelf(id,shelf){try{await api('/objects/'+id,{method:'PATCH',body:JSON.stringify({shelf})});await loadObjects();notify(shelf==='bin'?'Moved to private Bin':'Restored to collection');}catch(e){notify(e.message);}}
 async function cycleFolder(o){const folders=['Unsorted','Keep','Room','Objects'];const next=folders[(folders.indexOf(o.folder)+1)%folders.length];try{await api('/objects/'+o.id,{method:'PATCH',body:JSON.stringify({folder:next})});await loadObjects();notify('Folder: '+next);}catch(e){notify(e.message);}}
-async function changeVisibility(id,mode){try{const data=await api('/objects/'+id,{method:'PATCH',body:JSON.stringify({visibility:mode})});if(data.share_token){const link=location.origin+'/shared.html?token='+data.share_token;try{await navigator.clipboard.writeText(link);notify('Private share link copied')}catch{prompt('Copy the private share URL',link)}}else notify('Visibility set to '+mode);await loadObjects();}catch(e){notify(e.message);}}
-async function removeObject(id){if(!confirm('Delete this object and its snapshot?'))return;try{await api('/objects/'+id,{method:'DELETE'});await loadObjects();notify('Object removed')}catch(e){notify(e.message)}}
+async function changeVisibility(id,mode){try{const data=await api('/objects/'+id,{method:'PATCH',body:JSON.stringify({visibility:mode})});if(data.share_token){const link=location.origin+'/shared.html?token='+data.share_token;try{await navigator.clipboard.writeText(link);notify('Private share link copied')}catch{await window.FreeLabDialog.copy(link)}}else notify('Visibility set to '+mode);await loadObjects();}catch(e){notify(e.message);}}
+async function removeObject(id){if(!await window.FreeLabDialog.confirm('Delete this object and its snapshot?'))return;try{await api('/objects/'+id,{method:'DELETE'});await loadObjects();notify('Object removed')}catch(e){notify(e.message)}}
 async function enableXRCamera(){
  const video=$('cameraVideo');const track=state.stream?.getVideoTracks()[0];
  if(track?.readyState==='live'&&!track.muted){video.classList.remove('hidden');await video.play();if(video.videoWidth)return cameraReport();}
@@ -176,7 +188,7 @@ async function loadProviderList(){
   controls.append(key,save,test);
   if(p.source==='vault'){
    const remove=el('button','api-remove-key','Remove');remove.type='button';remove.title='Delete encrypted server key';
-   remove.onclick=async()=>{if(!confirm('Remove '+p.name+' key from the server?'))return;remove.disabled=true;try{await api('/admin/providers/'+p.provider,{method:'DELETE'});await loadProviderList();await refresh();}catch(error){remove.disabled=false;apiRowMessage(p.provider,error.message,true);}};controls.append(remove);
+   remove.onclick=async()=>{if(!await window.FreeLabDialog.confirm('Remove '+p.name+' key from the server?'))return;remove.disabled=true;try{await api('/admin/providers/'+p.provider,{method:'DELETE'});await loadProviderList();await refresh();}catch(error){remove.disabled=false;apiRowMessage(p.provider,error.message,true);}};controls.append(remove);
   }
   row.append(controls,el('p','api-result'));
   providerRows.set(p.provider,row);(ACTIVE_PROVIDERS.has(p.provider)?list:extraList).append(row);
@@ -232,11 +244,11 @@ async function loadAdminProfiles(){
  if(state.user?.role!=='admin')return;const box=$('adminUsers');const data=await api('/admin/profiles');box.replaceChildren();
  for(const u of data.users||[]){const row=el('article','admin-user'),info=el('div'),actions=el('div','admin-user-actions');
   info.append(el('strong','',u.display_name+' · @'+u.username),el('small','',u.role.toUpperCase()+(u.blocked?' · BLOCKED UNTIL '+new Date(u.blocked_until*1000).toLocaleString():' · Active')+' · '+u.created_at));
-  const reset=el('button','','Reset password');reset.onclick=async()=>{const pw=prompt('Set a new password (12–256 characters) for @'+u.username+':');if(pw===null)return;if(pw.length<12)return notify('Password needs at least 12 characters');if(!confirm('Reset password for @'+u.username+'? This revokes existing sessions.'))return;try{await api('/admin/profiles/'+u.id+'/password',{method:'PUT',body:JSON.stringify({password:pw})});notify('Password updated');await loadAdminProfiles();}catch(e){notify(e.message);}};actions.append(reset);
+  const reset=el('button','','Reset password');reset.onclick=async()=>{const pw=await window.FreeLabDialog.input('Set a new password (12–256 characters) for @'+u.username+':');if(pw===null)return;if(pw.length<12)return notify('Password needs at least 12 characters');if(!await window.FreeLabDialog.confirm('Reset password for @'+u.username+'? This revokes existing sessions.'))return;try{await api('/admin/profiles/'+u.id+'/password',{method:'PUT',body:JSON.stringify({password:pw})});notify('Password updated');await loadAdminProfiles();}catch(e){notify(e.message);}};actions.append(reset);
   if(u.role!=='admin'){
-   const block=el('button','',u.blocked?'Unblock':'Block temporarily');block.onclick=async()=>{let hours=0;if(!u.blocked){const answer=prompt('Block @'+u.username+' for 1, 24 or 168 hours?','24');if(answer===null)return;hours=Number(answer);if(![1,24,168].includes(hours))return notify('Choose 1, 24 or 168 hours');}if(!confirm((hours?'Block':'Unblock')+' @'+u.username+'?'))return;
+   const block=el('button','',u.blocked?'Unblock':'Block temporarily');block.onclick=async()=>{let hours=0;if(!u.blocked){const answer=await window.FreeLabDialog.input('Block @'+u.username+' for 1, 24 or 168 hours?','24');if(answer===null)return;hours=Number(answer);if(![1,24,168].includes(hours))return notify('Choose 1, 24 or 168 hours');}if(!await window.FreeLabDialog.confirm((hours?'Block':'Unblock')+' @'+u.username+'?'))return;
     try{await api('/admin/profiles/'+u.id+'/block',{method:'PUT',body:JSON.stringify({hours})});await loadAdminProfiles();}catch(e){notify(e.message);}};actions.append(block);
-   const remove=el('button','','Remove user');remove.onclick=async()=>{if(!confirm('Permanently remove @'+u.username+' and their saved data? This cannot be undone.'))return;
+   const remove=el('button','','Remove user');remove.onclick=async()=>{if(!await window.FreeLabDialog.confirm('Permanently remove @'+u.username+' and their saved data? This cannot be undone.'))return;
     try{await api('/admin/profiles/'+u.id,{method:'DELETE'});notify('Account removed');await loadAdminProfiles();}catch(e){notify(e.message);}};actions.append(remove);
   }row.append(info,actions);box.append(row);
  }
@@ -299,8 +311,8 @@ async function saveXRFrame(onLocal){
  const r=await api('/captures',{method:'POST',body:JSON.stringify({image:state.snapshot})});
  return {...r,image:state.snapshot};
 }
-async function createXR3D(cid,oid){
- const payload={capture_id:cid,object_id:oid??null,confirm_paid:true};
+async function createXR3D(cid,oid,prompt=''){
+ const payload={capture_id:cid,object_id:oid??null,confirm_paid:true};if(prompt.trim())payload.prompt=prompt.trim();
  return api('/media/3d',{method:'POST',body:JSON.stringify(payload)});
 }
 async function checkXR3D(id,refresh=false){return api('/media/3d/'+id+(refresh?'?refresh=1':''));}
@@ -437,9 +449,9 @@ function startWavPrompt(){
    stream=micReady()?state.micStream:await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true},video:false});
    reused=stream===state.micStream;if(stopped){if(!reused)stream.getTracks().forEach(t=>t.stop());return;}
    audio=new (window.AudioContext||window.webkitAudioContext)({sampleRate:16000});await audio.resume();
-   sampleRate=audio.sampleRate;source=audio.createMediaStreamSource(stream);proc=audio.createScriptProcessor(2048,1,1);
-   zero=audio.createGain();zero.gain.value=0;source.connect(proc);proc.connect(zero);zero.connect(audio.destination);analyser=audio.createAnalyser();analyser.fftSize=256;analyser.smoothingTimeConstant=.7;source.connect(analyser);
-   proc.onaudioprocess=e=>{if(stopped)return;const input=e.inputBuffer.getChannelData(0);chunks.push(new Float32Array(input));
+   sampleRate=audio.sampleRate;source=audio.createMediaStreamSource(stream);
+   zero=audio.createGain();zero.gain.value=0;analyser=audio.createAnalyser();analyser.fftSize=256;analyser.smoothingTimeConstant=.7;source.connect(analyser);
+   const receiveSamples=input=>{if(stopped)return;chunks.push(new Float32Array(input));
      let sq=0;for(let i=0;i<input.length;i++)sq+=input[i]*input[i];const volume=Math.sqrt(sq/input.length);
      stateRecord.volume=stateRecord.volume*.7+volume*.3;const spectral=new Uint8Array(analyser.frequencyBinCount);analyser.getByteFrequencyData(spectral);
      const sections=12;stateRecord.freq=Array.from({length:sections},(_,j)=>{
@@ -447,6 +459,17 @@ function startWavPrompt(){
        for(let k=start;k<end;k++)total+=spectral[k];return Math.min(1,(total/(end-start))/205);});
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
+   if(audio.audioWorklet&&window.AudioWorkletNode){
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.19');
+     proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
+     proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
+   }else{
+     // Compatibility for browsers without AudioWorklet; never the primary audio path.
+     proc=audio.createScriptProcessor(2048,1,1);
+     proc.onaudioprocess=e=>receiveSamples(e.inputBuffer.getChannelData(0));
+     traceEvent('AudioWorklet unsupported; legacy microphone compatibility mode','warn');
+   }
+   source.connect(proc);proc.connect(zero);zero.connect(audio.destination);
  }catch(e){if(!stopped){stopped=true;recorder=null;rejectResult(e);}}})();
  return stateRecord;
 }

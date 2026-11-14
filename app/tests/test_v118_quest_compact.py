@@ -1,4 +1,4 @@
-"""Regression guards for v0.10.18. No network, headset, camera, or paid API calls."""
+"""Regression guards for v0.10.19. No network, headset, camera, or paid API calls."""
 import json
 import re
 import unittest
@@ -67,7 +67,7 @@ class QuestCompact118(unittest.TestCase):
   self.assertIn("$('cameraVideo').classList.add('hidden')",CAP)
   self.assertIn("$('previewImage').classList.add('hidden')",CAP)
   self.assertIn("function beginNew()",CAP)
-  self.assertIn('window.confirm(',CAP)
+  self.assertIn('window.FreeLabDialog.confirm(',CAP)
 
  def test_collection_actions_compact_filter_gallery_swipe(self):
   self.assertIn('id="collectionSearch"',HTML)
@@ -84,8 +84,8 @@ class QuestCompact118(unittest.TestCase):
 
  def test_release_versions(self):
   for name in ('version.json','frontend/version.json','changelog.json','frontend/changelog.json'):
-   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.18')
-  self.assertIn('room-viewer.mjs?v=0.10.18',ROOMS)
-  self.assertIn('xr.js?v=0.10.18',HTML)
+   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.19')
+  self.assertIn('room-viewer.mjs?v=0.10.19',ROOMS)
+  self.assertIn('xr.js?v=0.10.19',HTML)
 
 if __name__=='__main__': unittest.main()

@@ -266,7 +266,7 @@ are unchanged; raw XR passthrough camera pixels are not shared. Three.js require
 access to the pinned CDN; the viewer shows an explicit loading error if the
 module is unavailable. WebGL framerate depends on spectator hardware.
 
-## v0.10.18 release note
+## v0.10.19 release note
 
 - Nginx `.mjs` MIME override and public module signature check protect desktop rooms.
 - Full-window desktop 3D room uses requestAnimationFrame; GPU/browser frame rate is measured, not guaranteed. Spatial labels are HTML overlays to maintain readable screen-space text across depths.
@@ -274,7 +274,7 @@ module is unavailable. WebGL framerate depends on spectator hardware.
 - Profile photo is private JPEG/PNG data in SQLite, served only to the signed-in user.
 - No existing credentials, images, Git, watcher environment or TLS files are cleared.
 
-## v0.10.18 hotfix
+## v0.10.19 hotfix
 
 Fix Ubuntu release testing: the repository-root `watch-free-lab.sh` is packaged with
 the ZIP but intentionally is not copied into `/var/www/free-lab.cam/releases/vX.Y.Z`.
@@ -283,7 +283,7 @@ The server-side application checks still run without it, including nginx ES modu
 MIME checks. The release is bumped because previous v0.10.14 files may remain
 on disk after a rejected install and cannot be safely overwritten.
 
-## v0.10.18 — active nginx MIME repair
+## v0.10.19 — active nginx MIME repair
 
 On previous deployments `/etc/nginx/sites-available/free-lab.cam` could be
 different from the configuration that nginx actually serves. `nginx -t` only
@@ -295,5 +295,8 @@ config for unrelated hosts or multiple conflicting site configs. It checks
 nginx and service files if their HTTP responses are not valid JavaScript.
 
 
-### v0.10.18
+### v0.10.19
 The capture studio uses inline quick AI actions, a compact instruction composer, a 3-dot menu for advanced camera options, a filterable image-first collection and an enlarged swipeable gallery. The Quest XR path prioritizes a WebGL2 compositor with minimal optional features and no DOM overlay. On non-WebXR browsers, Enter 3D previews local sources in Three.js.
+
+### v0.10.19
+Desktop/mobile captures share three primary roundels. A context menu exposes 3D, and a multiline composer accepts image and text-guided instructions. AHOLO receives an authenticated, encoded reference image with asynchronous status checks; successful GLB outputs are cached privately when the provider download host passes the allowlist. Saved description threads are read-only retrievable. All paid provider tasks require in-app confirmation. AudioWorklet replaces main-thread audio recording when supported.

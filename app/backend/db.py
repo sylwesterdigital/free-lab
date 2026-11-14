@@ -122,6 +122,9 @@ def init(path):
             ('parent_object_id','INTEGER REFERENCES objects(id) ON DELETE SET NULL'),
             ('operation',"TEXT NOT NULL DEFAULT ''")):
             if name not in fields:con.execute('ALTER TABLE objects ADD COLUMN '+name+' '+definition)
+        fields={row['name'] for row in con.execute('PRAGMA table_info(jobs_3d)')}
+        if 'model_path' not in fields:con.execute("ALTER TABLE jobs_3d ADD COLUMN model_path TEXT NOT NULL DEFAULT ''")
+        if 'cache_error' not in fields:con.execute("ALTER TABLE jobs_3d ADD COLUMN cache_error TEXT NOT NULL DEFAULT ''")
         # Efficient arbitrary-depth tree lookup; every node keeps its stable parent ID.
         con.execute('CREATE INDEX IF NOT EXISTS objects_capture_parent ON objects(owner_id,capture_id,parent_object_id,id)')
 

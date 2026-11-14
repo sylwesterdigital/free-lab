@@ -1,13 +1,13 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.18">
+<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.19">
 <title>FREELAB — Step into the spatial world</title>
-<link rel="stylesheet" href="/assets/style.css?v=0.10.18">
+<link rel="stylesheet" href="/assets/style.css?v=0.10.19">
 </head><body>
 <div id="app" class="app-shell">
 <header class="header" aria-label="Site navigation">
-  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.18</span></a>
+  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.19</span></a>
   <nav class="header-right" aria-label="Workspace">
     <span class="live-pill"><span class="server-dot" id="connectionDot"></span><span id="healthStatus">Connecting</span></span>
     <button id="roomButton" class="nav-pill" type="button">Rooms</button>
@@ -29,7 +29,7 @@
       <button class="feature-seed" id="addNameButton" type="button" style="--dx:-293px;--dy:64px;--delay:.26s" aria-label="Create a private item"><span class="seed-icon">＋</span><span>New item</span></button>
       <label class="feature-seed" for="fileInput" style="--dx:284px;--dy:91px;--delay:.39s" tabindex="0" aria-label="Upload a room photograph"><span class="seed-icon">↥</span><span>Upload</span></label>
       <input type="file" id="fileInput" accept="image/*" hidden>
-      <button class="feature-seed" id="armXRMic" type="button" style="--dx:0px;--dy:205px;--delay:.47s" aria-label="Enable microphone before XR, without recording"><span class="seed-icon">♫</span><span>Enable mic</span></button>
+      <button class="feature-seed" id="armXRMic" type="button" style="--dx:0px;--dy:205px;--delay:.47s" aria-label="Enable microphone before XR, without recording"><span class="seed-icon bloom-mic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg></span><span>Enable mic</span></button>
       <span class="bloom-thread bloom-thread-a" aria-hidden="true"></span><span class="bloom-thread bloom-thread-b" aria-hidden="true"></span>
       <span class="bloom-thread bloom-thread-c" aria-hidden="true"></span><span class="bloom-thread bloom-thread-d" aria-hidden="true"></span>
     </nav>
@@ -80,11 +80,17 @@
 <div id="cameraPanel" class="camera-panel hidden" role="dialog" aria-label="Mobile spatial capture studio">
  <div class="capture-shell">
   <header class="capture-topbar"><div><p class="eyebrow">FREELAB / CAPTURE STUDIO</p><strong id="cameraStatus">Camera not started</strong></div><div class="capture-top-actions"><button type="button" id="captureGridToggle" title="Show all sources and segments">Library</button><button type="button" id="closeCamera" class="round-btn" aria-label="Close capture studio">×</button></div></header>
-  <div class="camera-content capture-viewport" id="captureViewport"><video id="cameraVideo" autoplay muted playsinline></video><canvas id="snapshotCanvas" hidden></canvas><img id="previewImage" alt="Captured source photo" class="hidden"><canvas id="samOverlay" class="sam-overlay hidden" aria-hidden="true"></canvas><div id="captureEmpty" class="capture-empty">Allow camera access or choose a saved image.</div><div class="capture-viewport-hint" id="captureViewportHint">LIVE CAMERA · READY TO CAPTURE</div>
-   <div class="capture-quick-actions hidden" id="captureQuickActions" role="toolbar" aria-label="Selected image actions"><button type="button" id="captureQuickVoice" title="Ask by voice" aria-label="Ask by voice"><span aria-hidden="true">♩</span><small>Voice</small></button><button type="button" id="captureQuickEye" title="Describe selected image" aria-label="Describe image"><span aria-hidden="true">◎</span><small>Describe</small></button><button type="button" id="captureQuickExtract" title="Extract objects from this source" aria-label="Extract objects"><span aria-hidden="true">✳</span><small>Extract</small></button></div>
-   <details class="capture-more" id="captureMore"><summary title="More capture tools" aria-label="More capture tools">⋯</summary><div class="capture-more-panel" id="captureMorePanel"></div></details>
+  <div class="camera-content capture-viewport" id="captureViewport"><video id="cameraVideo" autoplay muted playsinline></video><canvas id="snapshotCanvas" hidden></canvas><img id="previewImage" alt="Captured source photo" class="hidden"><canvas id="samOverlay" class="sam-overlay hidden" aria-hidden="true"></canvas><div id="captureEmpty" class="capture-empty">Allow camera access or choose a saved image.</div><div id="captureWorking" class="capture-processing-chip hidden" role="status" aria-live="polite">Working…</div><div class="capture-viewport-hint" id="captureViewportHint">LIVE CAMERA · READY TO CAPTURE</div>
+   <div class="capture-quick-actions hidden" id="captureQuickActions" role="toolbar" aria-label="Selected image actions"><button type="button" id="captureQuickVoice" title="Ask by voice" aria-label="Ask by voice"><span aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg></span><small>Voice</small></button><button type="button" id="captureQuickEye" title="Describe selected image" aria-label="Describe image"><span aria-hidden="true">◎</span><small>Describe</small></button><button type="button" id="captureQuickExtract" title="Extract objects from this source" aria-label="Extract objects"><span aria-hidden="true">✳</span><small>Extract</small></button></div>
+   <details class="capture-more" id="captureMore"><summary title="More capture tools" aria-label="More capture tools">⋯</summary><div class="capture-more-panel" id="captureMorePanel"><div class="capture-more-actions" id="captureMoreActions">
+    <button type="button" data-capture-tool="3d">Generate 3D model</button><button type="button" data-capture-tool="check3d">Check 3D connection & jobs</button>
+    <button type="button" data-capture-tool="prompt">Edit / generate image</button><button type="button" data-capture-tool="refine">Refine segment</button>
+    <button type="button" data-capture-tool="describe">Describe / saved notes</button><button type="button" data-capture-tool="theater">Fullscreen preview</button>
+    <button type="button" data-capture-tool="source">New source</button><button type="button" data-capture-tool="import">Import photo</button>
+   </div></div></details>
   </div>
-  <div class="capture-chat" id="captureChat"><form id="captureCommandForm"><button type="button" id="captureModeButton" title="Choose AI action" aria-label="Choose AI action">＋</button><select id="captureCommandMode" aria-label="AI action"><option value="prompt">Edit image</option><option value="describe">Describe</option><option value="extract">Extract</option><option value="refine">Refine segment</option><option value="3d">Generate 3D</option></select><input type="text" id="captureCommandText" placeholder="Ask about this image or tell AI what to change…" maxlength="1500" aria-label="Image instruction"><button type="button" id="captureChatVoice" title="Voice instruction" aria-label="Voice instruction">♩</button><button type="submit" id="captureChatSend" title="Send image instruction" aria-label="Send instruction">↑</button></form></div>
+  <div id="captureResult" class="capture-result hidden" role="status" aria-live="polite"></div>
+  <div class="capture-chat" id="captureChat"><form id="captureCommandForm"><button type="button" id="captureModeButton" title="Choose AI action" aria-label="Choose AI action">＋</button><select id="captureCommandMode" aria-label="AI action"><option value="prompt">Edit image</option><option value="describe">Describe</option><option value="extract">Extract</option><option value="refine">Refine segment</option><option value="3d">Generate 3D</option></select><textarea rows="2" id="captureCommandText" placeholder="Ask about this image or tell AI what to change…" maxlength="1500" aria-label="Image instruction"></textarea><button type="button" id="captureChatVoice" title="Voice instruction" aria-label="Voice instruction"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg></button><button type="submit" id="captureChatSend" title="Send image instruction" aria-label="Send instruction">↑</button></form></div>
   <div class="capture-rail"><button id="captureNewSource" type="button" aria-label="Start another source">↻<span>New source</span></button><button type="button" id="captureShutter" class="capture-shutter" aria-label="Take photograph"><span></span></button><button type="button" id="captureUpload" aria-label="Upload a photo">↥<span>Import</span></button></div>
   <div class="capture-workbench" id="captureWorkbench"><div class="capture-workbench-head"><div><p class="eyebrow">SOURCE → BRANCHES</p><h2>Spatial collection</h2></div><button type="button" id="captureReload">Refresh</button></div>
    <div id="captureTree" class="capture-tree" role="list" aria-label="Source and segment images"></div>
@@ -154,19 +160,20 @@
 <div id="scanConsent" class="modal hidden"><div class="modal-card"><p class="eyebrow">COST CONFIRMATION</p><h2>Enable periodic scans?</h2><p class="small-muted">One JPEG every 20 seconds can consume a paid Meta Muse API request. This is disabled by default and stops when the page becomes hidden. It counts against FREE LAB's daily request quotas, which are not dollar limits.</p><div class="provider-actions"><button id="cancelScan" class="secondary-btn">Cancel</button><button id="confirmScan" class="primary-btn">Start paid scan</button></div></div></div>
 <div id="changelog" class="modal hidden"><div class="modal-card changelog-card"><div class="modal-title"><div><p class="eyebrow">WHAT'S NEW / DEVELOPMENT LOG</p><h2 id="logTitle">Release notes</h2><p id="logDate" class="small-muted"></p></div><button class="round-btn" id="dismissChangelog" aria-label="Close development log">×</button></div><div class="log-tabs" role="tablist" aria-label="Release notes"><button type="button" id="logLatest" class="active" role="tab" aria-selected="true">Latest</button><button type="button" id="logHistory" role="tab" aria-selected="false">History</button></div><div class="log-scroll"><ul id="logItems"></ul><div id="logArchive" class="hidden"></div></div><button class="primary-btn" id="continueChangelog">Start exploring ↗</button></div></div>
 <div id="toast" class="toast hidden" role="status"></div>
-<script src="/assets/sound.js?v=0.10.18" defer></script>
-<script src="/assets/gestures.js?v=0.10.18" defer></script>
-<script src="/assets/strand-geometry.js?v=0.10.18" defer></script>
-<script src="/assets/string-lab.js?v=0.10.18" defer></script>
-<script src="/assets/finger-lab.js?v=0.10.18" defer></script>
-<script src="/assets/frame-lab.js?v=0.10.18" defer></script>
-<script src="/assets/lab-selector.js?v=0.10.18" defer></script>
-<script src="/assets/frame-games.js?v=0.10.18" defer></script>
-<script src="/assets/shape-sort.js?v=0.10.18" defer></script>
-<script src="/assets/rooms.js?v=0.10.18" defer></script>
-<script src="/assets/cloud-tree.js?v=0.10.18" defer></script>
-<script src="/assets/xr-ui.js?v=0.10.18" defer></script>
-<script src="/assets/app.js?v=0.10.18" defer></script><script src="/assets/xr.js?v=0.10.18" defer></script>
-<script src="/assets/capture-studio.js?v=0.10.18" defer></script>
-<script src="/assets/scene.mjs?v=0.10.18" type="module"></script>
+<script src="/assets/sound.js?v=0.10.19" defer></script>
+<script src="/assets/gestures.js?v=0.10.19" defer></script>
+<script src="/assets/strand-geometry.js?v=0.10.19" defer></script>
+<script src="/assets/string-lab.js?v=0.10.19" defer></script>
+<script src="/assets/finger-lab.js?v=0.10.19" defer></script>
+<script src="/assets/frame-lab.js?v=0.10.19" defer></script>
+<script src="/assets/lab-selector.js?v=0.10.19" defer></script>
+<script src="/assets/frame-games.js?v=0.10.19" defer></script>
+<script src="/assets/shape-sort.js?v=0.10.19" defer></script>
+<script src="/assets/rooms.js?v=0.10.19" defer></script>
+<script src="/assets/cloud-tree.js?v=0.10.19" defer></script>
+<script src="/assets/xr-ui.js?v=0.10.19" defer></script>
+<script src="/assets/dialog.js?v=0.10.19" defer></script>
+<script src="/assets/app.js?v=0.10.19" defer></script><script src="/assets/xr.js?v=0.10.19" defer></script>
+<script src="/assets/capture-studio.js?v=0.10.19" defer></script>
+<script src="/assets/scene.mjs?v=0.10.19" type="module"></script>
 </body></html>

@@ -3,16 +3,17 @@ Billable POST is invoked only after explicit user confirmation.
 The private JPEG is exposed to Aholo using a time-limited, signed URL.
 """
 from __future__ import annotations
-import json,urllib.request,urllib.error
+import json,base64,urllib.request,urllib.error
 from urllib.parse import urlencode,urlparse
 from .meshy3d import NoRedirect
 BASE='https://api.aholo.ai/global/lux3d/v1/generate/'
 CREATE=BASE+'img-to-3d/task/create'
+TEXT_CREATE=BASE+'text-to-3d/task/create'
 STATUS=BASE+'task/get'
 
 def request_api(method,url,key,payload=None):
     if not key:raise ValueError('Aholo key not configured')
-    if url!=CREATE and not (url.startswith(STATUS+'?taskid=') and url[len(STATUS+'?taskid='):].isdigit()):
+    if url not in (CREATE,TEXT_CREATE) and not (url.startswith(STATUS+'?taskid=') and url[len(STATUS+'?taskid='):].isdigit()):
         raise ValueError('Unexpected Aholo endpoint')
     body=json.dumps(payload).encode() if payload is not None else None
     req=urllib.request.Request(url,method=method,data=body,headers={'Authorization':key,'Content-Type':'application/json','Accept':'application/json','User-Agent':'FREELAB-Aholo/0.10.11'})
@@ -31,6 +32,26 @@ def submit(image_url,key):
         raise ValueError('3D input must be a signed FREE LAB HTTPS image link')
     result=request_api('POST',CREATE,key,{'img':image_url,'version':'G1-Turbo','outputFormat':['glb']})
     task=result.get('taskid') if isinstance(result,dict) else result
+    if not str(task).isdigit():raise RuntimeError('Aholo returned no task ID')
+    return str(task)
+
+def submit_image(image_jpeg,key,prompt=''):
+    """Submit the already-authorised image directly, no provider fetch of private URL.
+    Lux3D supports image data URLs (as in SDK createFromFile). The encoded bytes
+    are sent only when the user explicitly starts a paid job.
+    """
+    if not isinstance(image_jpeg,bytes) or not 100 <= len(image_jpeg) <= 3_000_000:
+        raise ValueError('Image-to-3D requires a JPEG between 100 bytes and 3 MB')
+    image='data:image/jpeg;base64,'+base64.b64encode(image_jpeg).decode('ascii')
+    if not isinstance(prompt,str) or len(prompt)>750:raise ValueError('3D prompt too long')
+    payload={'img':image,'version':'G1-Turbo','outputFormat':['glb'],'enablePbr':True}
+    endpoint=CREATE
+    if prompt.strip():
+        endpoint=TEXT_CREATE
+        payload={'img':image,'prompt':prompt.strip(),'style':'cartoon' if 'cartoon' in prompt.lower() else 'photorealistic',
+                 'version':'G1-Turbo','outputFormat':['glb']}
+    result=request_api('POST',endpoint,key,payload)
+    task=result.get('taskid',result.get('taskId')) if isinstance(result,dict) else result
     if not str(task).isdigit():raise RuntimeError('Aholo returned no task ID')
     return str(task)
 
@@ -57,10 +78,13 @@ def status(task,key):
     # Outputs are not guaranteed to be in a fixed format or slot. Never return ZIP/OBJ as GLB.
     err=''
     if state==4:
-        for field in ('error','errorMessage','failReason','failureReason','message','msg','reason'):
+        for field in ('error','errorMessage','errorMsg','failReason','failureReason','message','msg','reason','bizErrMsg','bizMessage'):
             value=result.get(field)
             if isinstance(value,(str,int)) and str(value).strip():err=str(value).strip()[:180];break
-        if not err:err='Aholo task '+str(task)+' failed without an error message. Verify credits and that the signed image URL is reachable from Aholo.'
+        if not err:
+            detail=result.get('errorInfo') or result.get('failure') or result.get('errorDetail')
+            if isinstance(detail,dict):err=str(detail.get('message') or detail.get('reason') or detail.get('code') or '')[:180]
+        if not err:err='Aholo task '+str(task)+' failed without an error reason. Inspect task in AHOLO dashboard; check input image and credits.'
     elif state==3 and not glb:err='Task completed but no GLB asset was returned. Check the Aholo task outputs.'
     return {'status':mapped,'progress':100 if state==3 else (40 if state==1 else 0),
             'credits':result.get('consumedCredits') if isinstance(result.get('consumedCredits'),int) else None,'glb_url':glb,'thumbnail_url':None,'error':err}

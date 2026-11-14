@@ -6,12 +6,13 @@ from functools import wraps
 from flask import Flask,abort,g,jsonify,request,send_file,session
 from itsdangerous import URLSafeTimedSerializer,BadSignature,SignatureExpired
 from werkzeug.middleware.proxy_fix import ProxyFix
-from . import db,providers,secrets as keyvault,sam,provider_checks,media,meshy3d,aholo3d,glb_preview
+from . import db,providers,secrets as keyvault,sam,provider_checks,media,meshy3d,aholo3d,glb_preview,model_cache
 
 APP_ROOT=Path(__file__).resolve().parents[1]
 DATA_DIR=Path(os.getenv('FREE_LAB_DATA_DIR',APP_ROOT/'var')).resolve()
 DB=Path(os.getenv('FREE_LAB_DB',DATA_DIR/'free-lab.sqlite3')).resolve()
 IMAGE_DIR=DATA_DIR/'images'
+MODEL_DIR=DATA_DIR/'models'
 VERSION=json.loads((APP_ROOT/'version.json').read_text())['version']
 app=Flask(__name__,static_folder=str(APP_ROOT/'frontend'),static_url_path='')
 app.config.update(SECRET_KEY=os.getenv('FREE_LAB_SESSION_KEY',secrets.token_hex(32)),
@@ -21,6 +22,7 @@ app.config.update(SECRET_KEY=os.getenv('FREE_LAB_SESSION_KEY',secrets.token_hex(
 app.wsgi_app=ProxyFix(app.wsgi_app,x_for=1,x_proto=1,x_host=0)
 db.init(DB)
 IMAGE_DIR.mkdir(parents=True,exist_ok=True)
+MODEL_DIR.mkdir(parents=True,exist_ok=True)
 
 @app.before_request
 def before():
@@ -697,14 +699,27 @@ def media_capabilities():
 def job_3d_dict(row):
     return {'id':row['id'],'capture_id':row['capture_id'],'object_id':row['object_id'],
             'provider':row['provider'],'status':row['status'],'progress':row['progress'],
-            'credits':row['credits'],'glb_url':row['glb_url'],'thumbnail_url':row['thumbnail_url'],
-            'error':row['error'],'created_at':row['created_at']}
+            'credits':row['credits'],'thumbnail_url':row['thumbnail_url'],
+            'error':row['error'],'created_at':row['created_at'],
+            'cached':bool(row['model_path']),'cache_error':row['cache_error'],
+            'glb_url':('/api/media/3d/'+str(row['id'])+'/asset' if row['model_path'] else row['glb_url'])}
 
 @app.get('/api/media/3d')
 @require_user
 def jobs_3d():
     rows=g.con.execute('SELECT * FROM jobs_3d WHERE owner_id=? ORDER BY id DESC LIMIT 500',(g.user['id'],)).fetchall()
     return jsonify(jobs=[job_3d_dict(row) for row in rows])
+
+@app.get('/api/media/3d/check')
+@require_user
+def media_3d_check():
+    """Read-only capability test, no provider calls or credits charged."""
+    provider=preferred_3d_provider()
+    jobs=g.con.execute('SELECT id,status,error,created_at FROM jobs_3d WHERE owner_id=? AND provider=? ORDER BY id DESC LIMIT 3',
+                       (g.user['id'],provider)).fetchall()
+    return jsonify(provider=provider,configured=bool(provider_key(provider)),billable=False,
+        notice='Configuration check only; a real generation requires confirming a paid task.',
+        recent=[{'id':r['id'],'status':r['status'],'error':r['error'],'created_at':r['created_at']} for r in jobs])
 
 @app.get('/api/media/3d/source/<token>')
 def signed_3d_source(token):
@@ -730,6 +745,9 @@ def media_3d_start():
     if v.get('confirm_paid') is not True:return jsonify(error='Explicit paid-task confirmation required'),400
     provider=preferred_3d_provider()
     if v.get('provider') not in (None,'auto',provider):return jsonify(error='Provider selection changed. Reopen 3D settings to confirm.'),409
+    prompt=v.get('prompt','')
+    if not isinstance(prompt,str) or len(prompt)>750:
+        return jsonify(error='3D guidance must be at most 750 characters'),400
     cid=v.get('capture_id');oid=v.get('object_id')
     if type(cid) is not int or cid<=0:return jsonify(error='Capture ID required'),400
     cap=g.con.execute('SELECT image_name FROM captures WHERE id=? AND owner_id=? AND hidden=0',(cid,g.user['id'])).fetchone()
@@ -740,6 +758,8 @@ def media_3d_start():
         obj=g.con.execute('SELECT image_name FROM objects WHERE id=? AND capture_id=? AND owner_id=? AND shelf!=?',(oid,cid,g.user['id'],'bin')).fetchone()
         if not obj or not obj['image_name']:abort(404)
         name=obj['image_name']
+    if provider!='aholo' and prompt.strip():
+        return jsonify(error='Text-guided 3D requires Aholo. Switch 3D provider in Settings; no paid task submitted.'),422
     key=provider_key(provider)
     if not key:return jsonify(error=f'{provider.upper()} is not configured or not shared with this profile. Check Admin → API scope.'),503
     raw=sam.jpeg_for_model((IMAGE_DIR/name).read_bytes())
@@ -749,8 +769,7 @@ def media_3d_start():
     except ValueError as e:return jsonify(error=str(e)),429
     try:
         if provider=='aholo':
-            signed=URLSafeTimedSerializer(str(app.secret_key),salt='freelab-aholo-image-v1').dumps({'uid':g.user['id'],'cid':cid,'oid':oid,'nonce':secrets.token_hex(12)})
-            task=aholo3d.submit('https://free-lab.cam/api/media/3d/source/'+signed,key)
+            task=aholo3d.submit_image(raw,key,prompt.strip())
         else:task=meshy3d.submit(raw,key)
         with g.con:
             job=g.con.execute("INSERT INTO jobs_3d(owner_id,capture_id,object_id,provider,provider_task) VALUES(?,?,?,?,?)",(g.user['id'],cid,oid,provider,task)).lastrowid
@@ -775,24 +794,48 @@ def media_3d_status(jid):
                   updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND owner_id=?''',
                   (info['status'],info['progress'],info['credits'],info['glb_url'],info['thumbnail_url'],info['error'],jid,g.user['id']))
         row=g.con.execute('SELECT * FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
+    if row['status']=='SUCCEEDED' and row['glb_url'] and not row['model_path'] and (not row['cache_error'] or request.args.get('refresh')=='1'):
+        try:
+            filename=model_cache.store(row['glb_url'],row['provider'],MODEL_DIR,g.user['id'],jid)
+            with g.con:g.con.execute('UPDATE jobs_3d SET model_path=?,cache_error=? WHERE id=? AND owner_id=?',(filename,'',jid,g.user['id']))
+        except (ValueError,OSError,urllib.error.HTTPError,urllib.error.URLError,TimeoutError) as e:
+            with g.con:g.con.execute('UPDATE jobs_3d SET cache_error=? WHERE id=? AND owner_id=?',(str(e)[:200],jid,g.user['id']))
+        row=g.con.execute('SELECT * FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
     return jsonify(job_3d_dict(row))
 
+
+@app.get('/api/media/3d/<int:jid>/asset')
+@require_user
+def private_3d_asset(jid):
+    row=g.con.execute('SELECT model_path FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
+    if not row:abort(404)
+    name=row['model_path']
+    if not name or not re.fullmatch(r'[0-9]+_[0-9]+\.glb',name) or name!=f'{g.user["id"]}_{jid}.glb':abort(404)
+    file=MODEL_DIR/name
+    if not file.is_file():abort(404)
+    resp=send_file(file,mimetype='model/gltf-binary',as_attachment=True,download_name=f'freelab-model-{jid}.glb')
+    resp.headers['Cache-Control']='private, no-store'
+    return resp
 
 @app.get('/api/media/3d/<int:jid>/preview')
 @require_user
 def media_3d_preview(jid):
     """Return small bounded geometry, not a 20-100MB textured model to Quest."""
-    row=g.con.execute('SELECT status,provider,glb_url FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
+    row=g.con.execute('SELECT status,provider,glb_url,model_path FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
     if not row:abort(404)
-    if row['status']!='SUCCEEDED' or not (meshy3d.safe_file_url(row['glb_url']) if row['provider']=='meshy' else aholo3d.safe_preview_url(row['glb_url'])):
+    if row['status']!='SUCCEEDED' or not (row['model_path'] or (meshy3d.safe_file_url(row['glb_url']) if row['provider']=='meshy' else aholo3d.safe_preview_url(row['glb_url']))):
         return jsonify(error='3D model not ready for preview'),409
-    req=urllib.request.Request(row['glb_url'],headers={'User-Agent':'FREELAB-GeometryPreview/0.10'})
-    opener=urllib.request.build_opener(meshy3d.NoRedirect)
     try:
-        with opener.open(req,timeout=18) as response:
-            if response.headers.get('Content-Length') and int(response.headers['Content-Length'])>glb_preview.MAX_FILE:
-                return jsonify(error='3D model larger than the safe XR preview limit; use Library download'),413
-            raw=response.read(glb_preview.MAX_FILE+1)
+        if row['model_path']:
+            if row['model_path']!=f'{g.user["id"]}_{jid}.glb':abort(404)
+            raw=(MODEL_DIR/row['model_path']).read_bytes()
+        else:
+            req=urllib.request.Request(row['glb_url'],headers={'User-Agent':'FREELAB-GeometryPreview/0.10'})
+            opener=urllib.request.build_opener(meshy3d.NoRedirect)
+            with opener.open(req,timeout=18) as response:
+                if response.headers.get('Content-Length') and int(response.headers['Content-Length'])>glb_preview.MAX_FILE:
+                    return jsonify(error='3D model larger than the safe XR preview limit; use Library download'),413
+                raw=response.read(glb_preview.MAX_FILE+1)
         geometry=glb_preview.decode(raw)
         return jsonify(**geometry)
     except urllib.error.HTTPError as e:return jsonify(error=f'3D model download HTTP {e.code}; renew the link in Library'),502
@@ -911,6 +954,23 @@ def media_describe():
                 503 if e.status in (500,502,503,504) else 429 if e.status==429 else 502)
     except (OSError,ValueError,RuntimeError) as e:
         db.finish_inference(g.con,call,'error');return jsonify(error=str(e)),502
+
+@app.get('/api/media/descriptions')
+@require_user
+def media_description_history():
+    try:cid=int(request.args.get('capture_id','0'))
+    except ValueError:return jsonify(error='Invalid source'),400
+    raw=request.args.get('object_id','')
+    try:oid=int(raw) if raw else None
+    except ValueError:return jsonify(error='Invalid segment'),400
+    if cid<=0 or (oid is not None and oid<=0):return jsonify(error='Invalid image'),400
+    cap=g.con.execute('SELECT 1 FROM captures WHERE id=? AND owner_id=? AND hidden=0',(cid,g.user['id'])).fetchone()
+    if not cap:abort(404)
+    if oid is not None and not g.con.execute('SELECT 1 FROM objects WHERE id=? AND capture_id=? AND owner_id=? AND shelf!=?',
+        (oid,cid,g.user['id'],'bin')).fetchone():abort(404)
+    rows=g.con.execute('SELECT question,answer,created_at FROM image_dialogue WHERE owner_id=? AND capture_id=? AND object_id IS ? ORDER BY id DESC LIMIT 30',
+        (g.user['id'],cid,oid)).fetchall()
+    return jsonify(history=[{'question':r['question'],'answer':r['answer'],'created_at':r['created_at']} for r in reversed(rows)],cached=True)
 
 @app.get('/api/media/voices')
 @require_user

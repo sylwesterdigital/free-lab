@@ -912,7 +912,7 @@ function syncTrackedUI(pose,t){
  }
  if(toolbar&&followMode){menuYaw=smoothYaw(menuYaw,yaw,Math.min(.24,1-Math.exp(-Math.min(.08,(t-lastFrame||16)/1000)*8.5)));toolbar.q=quatY(menuYaw);}
  // Eye is deliberately smaller and trails the gaze instead of being cemented to the face.
- if(captureEye){const target=point(poseForwardAnchor(pose,1.04,-.47),[0,0,0]);
+ if(captureEye){const target=point(poseForwardAnchor(pose,1.04,-.55),[0,0,0]);
   const a=1-Math.exp(-Math.min(.08,(t-lastFrame||16)/1000)*3.1);
   captureEye.pos=blend(captureEye.pos,target,a);captureEye.q=quatY(yaw);syncRoundels(pose);
   if(cameraHint){cameraHint.pos=vadd(captureEye.pos,point(rotateY(yaw),[0,.148,0],0));cameraHint.q=quatY(yaw);}}
@@ -1018,7 +1018,7 @@ function sparkles(vp,t){const cool=[],warm=[],trailBright=[],trailDim=[];particl
 }
 function place(pose){root=viewerAnchor(pose,-.04,1.45);rootYaw=yawFromMatrix(pose.transform.matrix);poseReady=true;
  if(!toolbar){menuYaw=cameraYaw(pose);const h=pose.transform.matrix,world=point(h,[0,0,0]),off=point(rotateY(cameraYaw(pose)),followOffset,0);toolbar={id:'toolbar',kind:'toolbar',size:[.67,.135],pos:vadd(world,off),q:quatY(cameraYaw(pose)),scale:1,visible:true,front:toolbarTexture('main'),back:null,resources:[]};toolbar.back=toolbar.front;toolbar.resources=[toolbar.front];}
- if(!captureEye){eyeResource=eyeTexture();captureEye={id:'captureeye',kind:'captureeye',size:[.099,.099],pos:point(poseForwardAnchor(pose,1.02,-.305),[0,0,0]),q:quatY(cameraYaw(pose)),scale:1,visible:true,front:eyeResource.tex,back:eyeResource.tex,resources:[eyeResource.tex]};paintEye(performance.now());}
+ if(!captureEye){eyeResource=eyeTexture();captureEye={id:'captureeye',kind:'captureeye',size:[.099,.099],pos:point(poseForwardAnchor(pose,1.02,-.55),[0,0,0]),q:quatY(cameraYaw(pose)),scale:1,visible:true,front:eyeResource.tex,back:eyeResource.tex,resources:[eyeResource.tex]};paintEye(performance.now());}
  if(!voiceButton)voiceButton=makeRoundel('voice-roundel','voiceroundel',.089);
  if(!extractButton)extractButton=makeRoundel('extract-roundel','extractroundel',.089);
  if(!cameraHint){const tex=cameraHintTexture('off');cameraHint={id:'camera-hint',kind:'status',size:[.47,.071],pos:[0,0,0],q:[0,0,0,1],scale:1,visible:true,front:tex,back:tex,resources:[tex]};cameraHintState='off';}

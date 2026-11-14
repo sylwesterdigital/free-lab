@@ -24,7 +24,7 @@ async function list(){const r=await req('/rooms');const box=$('roomList');if(!bo
   const row=document.createElement('article');row.className='room-entry';
   const title=document.createElement('strong');title.textContent=room.owner+' · '+(room.active?'LIVE':'OFFLINE')+' · '+room.visibility.toUpperCase();row.append(title);
   const btn=document.createElement('button');btn.textContent=room.joined?'View room':room.invited?'Accept invite':'Join';
-  btn.onclick=async()=>{try{await req('/rooms/'+room.id+'/join',{method:'POST'});await watch(room.id);}catch(e){alert(e.message);}};
+  btn.onclick=async()=>{try{await req('/rooms/'+room.id+'/join',{method:'POST'});await watch(room.id);}catch(e){window.FreeLabDialog?.message(e.message);}};
   row.append(btn);box.append(row);
  }
  if(!r.rooms.length)box.textContent='No rooms yet. Open XR to start yours.';
@@ -32,12 +32,12 @@ async function list(){const r=await req('/rooms');const box=$('roomList');if(!bo
 async function invite(){const profiles=(await req('/rooms/users')).users;const box=$('roomInviteList');box.replaceChildren();for(const u of profiles){
  const b=document.createElement('button');b.textContent='Invite @'+u.username;b.onclick=async()=>{
   try{if(!own)await start('private');await req('/rooms/mine/invite',{method:'POST',body:JSON.stringify({user_id:u.id})});b.textContent='Invitation sent';b.disabled=true;}
-  catch(e){alert(e.message);}
+  catch(e){window.FreeLabDialog?.message(e.message);}
  };box.append(b);
 }}
 async function ensureViewer(){
  if(viewer)return viewer;
- if(!viewerLoad)viewerLoad=import('/assets/room-viewer.mjs?v=0.10.18').then(m=>m.createRoomViewer({
+ if(!viewerLoad)viewerLoad=import('/assets/room-viewer.mjs?v=0.10.19').then(m=>m.createRoomViewer({
   canvas:$('roomCanvas'),inspector:$('roomInspector'),viewer:$('roomViewer'),
   status:$('roomState'),count:$('roomImageCount'),back:()=>leave(),
  })).catch(e=>{viewerLoad=null;throw e;});
