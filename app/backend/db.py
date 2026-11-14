@@ -55,6 +55,11 @@ CREATE TABLE IF NOT EXISTS profile_settings (
  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
  model_3d TEXT NOT NULL DEFAULT 'auto' CHECK(model_3d IN ('auto','aholo','meshy'))
 );
+-- Backward-compatible Tripo choice: original profile_settings CHECK excludes tripo.
+CREATE TABLE IF NOT EXISTS profile_3d_provider_override (
+ user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+ provider TEXT NOT NULL CHECK(provider IN ('tripo'))
+);
 CREATE TABLE IF NOT EXISTS image_dialogue (
  id INTEGER PRIMARY KEY,owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  capture_id INTEGER NOT NULL REFERENCES captures(id) ON DELETE CASCADE,

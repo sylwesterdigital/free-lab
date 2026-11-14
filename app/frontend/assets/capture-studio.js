@@ -1,4 +1,4 @@
-/* FREELAB v0.10.25. Capture is independent from the live camera preview.
+/* FREELAB v0.10.26. Capture is independent from the live camera preview.
  * Source/branch actions call the same authenticated XR API functions. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id),FL=()=>window.FreeLab;
@@ -147,6 +147,8 @@ function promptEditor(voice=false,instruction=''){
 async function generate3D(instruction=''){
  const item=selected(),prompt=String(instruction||'').trim();
  if(prompt.length>750)return inform('3D guidance must be 750 characters or fewer');
+ const chosenProvider=$('capture3DProvider').value;
+ await FL().save3DPreference(chosenProvider);
  const check=await FL().api('/media/3d/check');
  if(!check.configured){resultPanel('3D unavailable',check.provider+' has no API key configured for this profile. Check Settings → APIs.');return;}
  if(!await paid('GENERATE 3D',`Provider: ${check.provider.toUpperCase()} · ${prompt?'Text-guided model + reference image':'Image-to-3D model'} · Each submission is a separate paid task.`))return;
@@ -156,8 +158,9 @@ async function generate3D(instruction=''){
   monitorJob(result.id,chosen);inform('3D task '+result.id+' queued in the background. You can keep using the studio while it runs.');
  },'Submitting 3D task…');
 }
-async function connection3D(){try{const check=await FL().api('/media/3d/check');
- resultPanel('3D CONNECTION · '+check.provider.toUpperCase(),(check.configured?'API key configured.':'No usable API key for this profile.')+' This is read-only, not a generation test. '+(check.recent||[]).map(j=>'#'+j.id+' '+j.status+(j.error?' · '+j.error:'')).join(' / '));
+async function connection3D(){try{await FL().save3DPreference($('capture3DProvider').value);const check=await FL().api('/media/3d/check');
+ const verify=check.connection||{};const live=check.provider==='tripo'?(verify.verified?'LIVE API TEST PASSED · credits available: '+(verify.balance?.balance??'see Admin APIs'):'LIVE API TEST FAILED · '+(verify.message||'check key and credentials')):'Configuration check only (no live provider request).';
+ resultPanel('3D CONNECTION · '+check.provider.toUpperCase(),(check.configured?'API key configured. ':'No usable API key for this profile. ')+live+' · '+(check.recent||[]).map(j=>'#'+j.id+' '+j.status+(j.error?' · '+j.error:'')).join(' / '));
  }catch(e){resultPanel('3D connection check failed',e.message);}}
 async function recordVoice(){if(voiceRecorder){const old=voiceRecorder;voiceRecorder=null;
  resultPanel('TRANSCRIBING','Converting voice into text…',null,null,'running');
@@ -170,7 +173,7 @@ async function recordVoice(){if(voiceRecorder){const old=voiceRecorder;voiceReco
 }
 function resizeComposer(){const field=$('captureCommandText');field.style.height='auto';field.style.height=Math.min(field.scrollHeight,210)+'px';}
 function theater(){const item=selected();const id=item.type==='object'?item.oid:null;return FL().openGallery(id,item.type==='capture'?item.cid:null);}
-async function activate(id){try{if(id==='inspect')return;if(id==='extract')return recognize();if(id==='describe')return describe();if(id==='segment'){$('captureRefineRow').classList.remove('hidden');return $('captureRefineText').focus();}if(id==='refine')return refineImage();if(id==='prompt')return promptEditor();if(id==='voice')return recordVoice();if(id==='3d')return generate3D();if(id==='check3d')return connection3D();if(id==='download')return FL().downloadImage(imageURL(selected()),label(selected()));if(id==='source')return beginNew();if(id==='import')return $('fileInput').click();if(id==='theater')return theater();}catch(e){inform(e.message);}}
+async function activate(id){try{if(id==='inspect')return;if(id==='extract')return recognize();if(id==='describe')return describe();if(id==='segment'){$('captureRefineRow').classList.remove('hidden');return $('captureRefineText').focus();}if(id==='refine')return refineImage();if(id==='prompt')return promptEditor();if(id==='voice')return recordVoice();if(id==='3d'){const mode=$('captureCommandMode');mode.value='3d';mode.dispatchEvent(new Event('change'));$('captureCommandText').focus();return inform('Select the 3D provider, then press Send to submit a paid generation task.');}if(id==='check3d')return connection3D();if(id==='download')return FL().downloadImage(imageURL(selected()),label(selected()));if(id==='source')return beginNew();if(id==='import')return $('fileInput').click();if(id==='theater')return theater();}catch(e){inform(e.message);}}
 function beginNew(){const state=FL().getState();requestedCapture=null;chosen=null;inspecting=false;expanded=false;if(state.stream?.getVideoTracks?.().some(t=>t.readyState==='live'&&!t.muted)){FL().resumeCamera();render();}else{$('fileInput').click();} $('captureResult').replaceChildren();$('captureResult').classList.add('hidden');stopJobMonitor();}
 async function chatSubmit(e){e.preventDefault();const mode=$('captureCommandMode').value,text=$('captureCommandText').value.trim();
  try{if(!(chosen&&getItem(chosen))){if(mode==='prompt'||mode==='refine')return generateFromText(text);return resultPanel('SELECT A PHOTO','Choose a saved image before using '+mode+'.',null,null,'info');}switch(mode){case 'extract':await recognize();break;case 'describe':await describe(text);break;case 'segment':await segment(text);break;case 'refine':await refineImage(text);break;case '3d':await generate3D(text);break;default:await submitImageEdit(text);break;}}catch(error){inform(error.message);} }
@@ -184,7 +187,9 @@ function setup(){if(!$('captureShutter'))return;
  $('captureCommandText').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();$('captureCommandForm').requestSubmit();}});
  document.querySelectorAll('[data-capture-tool]').forEach(btn=>btn.onclick=()=>{$('captureMore').open=false;void activate(btn.dataset.captureTool);});
  $('captureModeButton').onclick=()=>{$('captureCommandMode').focus();$('captureCommandMode').click();};
- $('captureCommandMode').onchange=()=>{$('captureRefineRow').classList.add('hidden');$('captureCommandText').placeholder=({prompt:'Ask AI to change this image…',describe:'Ask a question about the image…',extract:'Extract all obvious objects from this source',segment:'Name one object to extract, e.g. chair',refine:'Describe how the image quality should be improved', '3d':'Generate a 3D model of the selected image'})[$('captureCommandMode').value];};
+ $('captureCommandMode').onchange=()=>{$('capture3DProvider').classList.toggle('hidden',$('captureCommandMode').value!=='3d');$('captureRefineRow').classList.add('hidden');$('captureCommandText').placeholder=({prompt:'Ask AI to change this image…',describe:'Ask a question about the image…',extract:'Extract all obvious objects from this source',segment:'Name one object to extract, e.g. chair',refine:'Describe how the image quality should be improved', '3d':'Generate a 3D model of the selected image'})[$('captureCommandMode').value];};
+ $('capture3DProvider').onchange=()=>void FL().save3DPreference($('capture3DProvider').value).catch(e=>inform(e.message));
+ void FL().get3DPreference().then(p=>{$('capture3DProvider').value=p.provider;}).catch(()=>{});
  $('captureViewportHint').textContent='LIVE CAMERA · READY TO CAPTURE';
  window.addEventListener('freelab-photo-ready',()=>{requestedCapture=null;inspecting=false;expanded=false;render();$('previewImage').classList.remove('hidden');$('cameraVideo').classList.add('hidden');$('captureViewportHint').textContent='PHOTO IMPORTED · PRESS SHUTTER TO SAVE';});
  $('cameraButton')?.addEventListener('click',()=>load().catch(e=>inform(e.message)));

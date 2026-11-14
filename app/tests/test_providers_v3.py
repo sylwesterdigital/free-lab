@@ -7,11 +7,11 @@ from cryptography.fernet import Fernet
 
 class ProviderChecks(unittest.TestCase):
     def test_allowlisted_readonly_only(self):
-        self.assertEqual(set(provider_checks.CHECKS), {'meta','aholo','meshy','openai','gemini','xai','replicate','elevenlabs'})
+        self.assertEqual(set(provider_checks.CHECKS), {'meta','aholo','meshy','tripo','openai','gemini','xai','replicate','elevenlabs'})
         for url, auth,kind in provider_checks.CHECKS.values():
             self.assertTrue(url.startswith('https://'))
             self.assertTrue(url.endswith(('/models','/token','/balance','/account','pageSize=1','/user')))
-        for name in ('tripo','fal','malicious'):
+        for name in ('fal','malicious'):
             with patch('urllib.request.build_opener') as fake:
                 result=provider_checks.check(name,'a'*25)
                 self.assertFalse(result['verified']);fake.assert_not_called()

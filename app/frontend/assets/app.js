@@ -174,8 +174,8 @@ async function segmentSnapshot(forcedPrompt=null){try{
  overlay.classList.remove('hidden');notify(`${boxes.length} SAM box(es) · ${data.saved_ids?.length||0} private crop(s) saved (not mask cutouts).`);state.tab='mine';selectTab('mine');await loadObjects();if(state.user?.role==='admin')loadUsage().catch(()=>{});return boxes.length;
  }catch(e){notify(e.message);return false;}finally{$('segment').disabled=false;}}
 async function loadUsage(){if(!state.user)return;const data=await api('/usage');const summary=$('usageSummary');if(!summary)return;summary.textContent=`FREE LAB rolling 24h: ${data.user_last_24h}/${data.user_cap||'unlimited'} requests for this profile · ${data.global_last_24h}/${data.global_cap||'unlimited'} overall. Local SQLite limits only; NOT a billing/spend cap. Set in /etc/free-lab.env on Ubuntu. `+((data.recent||[]).length?`Latest: ${data.recent[0].provider} / ${data.recent[0].status} / ${JSON.stringify(data.recent[0].tokens)}`:'No inference requests yet.');}
-const PROVIDER_SAFE_TESTS=new Set(['meta','aholo','meshy','openai','gemini','xai','replicate','elevenlabs']);
-const ACTIVE_PROVIDERS=new Set(['meta','aholo','meshy','elevenlabs']);
+const PROVIDER_SAFE_TESTS=new Set(['meta','aholo','meshy','tripo','openai','gemini','xai','replicate','elevenlabs']);
+const ACTIVE_PROVIDERS=new Set(['meta','aholo','meshy','tripo','elevenlabs']);
 let providerRows=new Map();
 function profileTab(name){
  const valid=state.user?.role==='admin'?['experience','apis','users']:['experience'];
@@ -184,6 +184,13 @@ function profileTab(name){
  document.querySelectorAll('[data-profile-view]').forEach(panel=>panel.classList.toggle('hidden',panel.dataset.profileView!==name));
  $('profileScroll').scrollTop=0;
  if(name==='apis')loadProviderList().catch(error=>{$('apiListStatus').textContent=error.message;});
+}
+async function refresh3DProviderUI(){
+ const control=$('profile3DProvider');if(!control)return;
+ try{const data=await get3DPreference();control.value=data.selected||data.provider;
+  $('profile3DProviderStatus').textContent='Using '+data.provider.toUpperCase()+' · '+(data.available?.[data.provider]?'key available':'API key not available to this profile')+' · paid 3D jobs require separate consent.';
+  const other=$('capture3DProvider');if(other){other.value=data.provider;}
+ }catch(e){$('profile3DProviderStatus').textContent='Could not load provider preference: '+e.message;}
 }
 function apiRowMessage(id,message,fail=false){const status=providerRows.get(id)?.querySelector('.api-result');if(status){status.textContent=message;status.classList.toggle('error',fail);}else $('apiListStatus').textContent=message;}
 async function loadProviderList(){
@@ -219,7 +226,8 @@ async function loadProviderList(){
   test.onclick=async()=>{
    test.disabled=true;apiRowMessage(p.provider,'Testing…');
    try{const r=await api('/admin/providers/'+p.provider+'/check',{method:'POST',body:JSON.stringify(key.value.trim()?{api_key:key.value.trim()}:{})});
-    const msg=r.verified?'Connected · authentication OK':r.http_status?'Authentication failed (HTTP '+r.http_status+')':r.message||'Unable to verify automatically';
+    const credits=r.balance&&r.balance.balance!==undefined?' · '+r.balance.balance+' credits available'+(r.balance.frozen?' ('+r.balance.frozen+' reserved)':''):'';
+    const msg=r.verified?'Connected · live read-only authentication OK'+credits:r.http_status?'Authentication failed (HTTP '+r.http_status+')':r.message||'Unable to verify automatically';
     apiRowMessage(p.provider,msg,!r.verified&&Boolean(r.http_status));
    }catch(error){apiRowMessage(p.provider,error.message,true);}finally{test.disabled=false;}
   };
@@ -344,7 +352,7 @@ async function init(){
  $('profile3DAvatarRemove').onclick=async()=>{if(!await window.FreeLabDialog.confirm('Remove your 3D avatar?'))return;
    try{await api('/me/avatar-3d',{method:'DELETE'});$('profile3DAvatarStatus').textContent='3D avatar removed.';}
    catch(err){$('profile3DAvatarStatus').textContent=err.message;}};
- $('profileButton').onclick=()=>{$('profilePanel').classList.remove('hidden');profileTab(state.user?.role==='admin'?'apis':'experience');};$('closeProfile').onclick=()=>$('profilePanel').classList.add('hidden');
+ $('profileButton').onclick=()=>{$('profilePanel').classList.remove('hidden');profileTab(state.user?.role==='admin'?'apis':'experience');void refresh3DProviderUI();};$('profile3DProvider').onchange=async()=>{const chosen=$('profile3DProvider').value;try{await save3DPreference(chosen);await refresh3DProviderUI();notify('3D provider changed to '+chosen.toUpperCase());}catch(e){notify(e.message);await refresh3DProviderUI();}};$('closeProfile').onclick=()=>$('profilePanel').classList.add('hidden');
  $('logout').onclick=async()=>{state.sessionKeys.clear();stopScan();closeCamera();await api('/logout',{method:'POST'});location.reload()};
  $('createProfile').onsubmit=async e=>{e.preventDefault();try{await api('/admin/profiles',{method:'POST',body:JSON.stringify({username:$('newUsername').value,display_name:$('newDisplayName').value,password:$('newPassword').value})});e.target.reset();notify('New private profile created');await loadAdminProfiles();}catch(error){notify(error.message)}};
  $('logLatest').onclick=()=>logTab('latest');$('logHistory').onclick=()=>logTab('history');$('showChangelog').onclick=()=>presentLog(true);$('dismissChangelog').onclick=dismissLog;$('continueChangelog').onclick=dismissLog;
@@ -540,7 +548,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.25');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.26');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{

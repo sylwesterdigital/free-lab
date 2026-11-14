@@ -1,12 +1,19 @@
-/* FREELAB v0.10.25: explicit interactive 3D preview; does not start a separate XR context. */
+/* FREELAB v0.10.26: explicit interactive 3D preview; does not start a separate XR context. */
 const $=id=>document.getElementById(id);
 let renderer=null,scene=null,camera=null,root=null,raf=0,active=false,loadingToken=0,drag=null,yaw=.48,pitch=.20,dist=2.8,lastTouchDistance=0;
-let THREE=null,GLTFLoader=null;
+let THREE=null,GLTFLoader=null,DRACOLoader=null,draco=null;
 async function loadThree(){
  if(THREE)return;
  THREE=await import('three');
- try{GLTFLoader=(await import('https://cdn.jsdelivr.net/npm/three@0.181.0/examples/jsm/loaders/GLTFLoader.js')).GLTFLoader;}catch{GLTFLoader=null;}
-
+ try{
+  const [gltfModule,dracoModule]=await Promise.all([
+   import('https://cdn.jsdelivr.net/npm/three@0.181.0/examples/jsm/loaders/GLTFLoader.js'),
+   import('https://cdn.jsdelivr.net/npm/three@0.181.0/examples/jsm/loaders/DRACOLoader.js')]);
+  GLTFLoader=gltfModule.GLTFLoader;DRACOLoader=dracoModule.DRACOLoader;
+  draco=new DRACOLoader();
+  draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.181.0/examples/jsm/libs/draco/gltf/');
+  draco.setDecoderConfig({type:'wasm'});
+ }catch(e){GLTFLoader=null;DRACOLoader=null;console.warn('FREELAB GLB/Draco decoder unavailable:',e.message);}
 }
 function state(message,working=false){const p=$('modelStageStatus');if(!p)return;p.textContent=message;p.classList.toggle('working',working);}
 function resize(){if(!renderer||!camera)return;const canvas=$('modelStageCanvas');const w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight);
@@ -38,10 +45,14 @@ async function open(id,avatar=false,localFile=null){const token=++loadingToken;c
    if(localFile){raw=await localFile.arrayBuffer();}
    else{const response=await fetch(rawUrl,{credentials:'same-origin'});if(!response.ok)throw Error('GLB unavailable (HTTP '+response.status+')');raw=await response.arrayBuffer();}
    if(token!==loadingToken)return;
-   const gltf=await new Promise((resolve,reject)=>new GLTFLoader().parse(raw,'',resolve,reject));object=gltf.scene;
+   const loader=new GLTFLoader();if(draco)loader.setDRACOLoader(draco);
+   const gltf=await new Promise((resolve,reject)=>loader.parse(raw,'',resolve,reject));object=gltf.scene;
    if(!localFile){dl.href=rawUrl;dl.download=avatar?'freelab-avatar.glb':'freelab-model-'+id+'.glb';dl.classList.remove('hidden');}
    state(localFile?(localFile.size>4_000_000?'Local preview only · '+(localFile.size/1_000_000).toFixed(2)+' MB · reduce by '+((localFile.size-4_000_000)/1_000_000).toFixed(2)+' MB before XR use':'Local 3D preview · ready for upload'):'Full 3D model loaded · drag to rotate');}
-  catch(e){if(localFile)throw e;object=await geometryFallback(fallbackUrl);state('Lightweight geometry preview · textures/animation omitted. '+e.message);}
+  catch(e){if(localFile)throw e;
+   try{object=await geometryFallback(fallbackUrl);state('Lightweight geometry preview · textures/animation omitted. '+e.message);}
+   catch(fallbackError){throw Error('GLB loader: '+e.message+' · Preview: '+fallbackError.message);}
+  }
   if(token!==loadingToken)return;fit(object);
  }catch(e){if(token===loadingToken)state('3D preview unavailable: '+e.message);}
  finally{if(token===loadingToken)$('modelStageStatus')?.classList.remove('working');}

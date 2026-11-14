@@ -12,6 +12,7 @@ CHECKS = {
     'meta': ('https://api.meta.ai/v1/models', 'bearer', 'models'),
     'aholo': ('https://api.aholo.ai/global/asset/v1/token', 'raw', 'auth'),
     'meshy': ('https://api.meshy.ai/openapi/v1/balance', 'bearer', 'balance'),
+    'tripo': ('https://openapi.tripo3d.ai/v3/account/balance', 'bearer', 'tripo_balance'),
     'openai': ('https://api.openai.com/v1/models', 'bearer', 'models'),
     'gemini': ('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', 'gemini', 'models'),
     'xai': ('https://api.x.ai/v1/models', 'bearer', 'models'),
@@ -41,9 +42,13 @@ def check(provider: str, api_key: str) -> dict:
         data = json.loads(payload)
         if not isinstance(data, dict):
             raise ValueError('Unexpected account response')
+        if kind == 'tripo_balance' and (data.get('code') != 0 or not isinstance(data.get('data'),dict) or not isinstance(data['data'].get('balance'),(int,float))):
+            raise ValueError('Tripo returned an unsuccessful or invalid account balance')
         result = {'provider': provider, 'verified': True, 'charged': False,
                   'test': 'Read-only authentication/account query. No inference submitted.'}
-        if kind == 'balance':
+        if kind == 'tripo_balance':
+            result['balance']={'balance':data['data']['balance'],'frozen':data['data'].get('frozen',0)}
+        elif kind == 'balance':
             result['balance'] = {k: data[k] for k in ('balance', 'monthly_credits', 'permanent_credits', 'monthly_resets_at') if k in data}
         elif kind == 'models':
             models = data.get('data', data.get('models', []))
@@ -53,7 +58,7 @@ def check(provider: str, api_key: str) -> dict:
         elif kind == 'account':
             result['account'] = str(data.get('username') or data.get('type') or 'Authenticated')[:80]
         elif kind == 'auth': result['message'] = 'Aholo issued an asset-upload authorization token; no world/Lux3D job was created.'
-        result['balance_available'] = kind == 'balance'
+        result['balance_available'] = kind in ('balance','tripo_balance')
         return result
     except urllib.error.HTTPError as e:
         return {'provider': provider, 'verified': False, 'charged': False, 'http_status': e.code,

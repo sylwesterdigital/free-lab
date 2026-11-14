@@ -1,5 +1,1 @@
-{
-  "project": "free-lab",
-  "version": "0.10.25",
-  "description": "XR voice composer and text-only generation, private avatar preview/optimization"
-}
+{"project":"free-lab","version":"0.10.26","description":"Tripo v3 image-to-3D, real balance diagnostics, Draco-compressed GLB preview and cross-device provider choice"}

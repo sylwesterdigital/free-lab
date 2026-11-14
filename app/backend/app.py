@@ -6,7 +6,7 @@ from functools import wraps
 from flask import Flask,abort,g,jsonify,request,send_file,session
 from itsdangerous import URLSafeTimedSerializer,BadSignature,SignatureExpired
 from werkzeug.middleware.proxy_fix import ProxyFix
-from . import db,providers,secrets as keyvault,sam,provider_checks,media,meshy3d,aholo3d,glb_preview,glb_xr,model_cache,avatar_optimizer
+from . import db,providers,secrets as keyvault,sam,provider_checks,media,meshy3d,aholo3d,tripo3d,glb_preview,glb_xr,model_cache,avatar_optimizer
 
 APP_ROOT=Path(__file__).resolve().parents[1]
 DATA_DIR=Path(os.getenv('FREE_LAB_DATA_DIR',APP_ROOT/'var')).resolve()
@@ -334,23 +334,35 @@ def update_provider_scope(provider):
         g.con.execute('INSERT INTO provider_scopes(provider,shared) VALUES(?,?) ON CONFLICT(provider) DO UPDATE SET shared=excluded.shared',(provider,int(v['shared'])))
     return jsonify(provider=provider,shared=v['shared'])
 
+def selected_3d_provider():
+    # Keep the existing SQLite profile_settings CHECK untouched in deployed
+    # databases; Tripo is recorded in a separate, schema-additive table.
+    override=g.con.execute('SELECT provider FROM profile_3d_provider_override WHERE user_id=?',(g.user['id'],)).fetchone()
+    if override:return override['provider']
+    legacy=g.con.execute('SELECT model_3d FROM profile_settings WHERE user_id=?',(g.user['id'],)).fetchone()
+    return legacy['model_3d'] if legacy else 'auto'
+
 def preferred_3d_provider():
-    r=g.con.execute('SELECT model_3d FROM profile_settings WHERE user_id=?',(g.user['id'],)).fetchone()
-    value=r['model_3d'] if r else 'auto'
-    if value=='auto':
-        return 'aholo' if provider_key('aholo') else 'meshy'
+    value=selected_3d_provider()
+    if value=='auto':return next((p for p in ('aholo','meshy','tripo') if provider_key(p)), 'aholo')
     return value
 
 @app.route('/api/preferences/3d',methods=['GET','PUT'])
 @require_user
 def model_3d_preference():
     if request.method=='GET':
-        return jsonify(provider=preferred_3d_provider(),available={k:bool(provider_key(k)) for k in ('aholo','meshy')})
+        return jsonify(provider=preferred_3d_provider(),selected=selected_3d_provider(),
+            available={k:bool(provider_key(k)) for k in ('aholo','meshy','tripo')})
     v=body();value=v.get('provider')
-    if value not in ('auto','aholo','meshy'):return jsonify(error='Choose Aholo or Meshy'),400
+    if value not in ('auto','aholo','meshy','tripo'):return jsonify(error='Choose AHOLO, Meshy, or Tripo'),400
     with g.con:
-        g.con.execute('INSERT INTO profile_settings(user_id,model_3d) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET model_3d=excluded.model_3d',(g.user['id'],value))
-    return jsonify(provider=preferred_3d_provider())
+        if value=='tripo':
+            g.con.execute('INSERT INTO profile_settings(user_id,model_3d) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET model_3d=excluded.model_3d',(g.user['id'],'auto'))
+            g.con.execute('INSERT INTO profile_3d_provider_override(user_id,provider) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET provider=excluded.provider',(g.user['id'],'tripo'))
+        else:
+            g.con.execute('DELETE FROM profile_3d_provider_override WHERE user_id=?',(g.user['id'],))
+            g.con.execute('INSERT INTO profile_settings(user_id,model_3d) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET model_3d=excluded.model_3d',(g.user['id'],value))
+    return jsonify(provider=preferred_3d_provider(),selected=value)
 
 @app.get('/api/usage')
 @require_user
@@ -778,7 +790,7 @@ def admin_diagnostics():
 def media_capabilities():
     return jsonify(image_edit={'meta':{'model':'muse-image-1.0','available':bool(provider_key('meta'))}},
                    speech={'meta':{'model':'muse-voice-transcribe-1.0','available':bool(provider_key('meta'))}},
-                   video={},three_d={p:{'available':bool(provider_key(p)),'async':True} for p in ('aholo','meshy')},message='3D provider preference selects Aholo or Meshy; no silent fallback.')
+                   video={},three_d={p:{'available':bool(provider_key(p)),'async':True} for p in ('aholo','meshy','tripo')},message='3D provider preference selects Aholo, Meshy or Tripo; no silent fallback.')
 
 def job_3d_dict(row):
     return {'id':row['id'],'capture_id':row['capture_id'],'object_id':row['object_id'],
@@ -801,8 +813,14 @@ def media_3d_check():
     provider=preferred_3d_provider()
     jobs=g.con.execute('SELECT id,status,error,created_at FROM jobs_3d WHERE owner_id=? AND provider=? ORDER BY id DESC LIMIT 3',
                        (g.user['id'],provider)).fetchall()
-    return jsonify(provider=provider,configured=bool(provider_key(provider)),billable=False,
-        notice='Configuration check only; a real generation requires confirming a paid task.',
+    configured=bool(provider_key(provider))
+    check={'verified':False,'message':'Provider key not configured; no request sent.'}
+    if provider=='tripo' and configured:
+        check=provider_checks.check('tripo',provider_key(provider))
+    elif configured:check={'verified':False,'message':'Key configured. No live read-only test is requested for this provider.'}
+    return jsonify(provider=provider,configured=configured,billable=False,
+        verified=bool(check.get('verified')),connection=check,
+        notice='Tripo balance test is read-only and free. Model generation requires separate paid confirmation.',
         recent=[{'id':r['id'],'status':r['status'],'error':r['error'],'created_at':r['created_at']} for r in jobs])
 
 @app.get('/api/media/3d/source/<token>')
@@ -843,7 +861,7 @@ def media_3d_start():
         if not obj or not obj['image_name']:abort(404)
         name=obj['image_name']
     if provider!='aholo' and prompt.strip():
-        return jsonify(error='Text-guided 3D requires Aholo. Switch 3D provider in Settings; no paid task submitted.'),422
+        return jsonify(error='Image + text guided 3D currently requires AHOLO. Clear guidance or select AHOLO. No paid task submitted.'),422
     key=provider_key(provider)
     if not key:return jsonify(error=f'{provider.upper()} is not configured or not shared with this profile. Check Admin → API scope.'),503
     raw=sam.jpeg_for_model((IMAGE_DIR/name).read_bytes())
@@ -854,7 +872,9 @@ def media_3d_start():
     try:
         if provider=='aholo':
             task=aholo3d.submit_image(raw,key,prompt.strip())
-        else:task=meshy3d.submit(raw,key)
+        elif provider=='meshy':task=meshy3d.submit(raw,key)
+        elif provider=='tripo':task=tripo3d.submit(raw,key,prompt.strip())
+        else:raise ValueError('Unsupported 3D provider')
         with g.con:
             job=g.con.execute("INSERT INTO jobs_3d(owner_id,capture_id,object_id,provider,provider_task) VALUES(?,?,?,?,?)",(g.user['id'],cid,oid,provider,task)).lastrowid
         db.finish_inference(g.con,call,'ok')
@@ -871,7 +891,10 @@ def media_3d_status(jid):
     if row['status'] in ('PENDING','IN_PROGRESS','UNKNOWN') or (row['status']=='SUCCEEDED' and request.args.get('refresh')=='1'):
         key=provider_key(row['provider'])
         if not key:return jsonify(error=row['provider'].upper()+' key missing: cannot poll task'),503
-        try:info=(aholo3d.status(row['provider_task'],key) if row['provider']=='aholo' else meshy3d.status(row['provider_task'],key))
+        try:
+            adapter={'aholo':aholo3d,'meshy':meshy3d,'tripo':tripo3d}.get(row['provider'])
+            if not adapter:raise ValueError('Unknown 3D provider')
+            info=adapter.status(row['provider_task'],key)
         except (RuntimeError,ValueError) as e:return jsonify(error=str(e)),502
         with g.con:
             g.con.execute('''UPDATE jobs_3d SET status=?,progress=?,credits=?,glb_url=?,thumbnail_url=?,error=?,
@@ -907,7 +930,7 @@ def media_3d_preview(jid):
     """Return compact, continuous textured geometry; never forward full GLB to Quest."""
     row=g.con.execute('SELECT status,provider,glb_url,model_path FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
     if not row:abort(404)
-    if row['status']!='SUCCEEDED' or not (row['model_path'] or (meshy3d.safe_file_url(row['glb_url']) if row['provider']=='meshy' else aholo3d.safe_preview_url(row['glb_url']))):
+    if row['status']!='SUCCEEDED' or not (row['model_path'] or (meshy3d.safe_file_url(row['glb_url']) if row['provider']=='meshy' else tripo3d.safe_file_url(row['glb_url']) if row['provider']=='tripo' else aholo3d.safe_preview_url(row['glb_url']))):
         return jsonify(error='3D model not ready for preview'),409
     try:
         if row['model_path']:

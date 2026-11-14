@@ -4,11 +4,11 @@
 from __future__ import annotations
 import os,urllib.request,urllib.error
 from pathlib import Path
-from . import meshy3d,aholo3d
+from . import meshy3d,aholo3d,tripo3d
 MAX_MODEL=32_000_000
 
 def store(url,provider,folder:Path,owner:int,jid:int):
-    good=(aholo3d.safe_preview_url(url) if provider=='aholo' else meshy3d.safe_file_url(url))
+    good=(aholo3d.safe_preview_url(url) if provider=='aholo' else tripo3d.safe_file_url(url) if provider=='tripo' else meshy3d.safe_file_url(url) if provider=='meshy' else None)
     if not good:raise ValueError('Provider output URL uses an unsupported download host; use the provider link while valid')
     folder.mkdir(parents=True,exist_ok=True)
     name=f'{owner}_{jid}.glb'

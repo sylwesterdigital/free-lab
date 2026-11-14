@@ -1,4 +1,4 @@
-"""v0.10.25: FRAME photo orientation/crop/grab regression; no Quest or paid calls."""
+"""v0.10.26: FRAME photo orientation/crop/grab regression; no Quest or paid calls."""
 import subprocess,unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -29,7 +29,7 @@ class PhotoFrame123(unittest.TestCase):
   r=subprocess.run(['node','-e',code],cwd=ROOT,capture_output=True,text=True,timeout=15)
   self.assertEqual(r.returncode,0,r.stderr)
  def test_frame_uses_cropped_jpeg_and_top_first_uv(self):
-  self.assertIn('frame-photo.js?v=0.10.25',HTML)
+  self.assertIn('frame-photo.js?v=0.10.26',HTML)
   self.assertIn('window.FreeLabFramePhoto?.projectedCrop(placed.corners,latestPose?.views||[])',XR)
   self.assertIn('window.FreeLab.saveXRFrame(region)',XR)
   self.assertIn('window.FreeLabFramePhoto?.cropRect(crop,video.videoWidth,video.videoHeight)',APP)

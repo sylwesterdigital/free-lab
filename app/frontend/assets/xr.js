@@ -6,7 +6,7 @@
 (()=>{'use strict';
 let gl,canvas,program,lineProgram,quad,rayBuffer,refSpace,session,root,poseReady=false,floorReference=false;
 let pending3dJobs=[],galleryPage=0,darkroom=null,darkBackdrop=null,darkClose=null,darkFloor=null,descriptionContext=null,descriptionQuestionMode=false,frameTouch=null,frameErase=null,lastMascotQuip=0,statusBorn=0,jobProvider='auto';
-let meshUniforms=null,meshProgram=null,meshWhite=null,meshGeneration=0;
+let meshUniforms=null,meshProgram=null,meshWhite=null,meshGeneration=0,meshSyncAt=0,meshSyncBusy=false;
 let configPanel=null,configShowing=false,config3DChoice='aholo',config3DAvailable=false,uiSettings=window.FreeLabXRUI?.read?.()||{},lastConfigTick=0,mascotTrailAt=0;
 let toolbar=null,editbar=null,statusCard=null,cloud=null,clouds=[],cards=[],zones=[],selected=null,held=null;
 let branchFocusId=null,branchPage=0; // Parent-based tree browsing, no fixed generation/depth limit.
@@ -286,7 +286,7 @@ function configTexture(){const [c,ctx]=canvas2d(770,970),p=uiPalette();panelSkin
  });
  ctx.strokeStyle=p.edge;ctx.globalAlpha=.3;ctx.beginPath();ctx.moveTo(38,700);ctx.lineTo(730,700);ctx.stroke();ctx.globalAlpha=1;
  text(ctx,'3D GENERATION',43,750,25,p.text,670);
- text(ctx,config3DChoice==='meshy'?'MESHY':'AHOLO',433,791,25,p.accent,700);
+ text(ctx,config3DChoice.toUpperCase(),433,791,25,p.accent,700);
  text(ctx,config3DAvailable?'KEY AVAILABLE':'NO KEY FOR THIS PROFILE',43,800,17,config3DAvailable?p.muted:'#f7a9b6',550);
  text(ctx,'◀',610,791,30,p.accent,700,'center');text(ctx,'▶',702,791,30,p.accent,700,'center');
  text(ctx,'PROCESSING ANIMATION',43,841,25,p.text,670);
@@ -300,7 +300,7 @@ function showConfig(){configShowing=!configShowing;
  if(configShowing&&!configPanel){const m=latestPose?.transform.matrix;const pos=latestPose?point(poseForwardAnchor(latestPose,1.05,-.08),[0,0,0]):[0,1.3,-1];const q=latestPose?lookingQuat(pos,[m[12],m[13],m[14]]):[0,0,0,1];const tex=configTexture();
   configPanel={id:'xr-config',kind:'config',pos,q,size:[.66,.83],scale:1,visible:true,front:tex,back:tex,resources:[tex]};}
  if(configPanel)configPanel.visible=configShowing;
- if(configShowing){refreshConfig();window.FreeLab?.get3DPreference?.().then(p=>{if(!configShowing)return;config3DChoice=p.provider==='meshy'?'meshy':'aholo';config3DAvailable=Boolean(p.available?.[config3DChoice]);refreshConfig();}).catch(()=>{});}
+ if(configShowing){refreshConfig();window.FreeLab?.get3DPreference?.().then(p=>{if(!configShowing)return;config3DChoice=['aholo','meshy','tripo'].includes(p.provider)?p.provider:'aholo';config3DAvailable=Boolean(p.available?.[config3DChoice]);refreshConfig();}).catch(()=>{});}
 }
 function configHit(hit){const x=(hit.x+.5)*770,y=(.5-hit.y)*970;
  if(y<90)return x>645?'configclose':null;
@@ -1922,7 +1922,12 @@ async function reopenCloudModels(captureId){
   }
  }catch(e){window.FreeLab?.traceEvent?.('3D model reload: '+e.message,'warn');}
 }
-async function poll3d(t){if(!pending3dJobs.length||t-meshyPollAt<14000)return;meshyPollAt=t;
+async function poll3d(t){
+ if(cloud?.id&&t-meshSyncAt>31000&&!meshSyncBusy){
+  meshSyncAt=t;meshSyncBusy=true;
+  void reopenCloudModels(cloud.id).catch(e=>window.FreeLab?.traceEvent?.('3D sync: '+e.message,'warn')).finally(()=>{meshSyncBusy=false;});
+ }
+ if(!pending3dJobs.length||t-meshyPollAt<14000)return;meshyPollAt=t;
  const jobs=pending3dJobs.slice(0,2);
  for(const item of jobs){try{
   const job=await window.FreeLab.checkXR3D(item.id);
@@ -2039,7 +2044,7 @@ async function action(id){const t=performance.now();if(t-lastAction<200)return;l
  case 'config':return showConfig();case 'configclose':configShowing=false;if(configPanel)configPanel.visible=false;return;
  case 'themenext':return cycleSetting('theme',1);case 'themeprev':return cycleSetting('theme',-1);
  case 'themerandom':uiSettings.generated=window.FreeLabXRUI.generate();return uiUpdate('generated',uiSettings.generated);
- case 'config3dnext':case 'config3dprev':{const value=config3DChoice==='aholo'?'meshy':'aholo';return window.FreeLab?.save3DPreference?.(value).then(p=>{config3DChoice=p.provider;return window.FreeLab.get3DPreference().then(result=>{config3DAvailable=Boolean(result.available?.[config3DChoice]);refreshConfig();setStatus('3D MODEL · '+config3DChoice.toUpperCase()+(config3DAvailable?' READY':' NO KEY'),5000);});}).catch(e=>setStatus('3D settings · '+e.message,8000));}
+ case 'config3dnext':case 'config3dprev':{const choices=['aholo','meshy','tripo'],i=choices.indexOf(config3DChoice);const value=choices[(i+(id==='config3dprev'?-1:1)+choices.length)%choices.length];return window.FreeLab?.save3DPreference?.(value).then(p=>{config3DChoice=p.provider;return window.FreeLab.get3DPreference().then(result=>{config3DAvailable=Boolean(result.available?.[config3DChoice]);refreshConfig();setStatus('3D MODEL · '+config3DChoice.toUpperCase()+(config3DAvailable?' READY':' NO KEY'),5000);});}).catch(e=>setStatus('3D settings · '+e.message,8000));}
  case 'processingnext':return cycleSetting('processing',1);case 'processingprev':return cycleSetting('processing',-1);
  case 'config-borders':case 'config-backgrounds':case 'config-mascot':case 'config-experimental':case 'config-masked':case 'config-voice':{
    const key=id.slice(7);return uiUpdate(key,uiSettings[key]===false);}
