@@ -25,6 +25,57 @@ avatar_optimizer.init(DB)
 IMAGE_DIR.mkdir(parents=True,exist_ok=True)
 MODEL_DIR.mkdir(parents=True,exist_ok=True)
 
+# XR preview preparation is a bounded read-only conversion of an already completed
+# paid job. Never regenerate or submit a provider task from a preview request.
+_xr_preview_guard=threading.Lock()
+_xr_preview_active=set()
+_XR_PREVIEW_CONCURRENT=1  # Avoid multiple simultaneous headless Blender instances.
+
+
+def _xr_preview_paths(owner,jid):
+    base=f'{owner}_{jid}.xr'
+    return MODEL_DIR/(base+'.glb'), MODEL_DIR/(base+'.error'), MODEL_DIR/(base+'.pending')
+
+
+def _xr_prepare_worker(owner,jid,raw):
+    output,error,pending=_xr_preview_paths(owner,jid)
+    temp=MODEL_DIR/(f'{owner}_{jid}.xr.tmp-'+secrets.token_hex(5))
+    try:
+        ready=avatar_optimizer.optimize_xr_preview(raw)
+        # A conversion is successful only if Quest's actual decoder can use it.
+        glb_xr.decode_visual(ready)
+        with temp.open('xb') as f:
+            os.fchmod(f.fileno(),0o600)
+            f.write(ready)
+        temp.replace(output)
+        error.unlink(missing_ok=True)
+    except Exception as e:
+        # No traceback, credentials, URLs or local file paths are returned to users.
+        message=str(e).replace('\n',' ')[:180]
+        message=re.sub(r'/[^ \t\"\']+', '[server file]', message)
+        error.write_text(message or 'Quest GLB conversion failed')
+    finally:
+        temp.unlink(missing_ok=True)
+        pending.unlink(missing_ok=True)
+        with _xr_preview_guard:_xr_preview_active.discard((owner,jid))
+
+
+def _xr_prepare_preview(owner,jid,raw):
+    output,error,pending=_xr_preview_paths(owner,jid)
+    if error.is_file():return ('FAILED',error.read_text()[:200])
+    with _xr_preview_guard:
+        key=(owner,jid)
+        if key in _xr_preview_active:return ('PREPARING','Optimizing the model for Quest')
+        if pending.is_file() and time.time()-pending.stat().st_mtime<330:
+            return ('PREPARING','Optimizing the model for Quest')
+        if len(_xr_preview_active)>=_XR_PREVIEW_CONCURRENT:
+            return ('WAITING','XR model preparation queued; retry shortly')
+        pending.touch()
+        _xr_preview_active.add(key)
+        threading.Thread(target=_xr_prepare_worker,args=(owner,jid,raw),daemon=True,
+                         name=f'freelab-xr-model-{jid}').start()
+    return ('PREPARING','Optimizing the model for Quest')
+
 @app.before_request
 def before():
     if request.path.startswith('/api/'):
@@ -927,26 +978,59 @@ def private_3d_asset(jid):
 @app.get('/api/media/3d/<int:jid>/preview')
 @require_user
 def media_3d_preview(jid):
-    """Return compact, continuous textured geometry; never forward full GLB to Quest."""
+    """Serve original supported GLB geometry or prepare a private Quest version.
+
+    Draco/dense meshes are decoded by headless Blender in a bounded background
+    worker. A paid generation operation is NEVER triggered by this endpoint.
+    """
     row=g.con.execute('SELECT status,provider,glb_url,model_path FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
     if not row:abort(404)
-    if row['status']!='SUCCEEDED' or not (row['model_path'] or (meshy3d.safe_file_url(row['glb_url']) if row['provider']=='meshy' else tripo3d.safe_file_url(row['glb_url']) if row['provider']=='tripo' else aholo3d.safe_preview_url(row['glb_url']))):
-        return jsonify(error='3D model not ready for preview'),409
+    if row['status']!='SUCCEEDED':return jsonify(error='3D model is still generating'),409
+    owner=g.user['id']
+    converted,failed,pending=_xr_preview_paths(owner,jid)
     try:
+        if converted.is_file():
+            return jsonify(**glb_xr.decode_visual(converted.read_bytes()))
+        if failed.is_file():
+            return jsonify(error='Quest model conversion failed: '+failed.read_text()[:180]),422
         if row['model_path']:
-            if row['model_path']!=f'{g.user["id"]}_{jid}.glb':abort(404)
+            if row['model_path']!=f'{owner}_{jid}.glb':abort(404)
             raw=(MODEL_DIR/row['model_path']).read_bytes()
         else:
-            req=urllib.request.Request(row['glb_url'],headers={'User-Agent':'FREELAB-GeometryPreview/0.10'})
-            opener=urllib.request.build_opener(meshy3d.NoRedirect)
-            with opener.open(req,timeout=18) as response:
+            # Provider URLs are strictly allowlisted and redirects are blocked.
+            safe=(meshy3d.safe_file_url(row['glb_url']) if row['provider']=='meshy'
+                  else tripo3d.safe_file_url(row['glb_url']) if row['provider']=='tripo'
+                  else aholo3d.safe_preview_url(row['glb_url']))
+            if not safe:return jsonify(error='3D output is not available from the provider'),422
+            req=urllib.request.Request(safe,headers={'User-Agent':'FREELAB-XR-Model/0.10'})
+            with urllib.request.build_opener(meshy3d.NoRedirect).open(req,timeout=18) as response:
                 if response.headers.get('Content-Length') and int(response.headers['Content-Length'])>glb_preview.MAX_FILE:
-                    return jsonify(error='3D model larger than the safe XR preview limit; use Library download'),413
+                    return jsonify(error='3D model exceeds the private 32 MB download limit'),413
                 raw=response.read(glb_preview.MAX_FILE+1)
-        geometry=glb_xr.decode_visual(raw)
-        return jsonify(**geometry)
-    except urllib.error.HTTPError as e:return jsonify(error=f'3D model download HTTP {e.code}; renew the link in Library'),502
-    except (ValueError,OSError,KeyError,IndexError,TypeError) as e:return jsonify(error=str(e)),422
+            if len(raw)>glb_preview.MAX_FILE:return jsonify(error='3D model exceeds the 32 MB download limit'),413
+            # Cache the successful download once, even if its geometry needs
+            # Blender preparation, so subsequent XR checks avoid expired URLs.
+            if (len(raw)>=20 and raw[:4]==b'glTF' and int.from_bytes(raw[8:12],'little')==len(raw)):
+                name=f'{owner}_{jid}.glb';target=MODEL_DIR/name
+                if not target.is_file():
+                    tmp=MODEL_DIR/(name+'.tmp-'+secrets.token_hex(5))
+                    try:
+                        with tmp.open('xb') as f:os.fchmod(f.fileno(),0o600);f.write(raw)
+                        tmp.replace(target)
+                    finally:tmp.unlink(missing_ok=True)
+                with g.con:g.con.execute('UPDATE jobs_3d SET model_path=?,cache_error=? WHERE id=? AND owner_id=?',(name,'',jid,owner))
+        try:return jsonify(**glb_xr.decode_visual(raw))
+        except ValueError as e:
+            # A syntactically invalid GLB is not worth repeatedly optimizing.
+            glb_xr.chunks(raw)
+            if not avatar_optimizer.blender_command():
+                return jsonify(error='Quest cannot decode this GLB directly; headless Blender is not installed for automatic conversion: '+str(e)[:100]),422
+            state,detail=_xr_prepare_preview(owner,jid,raw)
+            if state=='FAILED':return jsonify(error=detail),422
+            return jsonify(status=state,message=detail,job_id=jid),202
+    except urllib.error.HTTPError as e:return jsonify(error=f'Provider 3D download returned HTTP {e.code}; model may need a refreshed link'),502
+    except (ValueError,OSError,KeyError,IndexError,TypeError,urllib.error.URLError,TimeoutError) as e:
+        return jsonify(error=str(e)[:200]),422
 
 @app.post('/api/media/text-to-image')
 @require_user

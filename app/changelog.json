@@ -1,14 +1,26 @@
 {
-  "version": "0.10.28",
-  "title": "FREELAB v0.10.28 — Stationary theater controls at image bottom",
+  "version": "0.10.29",
+  "title": "FREELAB v0.10.29 — Spatial 3D generation cubes and automatic XR model preparation",
   "datetime": "2026-11-14",
   "changes": [
-    "XR theater now displays three matching white circular controls in a single stationary left, right, close row directly along the image bottom edge.",
-    "Controls are anchored to the image surface instead of the headset; turning or moving the head no longer relocates or rotates their positions.",
-    "When the image loads with its true aspect ratio, the control row adjusts once to the final image geometry and stays in position.",
-    "Previous, next and close actions remain on the same XR controller ray interactions; no changes to paid provider operations or saved collections."
+    "Every 3D generation task now appears as a small source-attached 3D cube with gently animated cyan, violet and pink gradient faces and illuminated edges.",
+    "Failed tasks and 3D preview failures turn the cube red with short error labels. The cube disappears when a finished textured model is placed in XR.",
+    "Previously generated private GLBs are loaded automatically from the saved source. When Quest cannot decode compressed or dense geometry, a bounded server-side Blender preparation job can convert a private XR preview in the background.",
+    "The UI retries read-only preview preparation without submitting or charging another generative AI request. Completed models remain attached to their original source and disappear with it.",
+    "The existing full-quality GLB is preserved, while converted XR previews are stored separately and protected by the same authenticated job ownership checks."
   ],
   "history": [
+    {
+      "version": "0.10.28",
+      "title": "FREELAB v0.10.28 — Stationary theater controls at image bottom",
+      "datetime": "2026-11-14",
+      "changes": [
+        "XR theater now displays three matching white circular controls in a single stationary left, right, close row directly along the image bottom edge.",
+        "Controls are anchored to the image surface instead of the headset; turning or moving the head no longer relocates or rotates their positions.",
+        "When the image loads with its true aspect ratio, the control row adjusts once to the final image geometry and stays in position.",
+        "Previous, next and close actions remain on the same XR controller ray interactions; no changes to paid provider operations or saved collections."
+      ]
+    },
     {
       "version": "0.10.27",
       "title": "FREELAB v0.10.27 — Source-linked 3D pop-in and job visibility",

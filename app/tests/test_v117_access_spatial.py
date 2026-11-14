@@ -1,4 +1,4 @@
-"""v0.10.28 regression checks: retained accounts, opt-in shared frames, XR depth and release notes."""
+"""v0.10.29 regression checks: retained accounts, opt-in shared frames, XR depth and release notes."""
 import sqlite3
 import tempfile
 import unittest

@@ -5,6 +5,7 @@ import bpy,sys,os
 from pathlib import Path
 args=sys.argv[sys.argv.index('--')+1:]
 source,destination,limit=args[0],args[1],int(args[2])
+xr_mode=len(args)>3 and args[3]=='XR'
 bpy.ops.object.select_all(action='SELECT');bpy.ops.object.delete(use_global=False)
 bpy.ops.import_scene.gltf(filepath=source)
 meshes=[o for o in bpy.data.objects if o.type=='MESH']
@@ -24,6 +25,29 @@ for obj in meshes:
         try:bpy.ops.object.mode_set(mode='OBJECT')
         except Exception:pass
     obj.select_set(False)
+# XR previews are deliberately geometry-budgeted, not merely file-budgeted.
+# A tiny Draco file may decompress to hundreds of thousands of triangles;
+# a small exported GLB can still overwhelm the Quest JSON mesh decoder.
+if xr_mode:
+    for image in bpy.data.images:
+        if image.type=='IMAGE' and min(image.size)>0 and max(image.size)>640:
+            factor=640/max(image.size)
+            image.scale(max(1,int(image.size[0]*factor)),max(1,int(image.size[1]*factor)))
+    face_total=sum(len(obj.data.polygons) for obj in meshes if obj.data)
+    if face_total>18000:
+        ratio=max(.015,18000/face_total)
+        for obj in meshes:
+            if not obj.data or len(obj.data.polygons)<500 or obj.data.shape_keys:continue
+            try:
+                bpy.ops.object.select_all(action='DESELECT')
+                obj.select_set(True);bpy.context.view_layer.objects.active=obj
+                modifier=obj.modifiers.new('FREELAB XR preview budget','DECIMATE')
+                modifier.ratio=ratio
+                bpy.ops.object.modifier_apply(modifier=modifier.name)
+            except Exception:
+                try:obj.modifiers.remove(modifier)
+                except Exception:pass
+            obj.select_set(False)
 # Conservative first, then gradually optimize until <= 4MB.
 for level,texture_edge in [(1.0,2048),(.82,1536),(.62,1024),(.42,768),(.24,512),(.13,384)]:
     for image in bpy.data.images:

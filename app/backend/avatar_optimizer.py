@@ -29,29 +29,41 @@ def init(path):
         con.execute('CREATE INDEX IF NOT EXISTS avatar_opt_user ON avatar_optimization_jobs(owner_id,id DESC)')
 
 
-def optimize(raw, blender=None):
-    if not 20<=len(raw)<=MAX_UPLOAD:raise ValueError('Avatar must be 16 MB or smaller')
+def _convert_glb(raw, blender=None, *, input_limit=MAX_UPLOAD, output_limit=MAX_XR, xr_mode=False):
+    """Convert a bounded private GLB, with no external URLs or paid provider calls."""
+    if not 20 <= len(raw) <= input_limit:raise ValueError('GLB exceeds the conversion input limit')
     program=blender or blender_command()
-    if not program:raise RuntimeError('Headless Blender is not installed or not on the server PATH')
+    if not program:raise RuntimeError('Headless Blender unavailable on this server')
     root=Path(__file__).resolve().parent
-    with tempfile.TemporaryDirectory(prefix='fl-avatar-') as work:
+    with tempfile.TemporaryDirectory(prefix='fl-glb-') as work:
         src=Path(work)/'input.glb';dst=Path(work)/'output.glb'
         src.write_bytes(raw)
         cmd=[program,'--background','--factory-startup','--disable-autoexec','--threads','2',
-             '--python',str(root/'avatar_blender_worker.py'),'--',str(src),str(dst),str(MAX_XR)]
+             '--python',str(root/'avatar_blender_worker.py'),'--',str(src),str(dst),str(output_limit)]+(['XR'] if xr_mode else [])
         env={k:v for k,v in os.environ.items() if not k.startswith(('PYTHONPATH','PYTHONSTARTUP'))}
         try:r=subprocess.run(cmd,capture_output=True,text=True,timeout=MAX_SECONDS,env=env,cwd=work,check=False)
-        except subprocess.TimeoutExpired:raise RuntimeError('Blender optimization exceeded four minutes') from None
-        except OSError as e:raise RuntimeError('Blender executable is unavailable or could not be launched') from e
+        except subprocess.TimeoutExpired:raise RuntimeError('Blender model preparation timed out') from None
+        except OSError as e:raise RuntimeError('Blender executable cannot be launched') from e
         if r.returncode or not dst.is_file():
-            msg=(r.stderr or r.stdout or 'unknown import/export failure')[-500:].replace('\n',' ')
-            raise RuntimeError('Blender could not optimize this avatar: '+msg)
+            msg=(r.stderr or r.stdout or 'unknown import/export error')[-440:].replace('\n',' ')
+            raise RuntimeError('Blender could not prepare the GLB: '+msg)
         output=dst.read_bytes()
-        if not output.startswith(b'glTF') or len(output)<20 or int.from_bytes(output[8:12],'little')!=len(output):
+        if len(output)>output_limit:raise RuntimeError('Optimized 3D model remains too large for the XR preview budget')
+        if len(output)<20 or output[:4]!=b'glTF' or int.from_bytes(output[8:12],'little')!=len(output):
             raise RuntimeError('Blender produced an invalid GLB')
-        if len(output)>MAX_XR:
-            raise RuntimeError(f'Optimization produced {len(output)/1_000_000:.2f} MB; still above 4 MB. Try reducing textures or polygons in Blender.')
         return output
+
+
+def optimize(raw, blender=None):
+    """Avatar conversion preserves the strict 4 MB attachment policy."""
+    if not 20<=len(raw)<=MAX_UPLOAD:raise ValueError('Avatar must be 16 MB or smaller')
+    return _convert_glb(raw,blender,input_limit=MAX_UPLOAD,output_limit=MAX_XR)
+
+
+def optimize_xr_preview(raw, blender=None):
+    """Read-only Quest preview prep from a previously paid 3D job; original is preserved."""
+    from .glb_preview import MAX_FILE
+    return _convert_glb(raw,blender,input_limit=MAX_FILE,output_limit=8_000_000,xr_mode=True)
 
 
 def _worker(path,job_id,validate):
