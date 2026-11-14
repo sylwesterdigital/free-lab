@@ -57,7 +57,7 @@ function createCard(THREE,roomId,card,onPick){
  image.position.z=.012;image.userData.key=identifier(card);group.add(image);
  const title=makeLabel(THREE,card.label||(card.kind==='capture'?'Capture':'Segment'),card.kind==='capture'?'#ffb6d4':'#a3eed1');title.position.set(0,-.31,.026);title.visible=false;group.add(title); // fixed-size captions now live in the HTML overlay
  group.position.set(...card.p);group.userData.key=identifier(card);group.userData.card=card;
- const src='/api/rooms/'+encodeURIComponent(roomId)+'/media/'+card.kind+'/'+card.id;
+ const src=card.image_url||'/api/rooms/'+encodeURIComponent(roomId)+'/media/'+card.kind+'/'+card.id;
  const photo=new Image();photo.decoding='async';
  photo.onload=()=>{
   if(!photo.naturalWidth||!group.parent)return;
@@ -106,7 +106,7 @@ export async function createRoomViewer({canvas,inspector,viewer,status,count,bac
   $('roomInspectTitle').textContent=node.label||'Spatial image';
   $('roomInspectType').textContent=node.kind==='capture'?'SOURCE PHOTO':'EXTRACTED OBJECT';
   $('roomInspectDescription').textContent=node.description?.trim()||'No description saved yet.';
-  $('roomInspectImage').src='/api/rooms/'+roomId+'/media/'+node.kind+'/'+node.id;
+  $('roomInspectImage').src=node.image_url||'/api/rooms/'+roomId+'/media/'+node.kind+'/'+node.id;
   const relatives=$('roomInspectRelatives');relatives.replaceChildren();
   const parent=parentKey(node);if(parent&&cards.has(parent))addRelation(relatives,'↑ Parent',parent);
   for(const [k,g] of cards)if(parentKey(g.userData.card)===key)addRelation(relatives,'↳ '+(g.userData.card.label||'Child'),k);

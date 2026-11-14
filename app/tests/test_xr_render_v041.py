@@ -15,8 +15,8 @@ class WebXRBootTests(unittest.TestCase):
         self.assertIn('gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE',src)
     def test_disable_unneeded_multisampling_in_quest_layer(self):
         src=(APP/'frontend/assets/xr.js').read_text()
-        self.assertIn("new XRWebGLLayer(session,gl,{alpha:true,antialias:false})",src)
-        self.assertIn("getContext('webgl',{alpha:true,antialias:false,xrCompatible:true})",src)
+        self.assertIn("new XRWebGLLayer(session,gl,{alpha:true,antialias:false,depth:true,stencil:false,framebufferScaleFactor:.8})",src)
+        self.assertIn("getContext('webgl2',{alpha:true,antialias:false,premultipliedAlpha:true,depth:true,xrCompatible:true",src)
     def test_no_missing_local_three_import(self):
         scene=(APP/'frontend/assets/scene.mjs').read_text()
         self.assertNotIn("import('/assets/",scene)
@@ -26,6 +26,6 @@ class WebXRBootTests(unittest.TestCase):
         self.assertIn('location /assets/',install.NGINX)
         self.assertIn('try_files $uri =404;',install.NGINX)
     def test_release_includes_041_version(self):
-        self.assertEqual(__import__('json').loads((APP/'version.json').read_text())['version'],'0.10.17')
+        self.assertEqual(__import__('json').loads((APP/'version.json').read_text())['version'],'0.10.18')
 
 if __name__=='__main__':unittest.main()

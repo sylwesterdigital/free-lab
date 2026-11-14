@@ -1,4 +1,4 @@
-"""Release v0.10.17: MIME gate, mobile capture parity and readable spatial labels."""
+"""Release v0.10.18: MIME gate, mobile capture parity and readable spatial labels."""
 from pathlib import Path
 import json,re,sqlite3,tempfile,unittest,subprocess
 from backend import db
@@ -23,7 +23,7 @@ class RoomMobile114(unittest.TestCase):
    self.assertIn("VERSION='0.9.1'",watcher)
  def test_webgl_loop_and_fixed_size_spatial_labels(self):
   rooms=(ROOT/'frontend/assets/rooms.js').read_text()
-  self.assertIn('/assets/room-viewer.mjs?v=0.10.17',rooms)
+  self.assertIn('/assets/room-viewer.mjs?v=0.10.18',rooms)
   room=(ROOT/'frontend/assets/room-viewer.mjs').read_text()
   for phrase in ('requestAnimationFrame(tick)','renderer.render(scene,camera)','updateScreenLabels()','screenPoint.project(camera)','roomFPS','roomLabels','roomInspectDescription'):
    self.assertIn(phrase,room)
@@ -63,7 +63,7 @@ class RoomMobile114(unittest.TestCase):
   self.assertIn('brand-version',page)
   for legacy in ('FREELAB LABORATORY © 2026','BUILT FOR CURIOSITY','LIVE EXPERIMENT /'):
    self.assertNotIn(legacy,page)
-  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.17')
+  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.18')
  def test_frontend_syntax(self):
   for f in ('room-viewer.mjs','scene.mjs','capture-studio.js','app.js','xr.js'):
    p=ROOT/'frontend/assets'/f

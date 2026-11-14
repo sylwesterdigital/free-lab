@@ -36,34 +36,67 @@ async function refresh(){try{const h=await api('/health');$('healthStatus').text
  catch(e){$('healthStatus').textContent='Disconnected';}}
 async function loadObjects(){const path=state.tab==='mine'?'/objects':'/public';const data=await api(path);state.objects=state.tab==='public'?data.objects:data.objects.filter(x=>state.tab==='bin'?x.shelf==='bin':x.shelf!=='bin');renderObjects();}
 let galleryItems=[],galleryIndex=0;
-async function openGallery(objectId=null){
+async function openGallery(objectId=null,captureId=null){
  const source=(await api('/captures')).captures;
  const objects=(await api('/objects')).objects.filter(o=>o.has_image&&o.shelf!=='bin');
  galleryItems=[];
- for(const cap of source){galleryItems.push({id:'capture:'+cap.id,label:'Capture '+cap.id,url:cap.image_url,detail:'Source photograph'});
-  for(const obj of objects.filter(o=>o.capture_id===cap.id))galleryItems.push({id:'object:'+obj.id,label:obj.label,url:'/api/objects/'+obj.id+'/image',detail:'Generation '+(obj.parent_object_id?'child':'first')+' · '+obj.operation});}
- for(const obj of objects.filter(o=>!o.capture_id))galleryItems.push({id:'object:'+obj.id,label:obj.label,url:'/api/objects/'+obj.id+'/image',detail:'Legacy library'});
+ for(const cap of source){galleryItems.push({id:'capture:'+cap.id,cid:cap.id,oid:null,label:'Source '+cap.id,url:cap.image_url,detail:'Source photograph'});
+  for(const obj of objects.filter(o=>o.capture_id===cap.id))galleryItems.push({id:'object:'+obj.id,cid:cap.id,oid:obj.id,label:obj.label,url:'/api/objects/'+obj.id+'/image',detail:'Generation '+(obj.parent_object_id?'child':'first')+' · '+obj.operation});}
+ for(const obj of objects.filter(o=>!o.capture_id))galleryItems.push({id:'object:'+obj.id,cid:null,oid:obj.id,label:obj.label,url:'/api/objects/'+obj.id+'/image',detail:'Legacy library'});
  if(!galleryItems.length){notify('No saved images');return;}
- const found=galleryItems.findIndex(x=>x.id==='object:'+objectId);galleryIndex=found<0?0:found;
+ const target=captureId?'capture:'+captureId:objectId?'object:'+objectId:null;const found=target?galleryItems.findIndex(x=>x.id===target):-1;galleryIndex=found<0?0:found;
  $('desktopGallery').classList.remove('hidden');renderGallery();
 }
 function renderGallery(){const item=galleryItems[galleryIndex];if(!item)return;
  $('galleryTitle').textContent=item.label+' · '+(galleryIndex+1)+' / '+galleryItems.length;
  $('galleryImage').src=item.url;$('galleryDetail').textContent=item.detail;
- const strip=$('galleryFilmstrip');strip.replaceChildren();galleryItems.forEach((v,i)=>{const b=document.createElement('button');b.title=v.label;b.className=i===galleryIndex?'selected':'';const img=document.createElement('img');img.loading='lazy';img.src=v.url;b.append(img);b.onclick=()=>{galleryIndex=i;renderGallery();};strip.append(b);});strip.children[galleryIndex]?.scrollIntoView({block:'nearest',inline:'center'});
+ $('galleryToolMenu').open=false;$('galleryAIStatus').classList.add('hidden');
+ const strip=$('galleryFilmstrip');strip.replaceChildren();
+ // Limit DOM and image requests to a narrow filmstrip around the current asset.
+ for(let offset=-10;offset<=10;offset++){
+  const i=(galleryIndex+offset+galleryItems.length)%galleryItems.length;
+  if(galleryItems.length<=21&&(offset<0||offset>=galleryItems.length))continue;
+  const v=galleryItems[i],b=el('button',i===galleryIndex?'selected':'');b.type='button';b.title=v.label;
+  const img=el('img');img.loading='lazy';img.src=v.url;img.alt=v.label;b.append(img);
+  b.onclick=()=>{galleryIndex=i;renderGallery();};strip.append(b);
+ }
+ strip.querySelector('.selected')?.scrollIntoView({block:'nearest',inline:'center'});
 }
 function browseGallery(step){if(!galleryItems.length)return;galleryIndex=(galleryIndex+step+galleryItems.length)%galleryItems.length;renderGallery();}
 function renderObjects(){const box=$('items');box.replaceChildren();if(state.tab==='mine'){$('objectCount').textContent=String(state.objects.length);$('objectCounter').textContent=String(state.objects.length).padStart(2,'0');}
- if(!state.objects.length){const e=el('div','empty-state');e.append(el('span','', '◌'),el('strong','',state.tab==='bin'?'Your bin is empty':state.tab==='mine'?'Nothing collected yet':'No public objects yet'),el('p','',state.tab==='bin'?'Objects moved to the virtual bin stay private until permanently deleted.':state.tab==='mine'?'Upload a snapshot, enable camera, or create an entry manually.':'Objects appear here only when their owners publish them.'));box.append(e);return;}
- for(const o of state.objects){const card=el('article','object-card');let img;if(o.has_image){img=el('img','object-photo');img.loading='lazy';img.alt='Collected object';img.src=state.tab==='mine'?'/api/objects/'+o.id+'/image':'/api/objects/'+o.id+'/image';}else img=el('div','object-placeholder','◈');card.append(img);if(o.has_image){img.classList.add('gallery-launch');img.title='Open full-window gallery';img.onclick=()=>openGallery(o.id).catch(e=>notify(e.message));}
- const b=el('div','object-body'),meta=el('div','object-meta');meta.append(el('span','',o.provider==='manual'?'MANUAL':o.provider.toUpperCase()),el('span','',o.visibility.toUpperCase()));b.append(meta,el('h3','',o.label),el('p','',o.description||'Recognized spatial object'));
- if(state.tab==='mine'||state.tab==='bin'){const acts=el('div','object-actions');if(state.tab==='mine')for(const [name,mode] of [['Private','private'],['Public','public'],['Share link','link']]){const btn=el('button','tiny-btn',name);btn.onclick=()=>changeVisibility(o.id,mode);acts.append(btn);}if(state.tab==='mine'){
- const folder=el('button','tiny-btn',o.folder||'Unsorted');folder.title='Cycle collection folder';folder.onclick=()=>cycleFolder(o);acts.append(folder);
- const bin=el('button','tiny-btn','Move to bin');bin.onclick=()=>changeShelf(o.id,'bin');acts.append(bin);
- }else{
- const restore=el('button','tiny-btn','Restore');restore.onclick=()=>changeShelf(o.id,'collection');acts.append(restore);
- const del=el('button','tiny-btn','Permanently delete');del.onclick=()=>removeObject(o.id);acts.append(del);
- }b.append(acts);}else b.append(el('span','small-muted','By '+o.owner));card.append(b);box.append(card);}}
+ const term=($('collectionSearch')?.value||'').trim().toLocaleLowerCase();
+ const visible=state.objects.filter(o=>!term||[o.label,o.description,o.created_at,o.folder,o.provider,o.visibility,o.operation].join(' ').toLocaleLowerCase().includes(term));
+ const count=$('collectionMatchCount');if(count)count.textContent=visible.length+' of '+state.objects.length;
+ if(!visible.length){const e=el('div','empty-state');e.append(el('strong','',term?'No matching images':state.tab==='bin'?'Your bin is empty':state.tab==='mine'?'Nothing collected yet':'No public objects yet'));box.append(e);return;}
+ for(const o of visible){const card=el('article','object-card');const open=el('button','object-preview');open.type='button';open.title='Open '+o.label+' in full-size preview';open.setAttribute('aria-label','Open '+o.label);
+ if(o.has_image){const img=el('img','object-photo');img.loading='lazy';img.alt='';img.src='/api/objects/'+o.id+'/image';open.append(img);}else open.append(el('div','object-placeholder','◈'));
+ const footer=el('span','object-overlay');footer.append(el('strong','',o.label),el('small','',String(o.created_at||'').slice(0,10)+' · '+(o.visibility||'PRIVATE').toUpperCase()));open.append(footer);
+ open.onclick=()=>openGallery(o.id).catch(e=>notify(e.message));card.append(open);
+ const menu=el('details','object-menu');const summary=el('summary','', '⋯');summary.title='Object actions';summary.setAttribute('aria-label','Actions for '+o.label);menu.append(summary);
+ const tools=el('div','object-menu-popover');
+ const add=(name,cb)=>{const button=el('button','',name);button.type='button';button.onclick=async()=>{menu.open=false;try{await cb();}catch(e){notify(e.message);}};tools.append(button);};
+ add('Full preview',()=>openGallery(o.id));
+ if(state.tab==='mine'){
+  add('Private',()=>changeVisibility(o.id,'private'));add('Public',()=>changeVisibility(o.id,'public'));add('Copy share link',()=>changeVisibility(o.id,'link'));
+  add('Folder: '+(o.folder||'Unsorted'),()=>cycleFolder(o));add('Move to bin',()=>changeShelf(o.id,'bin'));
+ }else if(state.tab==='bin'){
+  add('Restore',()=>changeShelf(o.id,'collection'));add('Delete permanently',()=>removeObject(o.id));
+ }else{add('Owner: '+o.owner,()=>Promise.resolve());}
+ menu.append(tools);card.append(menu);box.append(card);
+ }
+}
+async function galleryAI(action){const item=galleryItems[galleryIndex];if(!item)return;
+ $('galleryToolMenu').open=false;const status=$('galleryAIStatus');status.classList.remove('hidden');
+ if(!item.cid){status.textContent='This is an older image without a source. Capture/import it as a new source to use AI tools.';return;}
+ try{if(['extract','describe','refine','3d'].includes(action)&&!confirm(action.toUpperCase()+' may incur a provider charge. Continue?')){status.classList.add('hidden');return;}
+  status.textContent='Running '+action+'…';let result;
+  if(action==='extract'){result=await recognizeXR(item.cid,item.oid||null,true);status.textContent='Extracted '+(result.items||[]).length+' segments. Open Collection to see them.';}
+  else if(action==='describe'){result=await describeXR(item.cid,item.oid||null,'',false);status.textContent=result.description||'No description returned';}
+  else if(action==='refine'){const noun=prompt('Object to extract from this image (e.g. chair):');if(!noun||noun.trim().length<2){status.classList.add('hidden');return;}result=await segmentXR(item.cid,noun.trim(),item.oid||null,true);status.textContent='Created '+(result.items||[]).length+' new segments.';}
+  else if(action==='3d'){result=await createXR3D(item.cid,item.oid||null);status.textContent='3D job '+result.id+' queued. Status is in Collection.';}
+  else {openPromptEditor({captureId:item.cid,objectId:item.oid||null,label:item.label},'',()=>{status.textContent='New image saved. Reopen Collection to inspect it.';});if(action==='voice')$('xrPromptVoice')?.focus();status.textContent='Use the editor to submit your image instruction.';}
+ }catch(error){status.textContent='Request failed: '+error.message;}
+}
 async function changeShelf(id,shelf){try{await api('/objects/'+id,{method:'PATCH',body:JSON.stringify({shelf})});await loadObjects();notify(shelf==='bin'?'Moved to private Bin':'Restored to collection');}catch(e){notify(e.message);}}
 async function cycleFolder(o){const folders=['Unsorted','Keep','Room','Objects'];const next=folders[(folders.indexOf(o.folder)+1)%folders.length];try{await api('/objects/'+o.id,{method:'PATCH',body:JSON.stringify({folder:next})});await loadObjects();notify('Folder: '+next);}catch(e){notify(e.message);}}
 async function changeVisibility(id,mode){try{const data=await api('/objects/'+id,{method:'PATCH',body:JSON.stringify({visibility:mode})});if(data.share_token){const link=location.origin+'/shared.html?token='+data.share_token;try{await navigator.clipboard.writeText(link);notify('Private share link copied')}catch{prompt('Copy the private share URL',link)}}else notify('Visibility set to '+mode);await loadObjects();}catch(e){notify(e.message);}}
@@ -219,10 +252,13 @@ async function init(){
  wirePromptEditor();
  $('loginForm').onsubmit=async e=>{e.preventDefault();$('loginError').textContent='';try{const data=await api('/login',{method:'POST',body:JSON.stringify({username:$('username').value,password:$('password').value})});$('password').value='';await afterAuth(data.user);}catch(error){$('loginError').textContent=error.message;}};
  const m=await api('/me').catch(()=>({user:null}));if(m.user)await afterAuth(m.user);else{await refresh();$('loginView').classList.remove('hidden');}
- $('enterXR').onclick=()=>{window.FreeLabSound?.unlock();window.FreeLabSound?.play('enter');if(!state.user)return notify('Sign in before entering XR');window.FreeLabRooms.chooseXR();};
+ const supportsAR=async()=>{try{return Boolean(navigator.xr&&await navigator.xr.isSessionSupported('immersive-ar'));}catch{return false;}};
+ const portalTitle=document.querySelector('.stage-portal>div>strong'),portalMode=document.querySelector('#enterXR .xr-letter strong'),portalHint=document.querySelector('.stage-portal>div>span');
+ const updateEntry=async()=>{const canXR=await supportsAR();if(portalMode)portalMode.textContent=canXR?'XR':'3D';if(portalTitle)portalTitle.textContent=canXR?'ENTER SPATIAL REALITY':'ENTER 3D COLLECTION';if(portalHint)portalHint.textContent=canXR?'QUEST · IMMERSIVE AR':'BROWSER · THREE.JS · ORBIT / EXPLORE';$('depthXR').classList.toggle('hidden',!canXR);};void updateEntry();
+ $('enterXR').onclick=async()=>{window.FreeLabSound?.unlock();window.FreeLabSound?.play('enter');if(!state.user)return notify('Sign in before entering 3D');if(await supportsAR())window.FreeLabRooms.chooseXR();else window.FreeLabRooms.previewLocal().catch(e=>notify('3D preview: '+e.message));};
  $('depthXR')?.addEventListener('click',()=>{if(!state.user)return notify('Sign in before entering XR');window.FreeLabRooms.chooseXR(true);notify('Depth is requested on XR entry. If unsupported or denied, use normal XR instead.');});
- $('toggleLibrary').onclick=()=>setLibrary($('workspace').classList.contains('hidden'));$('refresh3DJobs').onclick=refresh3DJobs;
- $('closeLibrary').onclick=()=>setLibrary(false);$('galleryClose').onclick=()=>$('desktopGallery').classList.add('hidden');$('galleryPrev').onclick=()=>browseGallery(-1);$('galleryNext').onclick=()=>browseGallery(1);let swipeX=null;$('galleryImage').addEventListener('pointerdown',e=>swipeX=e.clientX);$('galleryImage').addEventListener('pointerup',e=>{if(swipeX!==null&&Math.abs(e.clientX-swipeX)>45)browseGallery(e.clientX<swipeX?1:-1);swipeX=null;});document.addEventListener('keydown',e=>{if($('desktopGallery').classList.contains('hidden'))return;if(e.key==='Escape')$('galleryClose').click();else if(e.key==='ArrowLeft')browseGallery(-1);else if(e.key==='ArrowRight')browseGallery(1);});
+ $('collectionSearch').addEventListener('input',renderObjects);document.querySelectorAll('[data-gallery-action]').forEach(b=>b.onclick=()=>void galleryAI(b.dataset.galleryAction));$('toggleLibrary').onclick=()=>setLibrary($('workspace').classList.contains('hidden'));$('refresh3DJobs').onclick=refresh3DJobs;
+ $('closeLibrary').onclick=()=>setLibrary(false);$('galleryClose').onclick=()=>$('desktopGallery').classList.add('hidden');$('galleryPrev').onclick=()=>browseGallery(-1);$('galleryNext').onclick=()=>browseGallery(1);let swipeX=null;$('galleryImage').addEventListener('touchstart',e=>{swipeX=e.changedTouches[0].clientX;},{passive:true});$('galleryImage').addEventListener('touchend',e=>{if(swipeX!==null&&Math.abs(e.changedTouches[0].clientX-swipeX)>35)browseGallery(e.changedTouches[0].clientX<swipeX?1:-1);swipeX=null;},{passive:true});document.addEventListener('keydown',e=>{if($('desktopGallery').classList.contains('hidden'))return;if(e.key==='Escape')$('galleryClose').click();else if(e.key==='ArrowLeft')browseGallery(-1);else if(e.key==='ArrowRight')browseGallery(1);});
  document.querySelectorAll('.model-option').forEach(btn=>btn.onclick=()=>{$('modelChoice').value=btn.dataset.model;document.querySelectorAll('.model-option').forEach(b=>b.classList.toggle('selected',b===btn));});
  $('saveUploadCloud')?.addEventListener('click',async()=>{const button=$('saveUploadCloud');button.disabled=true;
   try{if(!state.snapshot)throw Error('Upload an image first');const result=await api('/captures',{method:'POST',body:JSON.stringify({image:state.snapshot})});
@@ -456,6 +492,6 @@ function wirePromptEditor(){
  };
 }
 
-window.FreeLab={silenceXRVoice,api,startWavPrompt,currentRecording,describeXR,modelXRPreview,get3DPreference,save3DPreference,list3DJobs,loadElevenVoices,createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,resumeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
+window.FreeLab={openGallery,silenceXRVoice,api,startWavPrompt,currentRecording,describeXR,modelXRPreview,get3DPreference,save3DPreference,list3DJobs,loadElevenVoices,createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,resumeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
 document.addEventListener('DOMContentLoaded',()=>{window.FreeLabRooms?.init?.();init().catch(e=>notify('Initialization failed: '+e.message));const bloom=$('featureBloom');if(bloom){setTimeout(()=>window.FreeLabSound?.play('arrival'),3000);bloom.querySelectorAll('.feature-seed').forEach(button=>{button.addEventListener('mouseenter',()=>window.FreeLabSound?.hover());button.addEventListener('focus',()=>window.FreeLabSound?.hover());});}});
 })();

@@ -1,22 +1,39 @@
 {
-  "version": "0.10.17",
-  "title": "FREELAB v0.10.17 — XR controls, collaboration and profile management",
+  "version": "0.10.18",
+  "title": "FREELAB v0.10.18 — Quest renderer and compact capture experience",
   "datetime": "2026-11-14",
   "changes": [
-    "Development log now shows current release and scrollable previous release history.",
-    "Settings profile photo uses a clickable circular upload control, with upload or camera choice supported by the device.",
-    "Administrators can list users, reset passwords, temporarily block/unblock accounts, and remove non-admin users; sensitive changes revoke sessions.",
-    "XR image labels render only once in the viewer-sized caption (white); card action labels turn pink on hover.",
-    "Theater navigation buttons form a near-eye bottom row with white background and dark symbols.",
-    "Lower and shrink voice transcript and confirmation controls; move capture roundels away from game actions; reposition description panel and billboard config panel.",
-    "Mascot speech is stopped when hidden; contextual comments have larger variety, per-phrase repetition cooldown and audio overlap protection.",
-    "Voice search highlights and temporarily brings forward matching saved segments. Global restyle commands ask for second confirmation and cap edits to six billed images.",
-    "New optional XR depth entry requests depth-sensing before session begins, checks enabledFeatures correctly and reports sensor availability without claiming occlusion.",
-    "Joined spectators appear as named room-presence badges in host XR, and optional experimental frame outlines are shared to desktop room viewers (off by default).",
-    "Provider API test remains separate from asynchronous AHOLO Lux3D creation, polling and result retrieval.",
-    "WebRTC audio/video, physical passthrough rectangle screenshots and texture bin require additional permissions, signaling and calibration; not claimed as available in this release."
+    "Quest immersive AR now prefers WebGL2, uses an XRWebGLLayer without unsupported DOM overlay, reduces compositor framebuffer scale and stops GPU work after context loss. Landing Three.js renderer is disabled in Quest Browser to prevent competing contexts.",
+    "Mobile browsers without immersive-ar support show ENTER 3D; launch an interactive private Three.js spatial preview of existing sources and branches (not a claim of AR passthrough).",
+    "Development log uses shorter copy, compact scroll window, round borderless close button and smaller release typography.",
+    "Top navigation pills use consistent desktop heights and spacing and reduce on narrow screens.",
+    "Camera studio distinguishes live video from an inspected image. Selected source or segment shows overlaid Voice, Describe and Extract controls; library is toggled, not required to use AI.",
+    "More menu contains full advanced camera, extraction quality, named segmentation, manual save and optional sampling controls without a separate legacy-controls section.",
+    "Image instruction composer supports prompt edits, descriptions, extraction, refined segmentation, 3D generation and voice. Provider calls remain explicit and billable work requires confirmation.",
+    "Collection uses image-first thumbnails, name/date overlays, a 3-dot per-object contextual menu and live filtering by label, date, description and metadata.",
+    "Full-screen gallery fills the available viewport, has compact white circular side arrows, mobile swipe navigation and a contextual menu for image AI actions.",
+    "Live Quest rendering and all webcam/AI combinations still require device verification; fallback never fabricates readable passthrough camera pixels."
   ],
   "history": [
+    {
+      "version": "0.10.17",
+      "title": "FREELAB v0.10.17 — XR controls, collaboration and profile management",
+      "datetime": "2026-11-14",
+      "changes": [
+        "Development log now shows current release and scrollable previous release history.",
+        "Settings profile photo uses a clickable circular upload control, with upload or camera choice supported by the device.",
+        "Administrators can list users, reset passwords, temporarily block/unblock accounts, and remove non-admin users; sensitive changes revoke sessions.",
+        "XR image labels render only once in the viewer-sized caption (white); card action labels turn pink on hover.",
+        "Theater navigation buttons form a near-eye bottom row with white background and dark symbols.",
+        "Lower and shrink voice transcript and confirmation controls; move capture roundels away from game actions; reposition description panel and billboard config panel.",
+        "Mascot speech is stopped when hidden; contextual comments have larger variety, per-phrase repetition cooldown and audio overlap protection.",
+        "Voice search highlights and temporarily brings forward matching saved segments. Global restyle commands ask for second confirmation and cap edits to six billed images.",
+        "New optional XR depth entry requests depth-sensing before session begins, checks enabledFeatures correctly and reports sensor availability without claiming occlusion.",
+        "Joined spectators appear as named room-presence badges in host XR, and optional experimental frame outlines are shared to desktop room viewers (off by default).",
+        "Provider API test remains separate from asynchronous AHOLO Lux3D creation, polling and result retrieval.",
+        "WebRTC audio/video, physical passthrough rectangle screenshots and texture bin require additional permissions, signaling and calibration; not claimed as available in this release."
+      ]
+    },
     {
       "version": "0.10.16",
       "title": "FREELAB v0.10.16 — Active nginx virtual host repair",

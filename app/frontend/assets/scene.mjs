@@ -4,7 +4,7 @@
 const canvas=document.getElementById('sceneCanvas');
 const stage=document.getElementById('sceneStage');
 const fallback=document.getElementById('sceneFallback');
-if(canvas&&stage){
+if(canvas&&stage&&!/OculusBrowser|Quest|Oculus/i.test(navigator.userAgent)){
  try{
   // Load only the pinned CDN module: do not request an absent local vendor file.
   // If the CDN is unavailable, the local CSS mascot remains visible.

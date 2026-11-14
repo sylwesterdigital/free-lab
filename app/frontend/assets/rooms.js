@@ -37,7 +37,7 @@ async function invite(){const profiles=(await req('/rooms/users')).users;const b
 }}
 async function ensureViewer(){
  if(viewer)return viewer;
- if(!viewerLoad)viewerLoad=import('/assets/room-viewer.mjs?v=0.10.17').then(m=>m.createRoomViewer({
+ if(!viewerLoad)viewerLoad=import('/assets/room-viewer.mjs?v=0.10.18').then(m=>m.createRoomViewer({
   canvas:$('roomCanvas'),inspector:$('roomInspector'),viewer:$('roomViewer'),
   status:$('roomState'),count:$('roomImageCount'),back:()=>leave(),
  })).catch(e=>{viewerLoad=null;throw e;});
@@ -59,6 +59,22 @@ async function watch(id){
   if(heartbeatTimer)clearInterval(heartbeatTimer);heartbeatTimer=setInterval(()=>{if(document.visibilityState!=='hidden'&&selected===id)void req('/rooms/'+id+'/presence',{method:'POST'}).catch(()=>{});},8000);
  }catch(e){$('roomState').textContent='3D viewer unavailable: '+e.message;console.error(e);}
 }
+async function previewLocal(){
+ const clouds=await window.FreeLab.listXRClouds();
+ const cards=[];let sourceIndex=0;
+ for(const source of (clouds||[]).filter(x=>!x.hidden).slice(0,10)){
+  const cx=(sourceIndex%5-2)*1.9,cy=1.7+Math.floor(sourceIndex/5)*1.5;
+  cards.push({kind:'capture',id:source.id,p:[cx,cy,-1.2],q:[0,0,0,1],label:'Source '+source.id,description:source.description||'',image_url:source.image_url});
+  let i=0;for(const child of (source.objects||[]).filter(x=>x.shelf!=='bin').slice(0,6)){
+   const angle=(i%7)*.82-2.4,r=1.1+(Math.floor(i/7)*.8);
+   cards.push({kind:'object',id:child.id,p:[cx+Math.sin(angle)*r,cy+.9+Math.cos(angle)*.35,-1.2-.5*r],q:[0,0,0,1],label:child.label||'Segment',description:child.description||'',image_url:'/api/objects/'+child.id+'/image'});i++;
+  }sourceIndex++;
+ }
+ if(!cards.length){window.FreeLab.notify('Capture a source first, then choose Enter 3D to explore its branches.');window.FreeLab.openCamera();return;}
+ selected=0;$('roomsPanel').classList.remove('hidden');$('roomViewer').classList.remove('hidden');$('roomLobby').classList.add('hidden');$('roomsPanel').classList.add('room-in-session');
+ const v=await ensureViewer();v.start();v.setState({pose:[0,1.5,0],q:[0,0,0,1],cards,shapes:[]},'local-preview',{active:false,visibility:'private'});
+ $('roomState').textContent='PRIVATE · BROWSER 3D';$('roomImageCount').textContent=cards.length+' images';
+}
 function leave(){const old=selected;selected=0;if(pollTimer)clearInterval(pollTimer);pollTimer=null;if(heartbeatTimer)clearInterval(heartbeatTimer);heartbeatTimer=null;if(old)void req('/rooms/'+old+'/presence',{method:'DELETE'}).catch(()=>{});
  viewer?.stop();$('roomViewer').classList.add('hidden');$('roomLobby').classList.remove('hidden');
  $('roomsPanel').classList.remove('room-in-session');void list().catch(()=>{});
@@ -75,5 +91,5 @@ function init(){if(!$('roomButton'))return;
  $('roomCancel').onclick=()=>chooser.classList.add('hidden');
 }
 function chooseXR(requireDepth=false){const p=$('roomChooser');p.dataset.depth=String(Boolean(requireDepth));p.dataset.visibility='private';$('roomPrivate').classList.add('chosen');$('roomPublic').classList.remove('chosen');p.classList.remove('hidden');}
-window.FreeLabRooms={init,chooseXR,start,end,publish,list};
+window.FreeLabRooms={init,chooseXR,previewLocal,start,end,publish,list};
 })();
