@@ -1,18 +1,18 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.13">
+<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.15">
 <title>FREELAB — Step into the spatial world</title>
-<link rel="stylesheet" href="/assets/style.css?v=0.10.13">
+<link rel="stylesheet" href="/assets/style.css?v=0.10.15">
 </head><body>
 <div id="app" class="app-shell">
 <header class="header" aria-label="Site navigation">
-  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span>FREELAB</span><span class="brand-tag">SPATIAL STUDIO / 008</span></a>
+  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.15</span></a>
   <nav class="header-right" aria-label="Workspace">
     <span class="live-pill"><span class="server-dot" id="connectionDot"></span><span id="healthStatus">Connecting</span></span>
     <button id="roomButton" class="nav-pill" type="button">Rooms</button>
     <button id="toggleLibrary" class="nav-pill" aria-expanded="false" aria-controls="workspace">Collection <span id="objectCount">0</span></button>
-    <button class="nav-avatar" id="profileButton" title="Profiles and model providers" aria-label="Account and model settings">◌</button>
+    <button class="nav-avatar" id="profileButton" title="Profile and model providers" aria-label="Account and model settings"><span id="profileInitials">ME</span><img id="profileAvatar" class="hidden" alt=""></button>
   </nav>
 </header>
 <main id="main" class="main">
@@ -35,7 +35,6 @@
     </nav>
     <aside class="scene-caption"><span class="caption-index">01 / SPATIAL COLLECTOR</span><p>Capture. Bloom.<br>Collect.</p><span class="caption-muted">Capture → recognize → collect in 3D.</span></aside>
     <span id="modelStatus" class="visually-hidden">Models ready on demand</span>
-    <div class="stage-bottom"><span>LIVE EXPERIMENT / 0.10.13</span><span class="stage-line"></span><span>BUILT FOR CURIOSITY</span></div>
   </section>
   <section id="workspace" class="workspace workspace-drawer hidden" aria-label="Private inventory">
     <div class="workspace-head"><div><p class="eyebrow">YOUR PERSONAL ARCHIVE</p><h2>Found in your world <span id="objectCounter" class="muted-count">00</span></h2></div><div class="workspace-actions"><div class="tabs"><button class="tab active" data-list="mine">Private</button><button class="tab" data-list="public">Public</button><button class="tab" data-list="bin">Bin</button></div><button id="closeLibrary" class="round-btn" aria-label="Close collection">×</button></div></div>
@@ -43,7 +42,7 @@
     <div id="items" class="item-grid"><div class="empty-state"><strong>Nothing collected yet</strong><p>Every object has a story. Start yours with a snapshot.</p></div></div>
   </section>
 </main>
-<footer class="footer"><span>FREELAB LABORATORY © 2026</span><span>PRIVATE BY DEFAULT · YOUR SPACE, YOUR RULES</span><button id="showChangelog" class="link-btn">DEV LOG ↗</button></footer>
+<footer class="footer"><a href="https://workwork.fun/" target="_blank" rel="noopener noreferrer">WORKWORK.FUN</a><span>PRIVATE BY DEFAULT · YOUR SPACE, YOUR RULES</span><a href="https://github.com/sylwesterdigital/free-lab" target="_blank" rel="noopener noreferrer" class="footer-github" aria-label="GitHub repository"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .8a11.2 11.2 0 0 0-3.54 21.83c.56.1.76-.24.76-.53v-2.1c-3.1.67-3.76-1.32-3.76-1.32-.5-1.29-1.23-1.63-1.23-1.63-1.01-.7.08-.69.08-.69 1.12.08 1.7 1.15 1.7 1.15.99 1.7 2.6 1.21 3.23.93.1-.72.39-1.22.71-1.5-2.47-.28-5.07-1.24-5.07-5.54 0-1.23.44-2.24 1.15-3.03-.12-.28-.5-1.43.1-2.99 0 0 .94-.3 3.08 1.16a10.7 10.7 0 0 1 5.6 0c2.14-1.46 3.07-1.16 3.07-1.16.61 1.56.23 2.71.12 2.99.72.79 1.14 1.8 1.14 3.03 0 4.31-2.6 5.25-5.08 5.53.4.34.76 1.01.76 2.04v3.02c0 .29.2.63.77.52A11.2 11.2 0 0 0 12 .8Z"/></svg><span>GitHub</span></a><button id="showChangelog" class="link-btn">DEV LOG ↗</button></footer>
 </div>
 
 <div id="roomChooser" class="modal hidden" data-visibility="private"><div class="modal-card room-chooser">
@@ -56,12 +55,12 @@
 <div id="roomsPanel" class="rooms-modal hidden" role="dialog" aria-label="Spatial rooms"><header><h2>Shared spatial rooms</h2><button id="roomsClose">×</button></header>
 <div id="roomLobby"><p class="small-muted">Only signed-in users can join. Private rooms require an invitation.</p><div id="roomList"></div><h3>Invite to your room</h3><div id="roomInviteList"></div></div>
 <div id="roomViewer" class="hidden" aria-label="Live interactive Three.js room">
- <canvas id="roomCanvas" tabindex="0" aria-label="Interactive 3D room. Drag to orbit, scroll to zoom, select images, or use Explore with WASD."></canvas>
- <div class="room-hud"><div class="room-identity"><span class="room-eyebrow">FREELAB / LIVE SPATIAL ROOM</span><div class="room-state-line"><span class="room-live-dot"></span><strong id="roomState">Connecting…</strong><span class="room-hud-separator">·</span><span id="roomImageCount">0 images</span></div></div>
+ <canvas id="roomCanvas" tabindex="0" aria-label="Interactive 3D room. Drag to orbit, scroll to zoom, select images, or use Explore with WASD."></canvas><div id="roomLabels" class="room-label-layer" aria-label="Spatial captions"></div>
+ <div class="room-hud"><div class="room-identity"><span class="room-eyebrow">FREELAB / LIVE SPATIAL ROOM</span><div class="room-state-line"><span class="room-live-dot"></span><strong id="roomState">Connecting…</strong><span class="room-hud-separator">·</span><span id="roomImageCount">0 images</span><span class="room-hud-separator">·</span><span id="roomFPS" aria-label="Rendering frame rate">— FPS</span></div></div>
  <div class="room-hud-actions"><button id="roomControlMode" title="Change navigation mode (V)">Explore · WASD</button><button id="roomControlFit" title="Fit the room (F)">Fit scene</button><button id="roomLeave" title="Exit this room">← Rooms</button></div></div>
  <div class="room-guide">DRAG TO ORBIT <span>·</span> SCROLL TO ZOOM <span>·</span> CLICK IMAGE TO INSPECT <span>·</span> EXPLORE: WASD / Q E</div>
  <aside id="roomInspector" class="room-inspector hidden" aria-label="Selected image and its branch"><div class="room-inspect-top"><span id="roomInspectType">SPATIAL IMAGE</span><button id="roomInspectorClose" aria-label="Close image details">×</button></div>
- <h3 id="roomInspectTitle">Image</h3><button id="roomInspectFull" class="room-inspect-picture" title="Enlarge image"><img id="roomInspectImage" alt="Selected spatial image"></button>
+ <h3 id="roomInspectTitle">Image</h3><div class="room-inspect-picture"><img id="roomInspectImage" alt="Selected spatial image"><button id="roomInspectFull" class="room-theater-button" title="Open theatrical fullscreen" aria-label="Open theatrical fullscreen">⛶</button></div>
  <p id="roomInspectDescription" class="room-inspect-desc"></p><p id="roomInspectMeta" class="room-inspect-meta"></p>
  <div id="roomInspectRelatives" class="room-inspect-relatives" aria-label="Image tree connections"></div><button id="roomInspectFocus" class="room-inspect-focus">Focus in room</button></aside>
  <div id="roomImageLightbox" class="room-image-lightbox hidden"><button id="roomImageClose" aria-label="Close enlarged image">×</button><img id="roomImageLarge" alt="Selected room media"></div>
@@ -77,7 +76,24 @@
 </div>
 
 <div id="loginView" class="auth-wrap hidden"><div class="auth-card"><span class="auth-sigil">◎</span><p class="eyebrow">YOUR OWN PRIVATE UNIVERSE</p><h2>Welcome to<br>FREELAB.</h2><p class="small-muted">Sign in to collect your world. Each profile has its own private inventory.</p><form id="loginForm"><label>PROFILE<input id="username" autocomplete="username" required maxlength="32" placeholder="username"></label><label>PASSWORD<input id="password" type="password" autocomplete="current-password" required placeholder="Your password"></label><button class="primary-btn" type="submit">Enter my space <span>↗</span></button><p id="loginError" class="error" role="alert"></p></form></div></div>
-<div id="cameraPanel" class="camera-panel hidden"><div class="panel-top"><div><p class="eyebrow">SPATIAL CAPTURE / CAMERA</p><strong id="cameraStatus">Camera not started</strong></div><button id="closeCamera" class="round-btn" aria-label="Close camera">×</button></div><div class="camera-content"><video id="cameraVideo" autoplay muted playsinline></video><canvas id="snapshotCanvas" hidden></canvas><img id="previewImage" alt="Snapshot preview" class="hidden"><canvas id="samOverlay" class="sam-overlay hidden" aria-hidden="true"></canvas><div id="captureEmpty" class="capture-empty">No camera pixels available. Upload a photo to explore.</div></div><div class="model-select"><label for="modelChoice">EXTRACTION QUALITY</label><input id="modelChoice" type="hidden" value="muse-ember-1.0"><div class="model-options" role="group" aria-label="Muse model"><button type="button" class="model-option selected" data-model="muse-ember-1.0">Quick <small>lower cost</small></button><button type="button" class="model-option" data-model="muse-spark-1.3">Detailed <small>higher cost</small></button></div></div><div class="camera-actions"><button id="takeSnapshot" class="secondary-btn">Snapshot</button><button type="button" class="secondary-btn" id="saveUploadCloud">Save photo to Spatial Library</button><button id="recognize" class="primary-btn">Extract objects with AI</button></div><div class="manual-entry"><input id="manualLabel" placeholder="Or name an object" maxlength="80"><button id="saveManual" class="secondary-btn">Save private</button></div><div class="sam-row"><input id="samPrompt" placeholder="SAM object e.g. chair" maxlength="60" aria-label="Object noun phrase to segment"><button id="segment" class="secondary-btn">Refine selected region</button></div><div class="scan-row"><button id="toggleScan" class="secondary-btn">Start 20s scan</button><small>Off by default · paid calls · optional request quota</small></div><p id="captureStatus" class="hint">Camera diagnostics pending.</p><p class="hint">Passthrough display ≠ camera pixels. Quest camera permission varies by browser build. Nothing uploads until you explicitly scan or recognize.</p></div>
+<div id="cameraPanel" class="camera-panel hidden" role="dialog" aria-label="Mobile spatial capture studio">
+ <div class="capture-shell">
+  <header class="capture-topbar"><div><p class="eyebrow">FREELAB / CAPTURE STUDIO</p><strong id="cameraStatus">Camera not started</strong></div><div class="capture-top-actions"><button type="button" id="captureGridToggle" title="Show all sources and segments">Library</button><button type="button" id="closeCamera" class="round-btn" aria-label="Close capture studio">×</button></div></header>
+  <div class="camera-content capture-viewport"><video id="cameraVideo" autoplay muted playsinline></video><canvas id="snapshotCanvas" hidden></canvas><img id="previewImage" alt="Captured source photo" class="hidden"><canvas id="samOverlay" class="sam-overlay hidden" aria-hidden="true"></canvas><div id="captureEmpty" class="capture-empty">Allow camera access or choose a saved image.</div><div class="capture-viewport-hint" id="captureViewportHint">LIVE CAMERA · READY TO CAPTURE</div></div>
+  <div class="capture-rail"><button id="captureNewSource" type="button" aria-label="Start another source">↻<span>New source</span></button><button type="button" id="captureShutter" class="capture-shutter" aria-label="Take photograph"><span></span></button><button type="button" id="captureUpload" aria-label="Upload a photo">↥<span>Import</span></button></div>
+  <div class="capture-workbench" id="captureWorkbench"><div class="capture-workbench-head"><div><p class="eyebrow">SOURCE → BRANCHES</p><h2>Spatial collection</h2></div><button type="button" id="captureReload">Refresh</button></div>
+   <div id="captureTree" class="capture-tree" role="list" aria-label="Source and segment images"></div>
+   <div id="captureSelection" class="capture-selection hidden"><div class="capture-selection-heading"><strong id="captureSelectedLabel">Source</strong><span id="captureSelectedKind">SOURCE</span></div><p id="captureSelectedDescription">Choose an image to work on it.</p>
+    <div class="capture-selected-actions"><button type="button" id="captureRecognize">EXTRACT</button><button type="button" id="captureDescribe">DESCRIBE</button><button type="button" id="captureRefine">REFINE</button><button type="button" id="capturePrompt">PROMPT</button><button type="button" id="captureVoice">VOICE</button><button type="button" id="captureMake3D">3D</button><button type="button" id="captureTheater">FULLSCREEN</button></div>
+    <div id="captureRefineRow" class="capture-refine-row hidden"><input id="captureRefineText" aria-label="Object to segment" placeholder="Name an object, e.g. chair" maxlength="60"><button type="button" id="captureRefineApply">EXTRACT SEGMENT (PAID)</button></div>
+    <div id="captureDescriptionResult" class="capture-description-result hidden" aria-live="polite"></div>
+   </div>
+  </div>
+  <details class="capture-advanced"><summary>Advanced camera and legacy controls</summary><div class="model-select"><label for="modelChoice">EXTRACTION QUALITY</label><input id="modelChoice" type="hidden" value="muse-ember-1.0"><div class="model-options" role="group" aria-label="Muse model"><button type="button" class="model-option selected" data-model="muse-ember-1.0">Quick <small>lower cost</small></button><button type="button" class="model-option" data-model="muse-spark-1.3">Detailed <small>higher cost</small></button></div></div>
+  <div class="camera-actions"><button id="takeSnapshot" class="secondary-btn">Snapshot</button><button type="button" class="secondary-btn" id="saveUploadCloud">Save photo to Spatial Library</button><button id="recognize" class="primary-btn">Extract objects with AI</button></div><div class="manual-entry"><input id="manualLabel" placeholder="Or name an object" maxlength="80"><button id="saveManual" class="secondary-btn">Save private</button></div><div class="sam-row"><input id="samPrompt" placeholder="SAM object e.g. chair" maxlength="60" aria-label="Object noun phrase to segment"><button id="segment" class="secondary-btn">Refine selected region</button></div><div class="scan-row"><button id="toggleScan" class="secondary-btn">Start 20s scan</button><small>Off by default · charged requests · optional request quota</small></div></details>
+  <p id="captureStatus" class="capture-diagnostics" role="status">Camera diagnostics pending.</p><p class="capture-policy">One capture per tap. AI, voice transcription and 3D generation may incur provider charges. Camera frames are not uploaded until an explicit action.</p>
+ </div>
+</div>
 <div id="profilePanel" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="profileHeading">
  <div class="modal-card profile-card">
   <div class="modal-title profile-fixed-header"><div><p class="eyebrow">PERSONAL SPACE</p><h2 id="profileHeading">Settings</h2></div><button class="round-btn" id="closeProfile" aria-label="Close settings">×</button></div>
@@ -88,7 +104,7 @@
   </div>
   <div class="profile-scroll" id="profileScroll">
    <section id="profileExperience" role="tabpanel" data-profile-view="experience">
-    <p class="profile-account" id="profileSummary"></p>
+    <p class="profile-account" id="profileSummary"></p><label class="profile-avatar-picker" for="profileAvatarInput">PROFILE PICTURE <input type="file" id="profileAvatarInput" accept="image/png,image/jpeg"><span>Square JPEG or PNG · saved to your private profile</span></label>
     <div class="experience-preferences"><p class="eyebrow">XR / PERSONALIZATION</p>
      <label for="pref-mascotMode">MASCOT IN XR<select id="pref-mascotMode"><option value="3d">3D character</option><option value="2d">2D character</option><option value="none">Off</option></select></label>
      <label for="pref-frameHoldSeconds">FRAME DETACH TIMER<select id="pref-frameHoldSeconds"><option value="1.5">1.5 seconds</option><option value="3" selected>3 seconds</option><option value="5">5 seconds</option></select></label>
@@ -132,18 +148,19 @@
 <div id="scanConsent" class="modal hidden"><div class="modal-card"><p class="eyebrow">COST CONFIRMATION</p><h2>Enable periodic scans?</h2><p class="small-muted">One JPEG every 20 seconds can consume a paid Meta Muse API request. This is disabled by default and stops when the page becomes hidden. It counts against FREE LAB's daily request quotas, which are not dollar limits.</p><div class="provider-actions"><button id="cancelScan" class="secondary-btn">Cancel</button><button id="confirmScan" class="primary-btn">Start paid scan</button></div></div></div>
 <div id="changelog" class="modal hidden"><div class="modal-card changelog-card"><div class="modal-title"><div><p class="eyebrow">WHAT'S NEW / DEVELOPMENT LOG</p><h2 id="logTitle">Release notes</h2><p id="logDate" class="small-muted"></p></div><button class="round-btn" id="dismissChangelog" aria-label="Close development log">×</button></div><ul id="logItems"></ul><button class="primary-btn" id="continueChangelog">Start exploring ↗</button></div></div>
 <div id="toast" class="toast hidden" role="status"></div>
-<script src="/assets/sound.js?v=0.10.13" defer></script>
-<script src="/assets/gestures.js?v=0.10.13" defer></script>
-<script src="/assets/strand-geometry.js?v=0.10.13" defer></script>
-<script src="/assets/string-lab.js?v=0.10.13" defer></script>
-<script src="/assets/finger-lab.js?v=0.10.13" defer></script>
-<script src="/assets/frame-lab.js?v=0.10.13" defer></script>
-<script src="/assets/lab-selector.js?v=0.10.13" defer></script>
-<script src="/assets/frame-games.js?v=0.10.13" defer></script>
-<script src="/assets/shape-sort.js?v=0.10.13" defer></script>
-<script src="/assets/rooms.js?v=0.10.13" defer></script>
-<script src="/assets/cloud-tree.js?v=0.10.13" defer></script>
-<script src="/assets/xr-ui.js?v=0.10.13" defer></script>
-<script src="/assets/app.js?v=0.10.13" defer></script><script src="/assets/xr.js?v=0.10.13" defer></script>
-<script src="/assets/scene.mjs?v=0.10.13" type="module"></script>
+<script src="/assets/sound.js?v=0.10.15" defer></script>
+<script src="/assets/gestures.js?v=0.10.15" defer></script>
+<script src="/assets/strand-geometry.js?v=0.10.15" defer></script>
+<script src="/assets/string-lab.js?v=0.10.15" defer></script>
+<script src="/assets/finger-lab.js?v=0.10.15" defer></script>
+<script src="/assets/frame-lab.js?v=0.10.15" defer></script>
+<script src="/assets/lab-selector.js?v=0.10.15" defer></script>
+<script src="/assets/frame-games.js?v=0.10.15" defer></script>
+<script src="/assets/shape-sort.js?v=0.10.15" defer></script>
+<script src="/assets/rooms.js?v=0.10.15" defer></script>
+<script src="/assets/cloud-tree.js?v=0.10.15" defer></script>
+<script src="/assets/xr-ui.js?v=0.10.15" defer></script>
+<script src="/assets/app.js?v=0.10.15" defer></script><script src="/assets/xr.js?v=0.10.15" defer></script>
+<script src="/assets/capture-studio.js?v=0.10.15" defer></script>
+<script src="/assets/scene.mjs?v=0.10.15" type="module"></script>
 </body></html>

@@ -212,6 +212,11 @@ function rebuildTheme(){if(!gl)return;
    c.data.decodedImage||null,String(c.data.provider||'').includes('sam-3.1-mask'));
   for(const t of new Set(c.resources||[]))gl.deleteTexture(t);
   c.front=a.tex;c.back=a.tex;c.resources=[a.tex];
+  if(c.kind==='source'||c.kind==='object'){
+   c.captionNormal=spatialCaptionTexture(c.data.label,c.data.subtitle,false);
+   c.captionActive=spatialCaptionTexture(c.data.label,c.data.subtitle,true);
+   c.resources.push(c.captionNormal,c.captionActive);
+  }
  }
 }
 function cardTexture(imageSrc,labelText,sub='PRIVATE CAPTURE',back=false,onDimensions=null,showExtract=false,readyImage=null,cutout=false){
@@ -229,7 +234,7 @@ function cardTexture(imageSrc,labelText,sub='PRIVATE CAPTURE',back=false,onDimen
    else text(ctx,'◎',fullWidth/2,frameHeight/2+53,102,'#9baea2',250,'center');
    if(showExtract){rrect(ctx,35,30,182,54,24,'#d6f3dc');text(ctx,'✳ EXTRACT',126,66,21,'#213b2b',690,'center');}
    if(cutout&&uiSettings.backgrounds!==false)rrect(ctx,14,h-103,fullWidth-28,102,22,'rgba(29,42,35,.74)');
-   text(ctx,labelText.slice(0,34),28,h-58,27,uiPalette().text,680);text(ctx,sub.slice(0,56),28,h-23,15,uiPalette().muted,540);rrect(ctx,fullWidth-90,h-96,61,61,18,'#283b32');text(ctx,'⛶',fullWidth-59,h-53,41,'#effff2',550,'center');
+   text(ctx,labelText.slice(0,34),28,h-58,27,uiPalette().text,680);text(ctx,sub.slice(0,56),28,h-23,15,uiPalette().muted,540);/* Theater control has no opaque background. */text(ctx,'⛶',fullWidth-59,h-53,41,'#effff2',550,'center');
   }
   if(!back){rrect(ctx,fullWidth-150,27,55,55,26,'#28352f');text(ctx,'···',fullWidth-122,64,31,'#ffffff',630,'center');
    rrect(ctx,fullWidth-84,27,55,55,26,'#28352f');text(ctx,'×',fullWidth-57,68,37,'#ffffff',440,'center');}
@@ -251,11 +256,11 @@ function toolbarTexture(kind){
  const labels={gallery:'LIB',follow:followMode?'PIN':'FOLLOW',debug:'LOG',config:'CONFIG',exit:'EXIT',
  segment:'EXTRACT',describe:'DESCRIBE',refine:'REFINE',prompt:'PROMPT',voice:'VOICE','3d':'3D',branch:'OPEN BRANCH',parent:'PARENT',closemenu:'CLOSE',submit3d:'CONFIRM 3D',cancel3d:'CANCEL'};
  if(context){names.forEach(([id,glyph],idx)=>{const y=16+idx*70,active=pointerHover===id;
-   text(ctx,glyph,42,y+40,32,active?'#ffffff':p.accent,640,'center');
-   text(ctx,labels[id]||id,82,y+40,22,active?'#ffffff':p.accent,650);
+   text(ctx,glyph,42,y+40,32,active?p.accent:p.text,640,'center');
+   text(ctx,labels[id]||id,82,y+40,25,active?p.accent:p.text,675);
  });}else{const step=w/names.length;names.forEach(([id,glyph],idx)=>{const cx=step*(idx+.5),active=pointerHover===id;
-   text(ctx,glyph,cx,52,36,active?'#ffffff':p.accent,660,'center');
-   text(ctx,labels[id]||id,cx,91,18,active?'#ffffff':p.accent,660,'center');
+   text(ctx,glyph,cx,52,36,active?p.accent:p.text,660,'center');
+   text(ctx,labels[id]||id,cx,91,21,active?p.accent:p.text,690,'center');
    if(id==='gallery'&&clouds.length){const count=clouds.filter(q=>q.id>0).length;
     ctx.beginPath();ctx.arc(cx+36,22,18,0,TAU);ctx.fillStyle=p.accent;ctx.fill();
     text(ctx,count>999?'999+':String(count),cx+36,28,count>99?13:16,p.panel2,750,'center');}
@@ -494,12 +499,25 @@ function statusTexture(value){
 }
 function navigationTexture(title){const [c,ctx]=canvas2d(600,175),p=uiPalette();
  ctx.clearRect(0,0,c.width,c.height);ctx.fillStyle=p.accent;ctx.font=`bold 39px ${p.font},system-ui`;ctx.textAlign='center';ctx.fillText(title,300,98);return {tex:texture(c),canvas:c};}
+function spatialCaptionTexture(label,subtitle,active=false){
+ const [canvas,ctx]=canvas2d(600,128);ctx.clearRect(0,0,600,128);
+ ctx.textBaseline='middle';ctx.shadowColor='#050709';ctx.shadowBlur=11;ctx.shadowOffsetY=2;
+ text(ctx,String(label||'IMAGE').slice(0,40),16,51,37,active?'#ff9dc5':'#ffffff',730);
+ text(ctx,String(subtitle||'').slice(0,64),16,98,23,active?'#ffd1e2':'#dee9e5',590);
+ return texture(canvas);
+}
 function addCard(id,kind,data,loc,size){let c;
  const front=kind==='branchpage'?navigationTexture(data.label||'NEXT'):cardTexture(data.image||null,data.label||'',data.subtitle||'',false,(w,h)=>{if(c){c.size=cardDimensions(w,h,kind);c.canvasHeight=h;c.buttonBand=.5-86/h;}},kind==='source'&&data.saved!==false,data.decodedImage||null,kind==='object'&&String(data.provider||'').includes('sam-3.1-mask'));
  const back=cardTexture(null,data.label||'',`FOLDER: ${data.folder||'Unsorted'}. ${data.description||'Object from your personal space'}`,true);
  const initialHeight=front.canvas?.height||420;
  c={id,kind,data,front:front.tex,back:back.tex,resources:[front.tex,back.tex],pos:[...loc],from:[...loc],to:[...loc],start:0,duration:0,scale:1,rot:0,q:[0,0,0,1],visible:true,
-   size:cardDimensions(front.canvas?.width||600,initialHeight,kind),canvasHeight:initialHeight,buttonBand:.5-86/initialHeight,original:[...loc]};cards.push(c);return c;}
+   size:cardDimensions(front.canvas?.width||600,initialHeight,kind),canvasHeight:initialHeight,buttonBand:.5-86/initialHeight,original:[...loc]};
+ if(kind==='source'||kind==='object'){
+   c.captionNormal=spatialCaptionTexture(data.label,data.subtitle,false);
+   c.captionActive=spatialCaptionTexture(data.label,data.subtitle,true);
+   c.resources.push(c.captionNormal,c.captionActive);
+ }
+ cards.push(c);return c;}
 
 // Isolated thumb-string experiment. The active Quest input modality determines when
 // the right controller (toggle) and two tracked thumb-tip joints (simulation) exist.
@@ -924,7 +942,21 @@ function cardBack(c){if(!latestPose||c.kind==='contextbar')return false;
 }
 function drawCard(c,vp){if(!c.visible||!c.front||c.animScale===0)return;const tex=cardBack(c)?c.back:c.front;
  gl.useProgram(program);gl.bindBuffer(gl.ARRAY_BUFFER,quad);const loc=gl.getAttribLocation(program,'aPos'),uv=gl.getAttribLocation(program,'aUV');gl.enableVertexAttribArray(loc);gl.enableVertexAttribArray(uv);gl.vertexAttribPointer(loc,3,gl.FLOAT,false,20,0);gl.vertexAttribPointer(uv,2,gl.FLOAT,false,20,12);
- gl.uniformMatrix4fv(gl.getUniformLocation(program,'uMVP'),false,matmul(vp,cardModel(c)));gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);gl.uniform1i(gl.getUniformLocation(program,'uTex'),0);gl.uniform1i(gl.getUniformLocation(program,'uFlip'),cardBack(c)?1:0);gl.uniform1f(gl.getUniformLocation(program,'uOpacity'),c.alpha===undefined?1:clamp(c.alpha,0,1));gl.drawArrays(gl.TRIANGLES,0,6);}
+ gl.uniformMatrix4fv(gl.getUniformLocation(program,'uMVP'),false,matmul(vp,cardModel(c)));gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);gl.uniform1i(gl.getUniformLocation(program,'uTex'),0);gl.uniform1i(gl.getUniformLocation(program,'uFlip'),cardBack(c)?1:0);gl.uniform1f(gl.getUniformLocation(program,'uOpacity'),c.alpha===undefined?1:clamp(c.alpha,0,1));gl.drawArrays(gl.TRIANGLES,0,6);
+ // Caption is independent of card image scale. A distance-compensated billboard
+ // maintains nearly the same visual font size close to and far from the head.
+ if((c.kind==='source'||c.kind==='object')&&c.captionNormal&&latestPose){
+  const parent=matmul(baseFor(c),matmul(translate(...rootPos(c)),quatMatrix(c.q||quatY(c.rot||0))));
+  const h=latestPose.transform.matrix,eye=[h[12],h[13],h[14]];
+  const dist=length(vsub(eye,[parent[12],parent[13],parent[14]]));
+  const factor=clamp(dist/1.25,.075,6.5),w=.29*factor,hh=.062*factor;
+  const captionModel=matmul(parent,matmul(translate(0,-c.size[1]*c.scale*(c.animScale===undefined?1:c.animScale)*.5-hh*.55,.035),scale(w,hh,1)));
+  gl.uniformMatrix4fv(gl.getUniformLocation(program,'uMVP'),false,matmul(vp,captionModel));
+  gl.bindTexture(gl.TEXTURE_2D,selected===c?c.captionActive:c.captionNormal);
+  gl.uniform1i(gl.getUniformLocation(program,'uFlip'),0);gl.uniform1f(gl.getUniformLocation(program,'uOpacity'),1);
+  gl.drawArrays(gl.TRIANGLES,0,6);
+ }
+}
 function line(vp,vertices,color,points=false,size=6){if(!vertices.length)return;gl.useProgram(lineProgram);gl.bindBuffer(gl.ARRAY_BUFFER,rayBuffer);const loc=gl.getAttribLocation(lineProgram,'aPos');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,3,gl.FLOAT,false,0,0);gl.uniformMatrix4fv(gl.getUniformLocation(lineProgram,'uVP'),false,vp);gl.uniform4fv(gl.getUniformLocation(lineProgram,'uColor'),color);gl.uniform1i(gl.getUniformLocation(lineProgram,'uPoint'),points?1:0);gl.uniform1f(gl.getUniformLocation(lineProgram,'uSize'),size);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices.flat()),gl.DYNAMIC_DRAW);gl.drawArrays(points?gl.POINTS:gl.LINES,0,vertices.length);}
 function decoration(vp){if(!cloud||cloud.collapsed||cloud.hidden)return;const focus=cards.find(c=>c.id==='item'+branchFocusId);const core=focus?point(root,rootPos(focus)):point(root,vadd([0,0,0],cloud.offset||[0,0,0]));const lines=[];
  for(const c of cards.filter(x=>x.kind==='object'&&x.visible&&x.animScale!==0)){const target=point(root,rootPos(c)),ctrl=vadd(vmul(vadd(core,target),.5),[0,.18,.05]),curve=[];for(let i=0;i<=12;i++){const t=i/12,u=1-t;curve.push(vadd(vadd(vmul(core,u*u),vmul(ctrl,2*t*u)),vmul(target,t*t)));}for(let i=1;i<curve.length;i++)lines.push(curve[i-1],curve[i]);}

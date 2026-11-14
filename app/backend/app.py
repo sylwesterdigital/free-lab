@@ -101,6 +101,35 @@ def login():
     session.clear();session['uid']=u['id']
     return jsonify(user={'id':u['id'],'username':u['username'],'display_name':u['display_name'],'role':u['role']})
 
+@app.get('/api/me/avatar')
+@require_user
+def get_my_avatar():
+    avatar=g.con.execute('SELECT mime,pixels FROM user_avatars WHERE user_id=?',(g.user['id'],)).fetchone()
+    if not avatar:abort(404)
+    response=send_file(io.BytesIO(avatar['pixels']),mimetype=avatar['mime'],max_age=0)
+    response.headers['Cache-Control']='private, no-store'
+    response.headers['X-Content-Type-Options']='nosniff'
+    return response
+
+@app.put('/api/me/avatar')
+@require_user
+def set_my_avatar():
+    raw_data=body().get('image','')
+    if not isinstance(raw_data,str) or len(raw_data)>280000:
+        return jsonify(error='Profile photo must be a small PNG or JPEG'),400
+    match=re.fullmatch(r'data:(image/jpeg|image/png);base64,([A-Za-z0-9+/=]+)',raw_data)
+    if not match:return jsonify(error='Use PNG or JPEG image data'),400
+    try:payload=base64.b64decode(match.group(2),validate=True)
+    except Exception:return jsonify(error='Invalid image encoding'),400
+    mime=match.group(1)
+    if len(payload)>190000 or len(payload)<48 or not ((mime=='image/png' and payload.startswith(b'\x89PNG\r\n\x1a\n')) or
+                                                  (mime=='image/jpeg' and payload.startswith(b'\xff\xd8\xff'))):
+        return jsonify(error='Invalid or oversized profile photo'),400
+    with g.con:g.con.execute('''INSERT INTO user_avatars(user_id,mime,pixels) VALUES(?,?,?)
+      ON CONFLICT(user_id) DO UPDATE SET mime=excluded.mime,pixels=excluded.pixels,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')''',
+      (g.user['id'],mime,payload))
+    return jsonify(ok=True)
+
 @app.post('/api/logout')
 def logout():
     session.clear();return jsonify(ok=True)

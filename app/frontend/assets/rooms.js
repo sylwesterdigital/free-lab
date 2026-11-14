@@ -37,7 +37,7 @@ async function invite(){const profiles=(await req('/rooms/users')).users;const b
 }}
 async function ensureViewer(){
  if(viewer)return viewer;
- if(!viewerLoad)viewerLoad=import('/assets/room-viewer.mjs?v=0.10.13').then(m=>m.createRoomViewer({
+ if(!viewerLoad)viewerLoad=import('/assets/room-viewer.mjs?v=0.10.15').then(m=>m.createRoomViewer({
   canvas:$('roomCanvas'),inspector:$('roomInspector'),viewer:$('roomViewer'),
   status:$('roomState'),count:$('roomImageCount'),back:()=>leave(),
  })).catch(e=>{viewerLoad=null;throw e;});

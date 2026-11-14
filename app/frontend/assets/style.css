@@ -184,3 +184,90 @@
 .room-inspector.hidden,.room-image-lightbox.hidden{display:none!important}.room-inspect-top{display:flex;justify-content:space-between;align-items:center;gap:15px;color:#a9d8c1;font:650 10px system-ui;letter-spacing:.19em}.room-inspect-top button{font-size:24px!important;padding:2px 10px!important;min-height:30px}
 .room-inspector h3{font-size:23px;font-weight:680;letter-spacing:-.025em;color:#ebf6ef;line-height:1.25;margin:0;overflow-wrap:anywhere}.room-inspect-picture{border:0!important;padding:0!important;background:#091512!important;display:grid;place-items:center;flex:0 0 auto;min-height:180px;max-height:42vh;overflow:hidden;border-radius:12px!important}.room-inspect-picture img{max-width:100%;max-height:40vh;object-fit:contain;display:block}.room-inspect-desc{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.62;font-size:13px;color:#d6e6dd;margin:0}.room-inspect-meta{font-size:11px;color:#8ca799;margin:0}.room-inspect-relatives{display:flex;gap:7px;flex-wrap:wrap;border-top:1px solid #96ab9d32;padding-top:14px}.room-inspect-relatives button{font-size:11px!important;padding:8px 11px!important}.room-inspect-focus{margin-top:auto;align-self:flex-start}.room-image-lightbox{position:absolute;inset:0;background:#030908f7;z-index:12;display:grid;place-items:center;padding:55px}.room-image-lightbox img{max-width:100%;max-height:100%;object-fit:contain}.room-image-lightbox>button{position:absolute;top:18px;right:20px;background:#213a32!important;color:#fff!important;border-radius:30px!important;font-size:32px!important;z-index:2}
 @media(max-width:760px){.room-hud{padding:12px;align-items:flex-start}.room-eyebrow{font-size:8px}.room-state-line{font-size:11px;gap:5px}.room-hud-actions button{padding:7px 9px!important;font-size:10px!important}.room-hud-actions{max-width:53vw}.room-guide{left:10px;right:10px;transform:none;white-space:normal;bottom:9px;text-align:center;font-size:8px;padding:8px}.room-inspector{right:9px;top:115px;bottom:42px;width:min(350px,calc(100vw - 18px));padding:13px;gap:9px}}
+
+/* 0.10.15 — cohesive UMI-like masthead, large accessible controls, subtle accents. */
+.brand-word{font-size:clamp(25px,2.8vw,35px);font-weight:850;letter-spacing:-.067em;background:linear-gradient(110deg,#c5b7f3 4%,#ebbdc2 28%,#b7f5d6 52%,#f6c1ba 77%,#c5b7f3 96%);background-size:260% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:freelabPastel 12s ease-in-out infinite}
+@keyframes freelabPastel{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+.brand-version{font-size:clamp(13px,1vw,16px);font-weight:500;letter-spacing:.05em;color:#aeb6ba;margin-left:18px}
+@media(min-width:850px){.brand-logo{display:none!important}.brand{gap:8px!important}}
+@media(prefers-reduced-motion:reduce){.brand-word{animation:none!important}}
+.nav-avatar{overflow:hidden;display:grid!important;place-items:center!important;min-width:43px!important;width:43px!important;height:43px!important;border-radius:50%!important;font-size:14px!important;font-weight:750!important;background:#293b34!important;color:#fff!important;border:1px solid #a6c3b580!important}
+.nav-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.profile-avatar-picker{display:flex!important;flex-direction:column;align-items:flex-start;gap:7px;font-size:13px!important;color:#eef6f3;padding:15px;border:1px solid #ffffff32;border-radius:14px;margin:12px 0}
+.profile-avatar-picker input{font-size:13px!important;width:100%;padding:8px!important}.profile-avatar-picker span{color:#bccbc3;font-size:12px}
+.footer{font-size:clamp(12px,.9vw,14px)!important;letter-spacing:.02em!important;flex-wrap:wrap}
+.footer a{color:#f0f6f1;text-decoration:none;font-weight:650}.footer a:hover,.footer a:focus-visible{color:#ff99c5}
+.footer-github{display:inline-flex;align-items:center;gap:7px}.footer .link-btn{color:#f7f7f7;font-size:13px}
+@media(max-width:650px){.brand-version{display:none}.brand-word{font-size:22px}.header{gap:8px}.footer{gap:15px}}
+/* Larger type, including headset browser surfaces with low effective resolution. */
+.feature-seed{font-size:clamp(13px,1.04vw,16px)!important;min-height:88px}.feature-seed .seed-icon{font-size:clamp(29px,3vw,37px)}
+.header-right .nav-pill{font-size:clamp(13px,1vw,16px)!important;min-height:42px}
+@media(max-width:680px){.feature-seed{font-size:13px!important;min-height:71px!important}}
+/* True viewport 3D canvas and fixed-size screen-space textual card captions.
+ * DOM transforms track projection; label font sizes never change with distance. */
+#roomViewer{isolation:isolate}
+#roomLabels{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden}
+.room-world-label{position:absolute;left:0;top:0;display:flex;flex-direction:column;gap:4px;min-width:110px;max-width:min(230px,25vw);padding:7px 11px 8px;border-radius:9px;background:rgba(12,20,24,.66);border-left:2px solid #a6dcce;box-shadow:0 3px 16px #0008;backdrop-filter:blur(9px);color:#fff;will-change:transform;font-family:system-ui,sans-serif;line-height:1.25;text-align:left}
+.room-world-label strong{font-size:clamp(13px,1.1vw,16px);font-weight:730;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.room-world-label span{font-size:clamp(11px,.83vw,13px);line-height:1.35;color:#d6e4df;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.room-world-label.selected{border-color:#ff95c2;background:rgba(25,20,33,.85)}
+.room-world-label.selected strong{color:#ff95c2}
+.room-inspect-picture{position:relative!important;padding:0!important;border:0!important;background:transparent!important;overflow:hidden;display:grid;place-items:center;min-height:180px;max-height:42vh}
+.room-inspect-picture img{max-width:100%;max-height:40vh;object-fit:contain}
+.room-inspector .room-theater-button{position:absolute!important;right:4px;top:4px;border:0!important;background:transparent!important;box-shadow:none!important;color:white!important;font-size:31px!important;padding:2px 9px!important;text-shadow:0 1px 8px #000!important}
+.room-inspector .room-theater-button:hover{background:transparent!important;color:#ff99c5!important}
+.room-hud-actions button{font-size:clamp(13px,1vw,16px)!important;min-height:45px}
+.room-eyebrow,.room-state-line strong,#roomFPS{font-size:clamp(13px,1vw,16px)!important}
+#roomFPS{font-variant-numeric:tabular-nums;color:#b8d2c6}
+.room-inspector h3{font-size:clamp(21px,2vw,27px)}
+.room-inspect-desc{font-size:clamp(14px,1.1vw,17px);line-height:1.55}
+.room-inspector .room-inspect-focus{font-size:14px!important}
+@media(max-width:760px){.room-world-label{max-width:170px;padding:5px 7px}.room-world-label strong{font-size:12px}.room-world-label span{font-size:11px}.room-hud{gap:10px}.room-hud-actions button{font-size:12px!important;min-height:35px!important}}
+/* 0.10.15 mobile-first camera studio: full camera surface, bottom shutter,
+ * recursive source dandelions and XR-parity actions. Legacy controls stay in details. */
+#cameraPanel.camera-panel{position:fixed!important;inset:0!important;z-index:100!important;width:100vw!important;max-width:none!important;height:100dvh!important;max-height:none!important;border-radius:0!important;background:#0d1116!important;overflow-y:auto!important;overscroll-behavior:contain!important;padding:0!important}
+.capture-shell{min-height:100dvh;max-width:980px;margin:auto;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}
+.capture-topbar{position:relative;display:flex;justify-content:space-between;gap:12px;align-items:center;padding:15px 20px;z-index:2}
+.capture-topbar .eyebrow{margin:0 0 5px;font-size:clamp(11px,1vw,13px);color:#b9c4ca}.capture-topbar strong{font-size:15px;color:white;line-height:1.4}
+.capture-top-actions{display:flex;gap:9px;align-items:center}.capture-top-actions>button{border:1px solid #ffffff46;background:#1c262b;color:white;padding:10px 14px;border-radius:15px;font-size:14px;min-height:43px}
+.capture-top-actions .round-btn{width:43px;height:43px;font-size:28px}
+#cameraPanel .capture-viewport{position:relative!important;flex:0 0 auto!important;margin:0 auto!important;width:calc(100% - 30px)!important;height:auto!important;aspect-ratio:4/5!important;max-height:min(63dvh,720px)!important;border-radius:22px!important;overflow:hidden!important;background:radial-gradient(circle at 50% 50%,#2c383c,#13191e)!important;display:grid;place-items:center}
+.capture-viewport video,.capture-viewport>img,.capture-viewport>.sam-overlay{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;object-fit:contain!important;max-width:100%;max-height:100%}
+.capture-viewport video{object-fit:cover!important}.capture-viewport-hint{position:absolute;left:15px;right:15px;top:15px;z-index:2;font-size:12px;letter-spacing:.11em;color:#fff;text-shadow:0 2px 9px #000;text-align:center;pointer-events:none}
+.capture-rail{display:flex;align-items:center;justify-content:space-around;padding:17px 18px 18px;gap:20px}
+.capture-rail button{font-size:28px;color:white;background:none;border:0;min-width:70px;min-height:70px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.capture-rail button span:not(.capture-shutter span){font-size:12px;letter-spacing:.035em;color:#d8e3e3}
+.capture-rail .capture-shutter{border-radius:50%;width:82px;height:82px;min-width:82px;min-height:82px;border:4px solid white;box-shadow:0 0 0 4px #ffffff2a;transition:transform .13s,box-shadow .15s}
+.capture-rail .capture-shutter:active{transform:scale(.90)}
+.capture-rail .capture-shutter span{width:62px;height:62px;border-radius:50%;background:#fff;display:block}
+.capture-workbench{display:flex;flex-direction:column;gap:15px;padding:22px 18px 26px;border-top:1px solid #ffffff22;background:linear-gradient(160deg,#171e23,#0e1216)}
+.capture-workbench.minimized .capture-tree,.capture-workbench.minimized .capture-selection{display:none!important}
+.capture-workbench-head,.capture-selection-heading{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.capture-workbench h2{margin:5px 0 0;font-size:24px;letter-spacing:-.035em;color:#fff}
+.capture-workbench-head>.capture-workbench-head,.capture-workbench-head>button{background:transparent;color:#fff;border:1px solid #ffffff38;border-radius:12px;padding:10px 14px;font-size:14px}
+.capture-tree{display:flex;flex-direction:column;gap:18px}.capture-tree-empty{padding:28px;color:#cbd7d3;border:1px dashed #ffffff45;border-radius:15px;font-size:14px}
+.capture-cloud{padding:15px;background:#1c282e;border:1px solid #ffffff1a;border-radius:20px}.capture-cloud-head{font-size:11px;font-weight:760;letter-spacing:.15em;color:#afc8c8;margin-bottom:10px}
+.capture-branches{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px;padding-top:10px;margin-left:18px;border-left:2px solid #bad4cb3d;padding-left:12px}
+.capture-node{position:relative;display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:7px!important;text-align:left;background:#111a1e!important;color:#fff!important;border:1px solid #ffffff25!important;border-radius:13px!important;overflow:hidden;padding:5px!important;min-height:0!important}
+.capture-node.selected{border-color:#ff9dc5!important;box-shadow:0 0 0 1px #ff9dc577!important}
+.capture-node:hover,.capture-node:focus-visible{color:#ff9dc5!important;border-color:#ff9dc5!important}
+.capture-node>img{width:100%;height:120px;object-fit:contain;background:#0a1116;border-radius:8px}
+.capture-node-copy{display:flex;flex-direction:column;gap:5px;padding:7px 8px 9px;max-width:100%}
+.capture-node-copy strong{font-size:clamp(13px,1.1vw,16px);line-height:1.2;overflow-wrap:anywhere}
+.capture-node-copy small{font-size:12px;line-height:1.5;color:#b4c6c2;max-height:3.1em;overflow:hidden}
+.capture-cloud>.capture-node{flex-direction:row!important;align-items:center!important;max-width:420px}
+.capture-cloud>.capture-node>img{width:110px;height:95px}
+.capture-selection{padding:17px;background:#202b31;border:1px solid #ffffff29;border-radius:16px;display:flex;flex-direction:column;gap:13px}
+.capture-selection-heading strong{font-size:20px;color:white}.capture-selection-heading span{font-size:11px;letter-spacing:.12em;color:#f1b9ce}
+.capture-selection>p{font-size:14px;color:#e0e9e6;line-height:1.55;margin:0}
+.capture-selected-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.capture-selected-actions button,.capture-refine-row button{background:#141d23;border:1px solid #ffffff3b;color:#f7f9fa;padding:14px 5px;min-height:50px;border-radius:12px;font-size:clamp(12px,1vw,15px);font-weight:700;letter-spacing:.01em}
+.capture-selected-actions button:hover,.capture-selected-actions button:focus-visible,.capture-refine-row button:hover{color:#ff99c5;border-color:#ff99c5;background:#24212a}
+.capture-refine-row{display:flex;gap:8px}.capture-refine-row input{flex:1;min-width:0;border:1px solid #ffffff44;background:#0c1519;color:#fff;border-radius:12px;padding:12px;font-size:16px}.capture-refine-row button{padding:9px 12px}
+.capture-description-result{white-space:pre-wrap;color:#edf7f3;padding:16px;border-radius:10px;border-left:2px solid #ff99c5;font-size:15px;line-height:1.65;background:#0c1418}
+.capture-advanced{margin:0 18px 20px;border:1px solid #ffffff30;border-radius:14px;padding:13px 15px;color:#fff}.capture-advanced summary{cursor:pointer;font-size:14px;font-weight:650}
+.capture-advanced .camera-actions,.capture-advanced .manual-entry,.capture-advanced .sam-row,.capture-advanced .scan-row{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px}
+.capture-diagnostics,.capture-policy{margin:0 18px 15px;font-size:13px;line-height:1.65;color:#bfcbd1}
+.capture-policy{font-size:12px;color:#9cabb0}
+@media(min-width:850px){#cameraPanel .capture-viewport{aspect-ratio:16/9!important;max-height:52dvh!important}.capture-shell{max-width:1000px}.capture-rail{max-width:600px;width:100%;margin:0 auto}}
+@media(max-width:620px){.capture-rail{padding:12px 12px 17px}.capture-rail .capture-shutter{width:74px;height:74px;min-width:74px;min-height:74px}.capture-rail .capture-shutter span{width:55px;height:55px}.capture-selected-actions{grid-template-columns:repeat(3,minmax(0,1fr))}.capture-branches{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.capture-node>img{height:105px}.capture-refine-row{flex-direction:column}.capture-topbar{padding:12px}.capture-topbar strong{font-size:13px}}

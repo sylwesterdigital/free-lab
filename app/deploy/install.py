@@ -49,7 +49,10 @@ server {
        proxy_read_timeout 50s;
        client_max_body_size 4500k;
     }
-    location = /assets/scene.mjs {
+    # Ubuntu nginx mime.types may not define .mjs. Browsers refuse octet-stream
+    # as an ES module. Apply this MIME override to every present/future .mjs.
+    location ~ \.mjs$ {
+       types { application/javascript mjs; }
        default_type application/javascript;
        try_files $uri =404;
     }
@@ -112,6 +115,32 @@ def switch(target):
     if temp.is_symlink() or temp.exists():temp.unlink()
     temp.symlink_to(target)
     os.replace(temp,CURRENT)
+
+def verify_local_es_modules():
+    """Fail/rollback an installation if nginx serves ES modules as octet-stream.
+
+    Authenticated TLS connects only to the local reverse proxy; no public DNS,
+    third-party service, or credentials are involved.
+    """
+    import socket,ssl
+    for asset in ('scene.mjs','room-viewer.mjs'):
+        with socket.create_connection(('127.0.0.1',443),timeout=9) as tcp:
+            with ssl.create_default_context().wrap_socket(tcp,server_hostname='free-lab.cam') as tls:
+                tls.settimeout(9)
+                tls.sendall((f'GET /assets/{asset} HTTP/1.1\r\nHost: free-lab.cam\r\n'
+                             'Connection: close\r\nCache-Control: no-cache\r\n\r\n').encode('ascii'))
+                lines=tls.makefile('rb')
+                status=lines.readline(600).decode('latin-1','replace')
+                headers={}
+                while True:
+                    line=lines.readline(4096)
+                    if line in (b'\r\n',b'\n',b''):break
+                    if b':' in line:
+                        key,value=line.split(b':',1)
+                        headers[key.decode('latin-1').strip().lower()]=value.decode('latin-1').strip()
+                mime=headers.get('content-type','').split(';',1)[0].lower()
+                if ' 200 ' not in status or mime not in ('application/javascript','text/javascript'):
+                    raise RuntimeError(f'ES module /assets/{asset} invalid: {status.strip()}, Content-Type={mime}')
 
 def probe_local_health(port):
     """Probe the loopback API directly, bypassing configured HTTP proxies."""
@@ -263,6 +292,7 @@ def install(stage,version):
         run('systemctl','restart','free-lab')
         wait_health(version)
         run('systemctl','reload','nginx')
+        verify_local_es_modules()
         print('DEPLOYED '+version)
         print('SERVER UNIT TESTS + LOCAL HEALTH PASSED')
         print('PUBLIC URL https://free-lab.cam/')

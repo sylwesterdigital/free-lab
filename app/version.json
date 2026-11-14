@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.13",
-  "description": "Immersive 3D desktop rooms with spatial image exploration"
+  "version": "0.10.15",
+  "description": "Desktop room MIME fix, responsive spatial captions and mobile capture studio"
 }

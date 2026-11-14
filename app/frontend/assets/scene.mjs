@@ -50,7 +50,12 @@ if(canvas&&stage){
   // Elliptical floating contour: toy-scale visual depth cue, not a fake room scan.
   const loop=new THREE.Mesh(new THREE.TorusGeometry(2.25,.012,9,110),new THREE.MeshBasicMaterial({color:0x7cff9e,transparent:true,opacity:.23}));loop.rotation.x=1.24;loop.position.set(0,.48,-1.6);scene.add(loop);
   const dust=[];for(let i=0;i<36;i++){const p=new THREE.Mesh(new THREE.SphereGeometry(.009+(i%3)*.003,6,6),new THREE.MeshBasicMaterial({color:0xb2ffbe,transparent:true,opacity:.28+(i%4)*.06}));p.position.set((Math.random()-.5)*9,Math.random()*3+.1,(Math.random()-.5)*5-1);scene.add(p);dust.push(p);}
-  let px=0,py=0;window.addEventListener('pointermove',ev=>{px=(ev.clientX/window.innerWidth-.5)*2;py=(ev.clientY/window.innerHeight-.5)*2;},{passive:true});
+  let px=0,py=0,particleImpulse=0,lastImpulse=0;
+  stage.addEventListener('pointermove',ev=>{
+   const r=stage.getBoundingClientRect();px=((ev.clientX-r.left)/r.width-.5)*2;py=((ev.clientY-r.top)/r.height-.5)*2;
+   const now=performance.now();if(now-lastImpulse>850&&Math.random()<.035){particleImpulse=1;lastImpulse=now;}
+  },{passive:true});
+
   function resize(){const b=stage.getBoundingClientRect();const w=Math.max(320,b.width),h=Math.max(420,b.height);renderer.setSize(w,h,false);camera.aspect=w/h;camera.position.set(w<740?0:0.0,w<740?3.5:3.2,w<740?10.2:8.4);camera.lookAt(0,.7,0);camera.updateProjectionMatrix();}
   new ResizeObserver(resize).observe(stage);resize();
   const t0=performance.now();const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -61,7 +66,10 @@ if(canvas&&stage){
     head.rotation.z=Math.sin(t*1.6)*.07;head.rotation.x=Math.sin(t*1.1)*.04+py*.06;
     earL.rotation.z=.28+Math.sin(t*2.8)*.06;earR.rotation.z=-.28-Math.sin(t*2.7)*.06;
     loop.rotation.z=t*.04;shadow.material.opacity=.65-.1*Math.sin(t*2.1);
-    dust.forEach((p,i)=>{p.position.y+=Math.sin(t*.8+i)*.0009;});
+    particleImpulse*=.968;
+    dust.forEach((p,i)=>{p.position.y+=Math.sin(t*.8+i)*.0009+particleImpulse*.0025;
+      p.position.x+=Math.sin(i*17.1+t*.7)*particleImpulse*.002;
+      p.material.opacity=(.20+(i%4)*.055)*(1+particleImpulse*.60);});
     if(reduced){creature.position.x=0;creature.position.y=.28;creature.rotation.set(0,0,0)}
     renderer.render(scene,camera);
   }requestAnimationFrame(render);

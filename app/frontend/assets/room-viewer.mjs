@@ -55,7 +55,7 @@ function createCard(THREE,roomId,card,onPick){
  outline.position.z=.007;group.add(outline);
  const image=new THREE.Mesh(new THREE.PlaneGeometry(w-.032,h-.032),new THREE.MeshBasicMaterial({color:0xbfcfc9,side:THREE.DoubleSide,transparent:true,depthWrite:false}));
  image.position.z=.012;image.userData.key=identifier(card);group.add(image);
- const title=makeLabel(THREE,card.label||(card.kind==='capture'?'Capture':'Segment'),card.kind==='capture'?'#ffb6d4':'#a3eed1');title.position.set(0,-.31,.026);group.add(title);
+ const title=makeLabel(THREE,card.label||(card.kind==='capture'?'Capture':'Segment'),card.kind==='capture'?'#ffb6d4':'#a3eed1');title.position.set(0,-.31,.026);title.visible=false;group.add(title); // fixed-size captions now live in the HTML overlay
  group.position.set(...card.p);group.userData.key=identifier(card);group.userData.card=card;
  const src='/api/rooms/'+encodeURIComponent(roomId)+'/media/'+card.kind+'/'+card.id;
  const photo=new Image();photo.decoding='async';
@@ -77,6 +77,7 @@ function disposeCard(group){group.traverse(o=>{if(o.geometry)o.geometry.dispose(
 
 export async function createRoomViewer({canvas,inspector,viewer,status,count,back}){
  const T=await loadThree();
+ const labelsLayer=document.getElementById('roomLabels');
  const renderer=new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});
  renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));renderer.outputColorSpace=T.SRGBColorSpace;
  renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.14;
@@ -95,9 +96,11 @@ export async function createRoomViewer({canvas,inspector,viewer,status,count,bac
  const aim=new T.Vector3(0,1.5,0),orbit={yaw:.48,pitch:.22,radius:6.2,vyaw:0,vpitch:0,pan:new T.Vector3()};
  let selected=null,roomId=null,active=false,raf=0,lastFrame=0,mode='orbit',hover=null,pointers=new Map(),dragTravel=0;
  const keys=new Set();const raycaster=new T.Raycaster();const mouse=new T.Vector2();
+ let fpsStart=0,fpsFrames=0,lastFps=0;const screenPoint=new T.Vector3();
  const button=(id,fn)=>{const b=document.getElementById(id);if(b)b.onclick=fn;return b;};
  const $=id=>document.getElementById(id);
- function select(key){selected=key;for(const [k,g] of cards){g.userData.outline.material.color.set(k===key?0xffdc8e:g.userData.card.kind==='capture'?0xffa9d1:0x98dfc2);g.userData.outline.material.opacity=k===key?1:.76;}
+ function select(key){selected=key;
+  for(const label of labelsLayer?.children||[])label.classList.toggle('selected',label.dataset.key===key);for(const [k,g] of cards){g.userData.outline.material.color.set(k===key?0xffdc8e:g.userData.card.kind==='capture'?0xffa9d1:0x98dfc2);g.userData.outline.material.opacity=k===key?1:.76;}
   const node=key&&cards.get(key)?.userData.card;
   if(!node){inspector.classList.add('hidden');return;}
   $('roomInspectTitle').textContent=node.label||'Spatial image';
@@ -120,6 +123,21 @@ export async function createRoomViewer({canvas,inspector,viewer,status,count,bac
  function pick(x,y){const r=canvas.getBoundingClientRect();mouse.set((x-r.left)/r.width*2-1,-(y-r.top)/r.height*2+1);
   raycaster.setFromCamera(mouse,camera);const intersections=raycaster.intersectObjects(hits,false);
   return intersections.length?intersections[0].object.userData.key:null;
+ }
+ function addScreenLabel(key,g){if(!labelsLayer)return;
+  const label=document.createElement('div');label.className='room-world-label';label.dataset.key=key;
+  const heading=document.createElement('strong');heading.textContent=g.userData.card.label||(g.userData.card.kind==='capture'?'Source image':'Segment');
+  const desc=document.createElement('span');desc.textContent=g.userData.card.description||'';
+  label.append(heading,desc);labelsLayer.append(label);g.userData.htmlLabel=label;
+ }
+ function updateScreenLabels(){if(!labelsLayer)return;
+  const bounds=canvas.getBoundingClientRect();if(!bounds.width||!bounds.height)return;
+  for(const g of cards.values()){const el=g.userData.htmlLabel;if(!el)continue;
+   screenPoint.copy(g.position);screenPoint.y-=.37;screenPoint.project(camera);
+   const visible=screenPoint.z<1&&screenPoint.z>-1&&Math.abs(screenPoint.x)<1.20&&Math.abs(screenPoint.y)<1.12;
+   el.style.display=visible?'flex':'none';if(!visible)continue;
+   el.style.transform=`translate3d(${((screenPoint.x+1)*.5*bounds.width).toFixed(1)}px,${((-screenPoint.y+1)*.5*bounds.height).toFixed(1)}px,0) translate(-50%,0)`;
+  }
  }
  function rebuildLinks(){
   for(const [key,o] of [...links]){o.geometry.dispose();o.material.dispose();scene.remove(o);links.delete(key);}
@@ -152,15 +170,16 @@ export async function createRoomViewer({canvas,inspector,viewer,status,count,bac
   const incoming=new Set();let changed=false;
   for(const c of payload.cards){if(!validPoint(c.p)||!['object','capture'].includes(c.kind)||!Number.isInteger(c.id))continue;
    const key=identifier(c);incoming.add(key);let g=cards.get(key);
-   if(!g){g=createCard(T,rid,c);cards.set(key,g);scene.add(g);hits.push(...g.userData.hits);changed=true;}
+   if(!g){g=createCard(T,rid,c);cards.set(key,g);scene.add(g);addScreenLabel(key,g);hits.push(...g.userData.hits);changed=true;}
    g.userData.card=c;g.userData.target=new T.Vector3(...c.p);
+   const label=g.userData.htmlLabel;if(label){label.querySelector('strong').textContent=c.label||(c.kind==='capture'?'Source image':'Segment');label.querySelector('span').textContent=c.description||'';}
    if(newRoom)g.position.copy(g.userData.target);
    if(Array.isArray(c.q)&&c.q.length===4&&c.q.every(Number.isFinite))g.userData.targetQuaternion=new T.Quaternion(...c.q).normalize();
    else g.userData.targetQuaternion=null;
   }
   for(const [key,g] of [...cards])if(!incoming.has(key)){
    hits.splice(hits.indexOf(g.userData.hits[0]),1);hits.splice(hits.indexOf(g.userData.hits[1]),1);
-   scene.remove(g);disposeCard(g);cards.delete(key);changed=true;
+   g.userData.htmlLabel?.remove();scene.remove(g);disposeCard(g);cards.delete(key);changed=true;
   }
   if(changed)rebuildLinks();
   if(selected&&!cards.has(selected))select(null);
@@ -200,7 +219,10 @@ export async function createRoomViewer({canvas,inspector,viewer,status,count,bac
    if(keys.has('d')||keys.has('ArrowRight'))camera.position.addScaledVector(side,speed);
    if(keys.has('q'))camera.position.y-=speed;if(keys.has('e'))camera.position.y+=speed;
   }
-  updateLinks();renderer.render(scene,camera);
+  updateLinks();updateScreenLabels();renderer.render(scene,camera);
+  fpsFrames++;if(!fpsStart)fpsStart=now;
+  if(now-fpsStart>=850){lastFps=Math.round(fpsFrames*1000/(now-fpsStart));text('roomFPS',lastFps+' FPS');fpsFrames=0;fpsStart=now;}
+
  }
  function onDown(e){if(!active)return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,button:e.button});dragTravel=0;canvas.setPointerCapture(e.pointerId);}
  function onMove(e){if(!active)return;const p=pointers.get(e.pointerId);if(!p){const k=pick(e.clientX,e.clientY);canvas.style.cursor=k?'pointer':'grab';return;}

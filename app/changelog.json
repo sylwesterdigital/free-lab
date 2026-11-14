@@ -1,14 +1,10 @@
 {
-  "version": "0.10.13",
-  "title": "Three.js Spatial Rooms \u00b7 v0.10.13",
-  "datetime": "2026-11-13 UTC",
+  "version": "0.10.15",
+  "title": "FREELAB v0.10.15 — Server-layout deployment fix",
+  "datetime": "2026-11-13",
   "changes": [
-    "Replaced the canvas-based room mockup with a fullscreen, continuously rendered Three.js spatial viewer",
-    "Added fluid orbit/zoom with pointer inertia, Fit Scene, and free-flight exploration with WASD, Q/E and Shift",
-    "Spectators see a tracked headset avatar with live head orientation, actual 3D image planes and parent-child branch links",
-    "Click a floating image to inspect the full media, saved description, ancestor or child links, and enlarge it",
-    "The room feed now includes authenticated metadata and headset/card orientations; camera pixels are never streamed",
-    "XR room publishing and desktop state polling run multiple times per second; Three.js rendering is independent of polling",
-    "Room UI and gallery fill the viewport and do not alter the private-by-default invitation model or archive data"
+    "Correct deployment test to work without the repository-root watcher in Ubuntu release directories",
+    "Preserve v0.10.14 desktop room, mobile capture, XR typography and branding improvements",
+    "Keep nginx JavaScript MIME verification and rollback protection for ES modules"
   ]
 }

@@ -10,7 +10,7 @@ from pathlib import Path,PurePosixPath
 
 ROOT=Path(sys.argv[1]).resolve();sys.argv=[sys.argv[0]]+sys.argv[2:]
 UPDATES=ROOT/'updates';UPLOADS=ROOT/'uploads';STATE=ROOT/'.free-lab'
-VERSION='0.9.0';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
+VERSION='0.9.1';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
 REPO='git@github.com:sylwesterdigital/free-lab.git'
 HOST=os.getenv('FREE_LAB_SSH_HOST','root@46.62.232.64')
 PORT=os.getenv('FREE_LAB_SSH_PORT','333')
@@ -83,7 +83,7 @@ def validate(archive,stage):
         if version_tuple(v)<=version_tuple(last_version()):raise BadArchive('Release is not newer than last deployed v'+last_version())
         files=manifest.get('sha256',{})
         required={'app/backend/app.py','app/backend/db.py','app/backend/providers.py','app/deploy/install.py','app/frontend/index.html',
-          'app/frontend/assets/app.js','app/frontend/assets/xr.js','app/frontend/assets/style.css',
+          'app/frontend/assets/app.js','app/frontend/assets/xr.js','app/frontend/assets/style.css','app/frontend/assets/capture-studio.js','app/frontend/assets/room-viewer.mjs',
           'app/frontend/version.json','app/frontend/changelog.json','app/requirements.txt','app/version.json','app/changelog.json','app/README.md'}
         if not isinstance(files,dict) or not required.issubset(files):raise BadArchive('Missing required application files')
         expected=set(files)|{'manifest.json','watch-free-lab.sh'}
@@ -219,7 +219,7 @@ def verify_public(v):
         raise Failure('Public version / API health did not match')
     if f'<meta name="free-lab-version" content="{v}">' not in home:
         raise Failure('Public HTML is not updated')
-    for path,signature in (('assets/xr.js','FREELAB'),('assets/scene.mjs','FREELAB')):
+    for path,signature in (('assets/xr.js','FREELAB'),('assets/scene.mjs','FREELAB'),('assets/room-viewer.mjs','FREELAB')):
         req=urllib.request.Request(URL+path+'?verify='+str(int(time.time())),headers={'Cache-Control':'no-cache','User-Agent':'FreeLabRelease/0.4.1'})
         with urllib.request.urlopen(req,timeout=25) as response:
             mime=response.headers.get('Content-Type','').split(';',1)[0].strip().lower()
