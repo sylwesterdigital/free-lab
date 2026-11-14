@@ -47,7 +47,8 @@ server {
        proxy_set_header X-Forwarded-Proto $scheme;
        proxy_connect_timeout 8s;
        proxy_read_timeout 50s;
-       client_max_body_size 4500k;
+       client_max_body_size 22m;  # 16 MB GLB + base64 for opt-in avatar optimization
+       client_body_timeout 120s;
     }
     # Explicitly type browser ES modules. nginx's stock mime.types on some
     # Ubuntu installations does not map .mjs to JavaScript.

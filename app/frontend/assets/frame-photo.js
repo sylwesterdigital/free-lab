@@ -1,4 +1,4 @@
-/* FREELAB v0.10.24 — pure XR frame/photo geometry. No GPU or camera access here.
+/* FREELAB v0.10.25 — pure XR frame/photo geometry. No GPU or camera access here.
  * A crop projected through an XR eye is an approximation when the video camera
  * is not hardware-calibrated to the viewer; never call it passthrough pixels. */
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;root.FreeLabFramePhoto=api;})(typeof window!=='undefined'?window:globalThis,function(){'use strict';

@@ -1,4 +1,4 @@
-/* FREELAB v0.10.24. Capture is independent from the live camera preview.
+/* FREELAB v0.10.25. Capture is independent from the live camera preview.
  * Source/branch actions call the same authenticated XR API functions. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id),FL=()=>window.FreeLab;
@@ -102,6 +102,17 @@ async function recognize(){const item=selected();if(!await paid('EXTRACT'))retur
  await execute(async()=>{await ensureFrame(item);const result=await FL().recognizeXR(item.cid,item.oid||null,true);expanded=true;await load(chosen);inform('Extracted '+(result.items||[]).length+' segments. Open Library to inspect them.');},'Extracting objects…');}
 async function segment(noun=null){const item=selected();const text=(noun||$('captureRefineText').value||'').trim();if(text.length<2){inform('Name one object to extract, for example chair');return;}if(!await paid('EXTRACT OBJECT'))return;
  await execute(async()=>{await ensureFrame(item);const r=await FL().segmentXR(item.cid,text,item.oid||null,true);expanded=true;$('captureRefineRow').classList.add('hidden');await load(chosen);inform('Created '+(r.items||[]).length+' named cutouts.');},'Extracting named object…');}
+async function generateFromText(instruction=''){
+ const text=String(instruction||'').trim();if(text.length<3){resultPanel('WRITE A PROMPT','Describe the image you want in the composer.',null,null,'info');return;}
+ if(text.length>750){resultPanel('PROMPT TOO LONG','Please keep image-generation prompts within 750 characters.',null,null,'error');return;}
+ if(!await paid('GENERATE IMAGE FROM TEXT','No photograph is required. This creates a new private source image.'))return;
+ await execute(async()=>{
+  resultPanel('CREATING FROM TEXT','Muse Image is generating a new source while you remain in the studio.',null,null,'running');
+  const result=await FL().generateXRImage(text);
+  await load('capture:'+result.capture_id);inspecting=true;render();
+  resultPanel('NEW IMAGE READY','Created a new private source. You can now edit, extract or generate 3D from it.',null,null,'success');
+ },'Generating image from text…');
+}
 async function submitImageEdit(instruction='',refine=false){
  const item=selected(),text=String(instruction||'').trim()||(refine?'Improve image quality, reduce noise, sharpen details and improve lighting.':'');
  if(text.length<3){$('captureCommandText').focus();resultPanel('WRITE AN INSTRUCTION','Enter the image change in the message box, then press Send.',null,null,'info');return;}
@@ -128,7 +139,7 @@ async function describe(query=''){const item=selected();
  resultPanel(result.cached?'Saved description':'Description saved to this image',result.description||'No description returned');
  inform(result.cached?'Loaded saved description':'Description saved');},'Describing selected image…');}
 function promptEditor(voice=false,instruction=''){
- selected();$('captureRefineRow').classList.add('hidden');$('captureCommandMode').value='prompt';
+ $('captureRefineRow').classList.add('hidden');$('captureCommandMode').value='prompt';
  if(instruction)$('captureCommandText').value=instruction;
  $('captureCommandText').focus();resizeComposer();
  if(voice)void recordVoice();
@@ -150,7 +161,7 @@ async function connection3D(){try{const check=await FL().api('/media/3d/check');
  }catch(e){resultPanel('3D connection check failed',e.message);}}
 async function recordVoice(){if(voiceRecorder){const old=voiceRecorder;voiceRecorder=null;
  resultPanel('TRANSCRIBING','Converting voice into text…',null,null,'running');
- try{const wav=await old.stop();const text=await FL().transcribeXR(wav);$('captureCommandText').value=text;resizeComposer();resultPanel('VOICE READY','Transcription placed in the composer. Press Send to use it.',null,null,'success');}
+ try{const wav=await old.stop();const text=await FL().transcribeXR(wav);$('captureCommandText').value=text;resizeComposer();if(!FL().pref('voiceConfirm')){$('captureCommandForm').requestSubmit();resultPanel('VOICE SENT','Your recognized instruction is being submitted.',null,null,'running');}else resultPanel('VOICE READY','Review the recognized text and press Send.',null,null,'success');}
  catch(e){resultPanel('Voice recognition failed',e.message);}return;}
  try{if(!await paid('VOICE TRANSCRIPTION','Audio is processed by the configured transcription provider when recording stops.'))return;
  if(!FL().micReady())await FL().armMicrophone();voiceRecorder=FL().startWavPrompt();
@@ -162,7 +173,7 @@ function theater(){const item=selected();const id=item.type==='object'?item.oid:
 async function activate(id){try{if(id==='inspect')return;if(id==='extract')return recognize();if(id==='describe')return describe();if(id==='segment'){$('captureRefineRow').classList.remove('hidden');return $('captureRefineText').focus();}if(id==='refine')return refineImage();if(id==='prompt')return promptEditor();if(id==='voice')return recordVoice();if(id==='3d')return generate3D();if(id==='check3d')return connection3D();if(id==='download')return FL().downloadImage(imageURL(selected()),label(selected()));if(id==='source')return beginNew();if(id==='import')return $('fileInput').click();if(id==='theater')return theater();}catch(e){inform(e.message);}}
 function beginNew(){const state=FL().getState();requestedCapture=null;chosen=null;inspecting=false;expanded=false;if(state.stream?.getVideoTracks?.().some(t=>t.readyState==='live'&&!t.muted)){FL().resumeCamera();render();}else{$('fileInput').click();} $('captureResult').replaceChildren();$('captureResult').classList.add('hidden');stopJobMonitor();}
 async function chatSubmit(e){e.preventDefault();const mode=$('captureCommandMode').value,text=$('captureCommandText').value.trim();
- try{if(!selected())return;switch(mode){case 'extract':await recognize();break;case 'describe':await describe(text);break;case 'segment':await segment(text);break;case 'refine':await refineImage(text);break;case '3d':await generate3D(text);break;default:await submitImageEdit(text);break;}}catch(error){inform(error.message);} }
+ try{if(!(chosen&&getItem(chosen))){if(mode==='prompt'||mode==='refine')return generateFromText(text);return resultPanel('SELECT A PHOTO','Choose a saved image before using '+mode+'.',null,null,'info');}switch(mode){case 'extract':await recognize();break;case 'describe':await describe(text);break;case 'segment':await segment(text);break;case 'refine':await refineImage(text);break;case '3d':await generate3D(text);break;default:await submitImageEdit(text);break;}}catch(error){inform(error.message);} }
 function setup(){if(!$('captureShutter'))return;
  const legacy=$('captureAdvancedTools'),panel=$('captureMorePanel');if(legacy&&panel)panel.append(legacy);
  $('captureShutter').onclick=()=>execute(saveSource,'Saving source privately…');$('captureNewSource').onclick=beginNew;$('captureUpload').onclick=()=>$('fileInput').click();

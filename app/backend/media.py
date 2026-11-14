@@ -53,6 +53,22 @@ def edit_meta_images(jpegs:list[bytes],prompt:str,key:str):
     if result.get('status') not in ('completed',None):raise RuntimeError('Meta image generation did not complete')
     return _valid_jpeg(extract_image(result)),result.get('usage',{})
 
+def generate_meta_image(prompt:str,key:str):
+    """Text-only Muse Image generation. No camera/source required.
+    User confirmed one paid image request; no web, image search or shell calls.
+    """
+    if not isinstance(prompt,str) or not 3<=len(prompt.strip())<=750:raise ValueError('Prompt must be 3–750 characters')
+    payload={'model':'muse-image-1.0','store':False,'input':prompt.strip(),
+             'tools':[{'type':'image_generation','enable_web_search':False,
+                       'enable_image_search':False,'enable_shell':False,
+                       'reasoning_strength':'low','output_format':'jpeg'}]}
+    response=_request(META+'/responses',json.dumps(payload).encode(),key,'application/json',timeout=115)
+    try:result=json.loads(response)
+    except (ValueError,TypeError) as e:raise RuntimeError('Meta returned a non-JSON image response') from e
+    if result.get('status') not in ('completed',None):raise RuntimeError('Meta image generation did not complete')
+    return _valid_jpeg(extract_image(result)),result.get('usage',{})
+
+
 def edit_meta_image(jpeg:bytes,prompt:str,key:str):
     return edit_meta_images([jpeg],prompt,key)
 

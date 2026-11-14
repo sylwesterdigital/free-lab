@@ -1,4 +1,4 @@
-/* FREELAB v0.10.24: explicit interactive 3D preview; does not start a separate XR context. */
+/* FREELAB v0.10.25: explicit interactive 3D preview; does not start a separate XR context. */
 const $=id=>document.getElementById(id);
 let renderer=null,scene=null,camera=null,root=null,raf=0,active=false,loadingToken=0,drag=null,yaw=.48,pitch=.20,dist=2.8,lastTouchDistance=0;
 let THREE=null,GLTFLoader=null;
@@ -23,8 +23,8 @@ async function geometryFallback(url){const res=await fetch(url,{credentials:'sam
  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geometry.computeVertexNormals();
  return new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0x9ce4ba,roughness:.74,metalness:.08,side:THREE.DoubleSide}));
 }
-async function open(id,avatar=false){const token=++loadingToken;const stage=$('modelStage');stage.classList.remove('hidden');active=true;
- $('modelStageTitle').textContent=avatar?'My 3D avatar':'3D model #'+id;
+async function open(id,avatar=false,localFile=null){const token=++loadingToken;const stage=$('modelStage');stage.classList.remove('hidden');active=true;
+ $('modelStageTitle').textContent=localFile?'Local avatar preview · '+(localFile.size/1_000_000).toFixed(2)+' MB':avatar?'My 3D avatar':'3D model #'+id;
  const dl=$('modelStageDownload');dl.classList.add('hidden');dl.removeAttribute('href');state('Loading 3D model…',true);
  try{await loadThree();if(token!==loadingToken)return;
  const canvas=$('modelStageCanvas');if(!renderer){renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'default',alpha:false});renderer.outputColorSpace=THREE.SRGBColorSpace;
@@ -34,12 +34,14 @@ async function open(id,avatar=false){const token=++loadingToken;const stage=$('m
   resize();if(!raf)frame();
   const rawUrl=avatar?'/api/me/avatar-3d':'/api/media/3d/'+id+'/asset';const fallbackUrl=avatar?'/api/me/avatar-3d/preview':'/api/media/3d/'+id+'/preview';
   // Download the actual authenticated GLB into the viewer. Only if that fails, use a bounded geometry preview.
-  let object;try{if(!GLTFLoader)throw Error('GLTF loader unavailable');const response=await fetch(rawUrl,{credentials:'same-origin'});if(!response.ok)throw Error('GLB unavailable (HTTP '+response.status+')');
-   const raw=await response.arrayBuffer();if(token!==loadingToken)return;
+  let object;try{if(!GLTFLoader)throw Error('GLTF loader unavailable');let raw;
+   if(localFile){raw=await localFile.arrayBuffer();}
+   else{const response=await fetch(rawUrl,{credentials:'same-origin'});if(!response.ok)throw Error('GLB unavailable (HTTP '+response.status+')');raw=await response.arrayBuffer();}
+   if(token!==loadingToken)return;
    const gltf=await new Promise((resolve,reject)=>new GLTFLoader().parse(raw,'',resolve,reject));object=gltf.scene;
-   dl.href=rawUrl;dl.download=avatar?'freelab-avatar.glb':'freelab-model-'+id+'.glb';dl.classList.remove('hidden');
-   state('Full 3D model loaded · drag to rotate');}
-  catch(e){object=await geometryFallback(fallbackUrl);state('Lightweight geometry preview · textures/animation omitted. '+e.message);}
+   if(!localFile){dl.href=rawUrl;dl.download=avatar?'freelab-avatar.glb':'freelab-model-'+id+'.glb';dl.classList.remove('hidden');}
+   state(localFile?(localFile.size>4_000_000?'Local preview only · '+(localFile.size/1_000_000).toFixed(2)+' MB · reduce by '+((localFile.size-4_000_000)/1_000_000).toFixed(2)+' MB before XR use':'Local 3D preview · ready for upload'):'Full 3D model loaded · drag to rotate');}
+  catch(e){if(localFile)throw e;object=await geometryFallback(fallbackUrl);state('Lightweight geometry preview · textures/animation omitted. '+e.message);}
   if(token!==loadingToken)return;fit(object);
  }catch(e){if(token===loadingToken)state('3D preview unavailable: '+e.message);}
  finally{if(token===loadingToken)$('modelStageStatus')?.classList.remove('working');}
@@ -53,4 +55,4 @@ const cv=$('modelStageCanvas');if(cv){cv.addEventListener('pointerdown',e=>{drag
   if(lastTouchDistance)dist=Math.max(1.3,Math.min(11,dist*(lastTouchDistance/d)));lastTouchDistance=d;},{passive:true});
  cv.addEventListener('touchend',()=>{lastTouchDistance=0;});}
 $('modelStageClose')?.addEventListener('click',close);window.addEventListener('keydown',e=>{if(e.key==='Escape'&&active)close();});window.addEventListener('resize',resize);
-window.FreeLabModelStage={open,close};
+window.FreeLabModelStage={open,openLocal:file=>open(null,false,file),close};

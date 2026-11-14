@@ -23,7 +23,7 @@ let voiceRecord=null,voiceRecordStarted=0,voiceMeterLast=0,cameraHintUntil=0,mes
 let particles=[],handPinch=new WeakMap(),lastNative=new WeakMap(),clickState=new WeakMap(),lastEyeUpdate=0,lastMicUpdate=0,inferenceCard=null,inferenceStarted=0;
 const PW=600,PH=420,MAX_CLOUD=10,TAU=2*Math.PI;
 // One navigation pill. Image-specific actions belong only to the selected card.
-const tools=[['gallery','▣'],['follow','◎'],['debug','≡'],['config','⚙'],['exit','×']];
+const tools=[['gallery','▣'],['createimage','✎'],['follow','◎'],['debug','≡'],['config','⚙'],['exit','×']];
 // A context menu only exists after clicking the image's ···, never in parallel by default.
 const sourceTools=[['describe','☷'],['segment','✳'],['refine','✦'],['prompt','✎'],['voice','🎤'],['3d','⬡'],['closemenu','×']];
 const objectTools=[['describe','☷'],['segment','✳'],['refine','✦'],['prompt','✎'],['voice','🎤'],['3d','⬡'],['closemenu','×']];
@@ -158,21 +158,21 @@ function drawMascot3D(vp,t){if(!mascotPointer?.visible||mascotMode()!=='3d'||!ma
 // It is not a fixed-width, cropped HEARD notification.
 function voiceIndicatorTexture(t){
  const processing=voicePhase==='processing';
- const message=processing?'·  ·  ·':voiceMessage;
+ const message=voicePhase==='listening'?'LISTENING · TAP MIC TO STOP':processing?'TRANSCRIBING…':voiceMessage;
  const words=String(message||'').slice(0,600).split(/\s+/);
- const probe=canvas2d(16,16)[1];probe.font='bold 43px system-ui';
+ const probe=canvas2d(16,16)[1];probe.font='bold 64px system-ui';
  const lines=[];let current='';const maxWidth=980;
  for(const word of words){const maybe=current?current+' '+word:word;
   if(probe.measureText(maybe).width>maxWidth&&current){lines.push(current);current=word;}else current=maybe;
  }
  if(current)lines.push(current);
- const w=1024,h=Math.max(54,18+lines.length*34);
+ const w=1024,h=Math.max(96,18+lines.length*76);
  const [c,ctx]=canvas2d(w,h);ctx.clearRect(0,0,w,h);
- ctx.font='bold 23px system-ui';ctx.textBaseline='middle';ctx.textAlign='center';
+ ctx.font='bold 62px system-ui';ctx.textBaseline='middle';ctx.textAlign='center';
  for(let i=0;i<lines.length;i++){
-  ctx.strokeStyle='#080b08';ctx.lineWidth=5;ctx.lineJoin='round';
-  ctx.strokeText(lines[i],w/2,27+i*34);
-  ctx.fillStyle='#ffe64b';ctx.fillText(lines[i],w/2,27+i*34);
+  ctx.strokeStyle='#080b08';ctx.lineWidth=10;ctx.lineJoin='round';
+  ctx.strokeText(lines[i],w/2,51+i*76);
+  ctx.fillStyle='#ffe64b';ctx.fillText(lines[i],w/2,51+i*76);
  }
  return {tex:texture(c),aspect:h/w};
 }
@@ -181,14 +181,14 @@ function setVoicePhase(type,message,ms=7500){
  if(voiceBadge?.front&&gl)gl.deleteTexture(voiceBadge.front);voiceBadge=null;
 }
 function tickVoiceIndicator(t,pose){
- if(voicePhase==='idle'||voicePhase==='listening')return;
+ if(voicePhase==='idle')return;
  if(!voiceBadge&&voiceUntil>t){const v=voiceIndicatorTexture(t);
-  voiceBadge={id:'voice-status',kind:'status',pos:[0,0,0],q:[0,0,0,1],size:[.22,.22*v.aspect],scale:1,visible:true,front:v.tex,back:v.tex};}
+  voiceBadge={id:'voice-status',kind:'status',pos:[0,0,0],q:[0,0,0,1],size:[.93,.93*v.aspect],scale:1,visible:true,front:v.tex,back:v.tex};}
  if(!voiceBadge)return;
  if(voiceUntil<t){if(gl)gl.deleteTexture(voiceBadge.front);voiceBadge=null;voicePhase='idle';return;}
  if(voicePhase==='processing'&&t%480<38){const v=voiceIndicatorTexture(t);
   gl.deleteTexture(voiceBadge.front);voiceBadge.front=v.tex;voiceBadge.back=v.tex;}
- const anchor=point(poseForwardAnchor(pose,.89,-.12),[0,0,0]);
+ const anchor=point(poseForwardAnchor(pose,.86,voicePhase==='listening'?- .23:-.25),[0,0,0]);
  voiceBadge.pos=blend(voiceBadge.pos,anchor,.22);voiceBadge.q=quatY(cameraYaw(pose));
 }
 function uiPalette(){return window.FreeLabXRUI?.palette?.(uiSettings)||{panel:'#343d38',panel2:'#26332d',text:'#f0f9f1',muted:'#b8cfc0',accent:'#ff91b5',edge:'#92b8a2',bottom:'#14251c',font:'system-ui'};}
@@ -258,7 +258,7 @@ function toolbarTexture(kind){
  const context=kind==='context',names=context?(meshConfirm?[['submit3d','⬡'],['cancel3d','×']]:imageTools()):tools;
  const w=context?300:620,h=context?names.length*70+24:112,p=uiPalette(),[c,ctx]=canvas2d(w,h);
  panelSkin(ctx,w,h,context?27:47);
- const labels={gallery:'LIB',follow:followMode?'PIN':'FOLLOW',debug:'LOG',config:'CONFIG',exit:'EXIT',
+ const labels={createimage:'CREATE',gallery:'LIB',follow:followMode?'PIN':'FOLLOW',debug:'LOG',config:'CONFIG',exit:'EXIT',
  segment:'EXTRACT',describe:'DESCRIBE',refine:'REFINE',prompt:'PROMPT',voice:'VOICE','3d':'3D',branch:'OPEN BRANCH',parent:'PARENT',closemenu:'CLOSE',submit3d:'CONFIRM 3D',cancel3d:'CANCEL'};
  if(context){names.forEach(([id,glyph],idx)=>{const y=16+idx*70,active=pointerHover===id;
    text(ctx,glyph,42,y+40,32,active?p.accent:p.text,640,'center');
@@ -395,14 +395,14 @@ function syncRoundels(pose){
  if(!captureEye)return;
  const yaw=cameraYaw(pose),frame=rotateY(yaw);
  const offset=(x,y,z)=>point(frame,[x,y,z],0);
- if(voiceButton){voiceButton.visible=voicePhase!=='processing';voiceButton.pos=vadd(captureEye.pos,offset(-.163,0,0));voiceButton.q=quatY(yaw);}
+ if(voiceButton){voiceButton.visible=voicePhase!=='processing';voiceButton.pos=voicePhase==='listening'?point(poseForwardAnchor(pose,.85,-.075),[0,0,0]):vadd(captureEye.pos,offset(-.163,0,0));voiceButton.q=quatY(yaw);}
  if(extractButton){
   // The right roundel is a permanent part of the three-button spatial group.
   // When no source is selected it is dimmed, NEVER replaced by camera pixels.
   extractButton.visible=voicePhase!=='listening'&&voicePhase!=='processing';const active=extractionAvailable();
   if(active!==extractVisualActive){extractVisualActive=active;if(gl)refreshRoundel(extractButton,'extract');}
   extractButton.pos=vadd(captureEye.pos,offset(.163,0,0));extractButton.q=quatY(yaw);}
- if(voicePending){const center=point(poseForwardAnchor(pose,.92,-.30),[0,0,0]);
+ if(voicePending){const center=point(poseForwardAnchor(pose,.88,-.39),[0,0,0]);
   if(voiceOk){voiceOk.pos=vadd(center,offset(-.087,0,0));voiceOk.q=quatY(yaw);}
   if(voiceCancel){voiceCancel.pos=vadd(center,offset(.087,0,0));voiceCancel.q=quatY(yaw);}
  }
@@ -668,7 +668,7 @@ function experimentalMenuTexture(index){
   }else if(mode==='five'){for(let k=-2;k<=2;k++){ctx.beginPath();ctx.moveTo(x-22,39+k*7);ctx.lineTo(x+22,39+k*7);ctx.stroke();}}
   else if(mode==='thumbs'){ctx.beginPath();ctx.moveTo(x-24,30);ctx.lineTo(x+24,30);ctx.moveTo(x-24,46);ctx.lineTo(x+24,46);ctx.stroke();}
   else {ctx.beginPath();ctx.moveTo(x-16,24);ctx.lineTo(x+16,56);ctx.moveTo(x+16,24);ctx.lineTo(x-16,56);ctx.stroke();}
-  ctx.font=active?'700 21px system-ui':'600 19px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font=active?'700 27px system-ui':'600 25px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText(({frames:'FRAME',sort:'SHAPES',chain:'CHAIN',cubes:'CUBES',throw:'THROW',five:'5 NOTE',thumbs:'THUMBS',off:'OFF'})[mode],x,95);
  }
  return texture(c);
@@ -1019,7 +1019,7 @@ function drawCard(c,vp){if(!c.visible||!c.front||c.animScale===0)return;const te
   const parent=matmul(baseFor(c),matmul(translate(...rootPos(c)),quatMatrix(c.q||quatY(c.rot||0))));
   const h=latestPose.transform.matrix,eye=[h[12],h[13],h[14]];
   const dist=length(vsub(eye,[parent[12],parent[13],parent[14]]));
-  const factor=clamp(dist/1.25,.075,6.5),w=.29*factor,hh=.062*factor;
+  const factor=clamp(dist/1.25,.075,6.5),w=.377*factor,hh=.081*factor;
   const captionModel=matmul(parent,matmul(translate(0,-c.size[1]*c.scale*(c.animScale===undefined?1:c.animScale)*.5-hh*.55,.035),scale(w,hh,1)));
   gl.uniformMatrix4fv(gl.getUniformLocation(program,'uMVP'),false,matmul(vp,captionModel));
   gl.bindTexture(gl.TEXTURE_2D,selected===c?c.captionActive:c.captionNormal);
@@ -1656,8 +1656,8 @@ function mixAdd(){const src=mixSource(selected);if(!src)return setStatus('Select
  if(mixBucket.length===2){const p=mixBucket[0].card;selected=p;openPrompt('Combine these two reference images into one coherent photograph, keeping recognizable subjects from both.');setStatus('MIX · 2 images ready · speak or type, then APPLY (one paid image edit)',18000);}
  else setStatus('MIX · 1 / 2 images · select another photo and press MIX or drag to the mixing bucket',12000);
 }
-function openPrompt(prefill=''){const target=currentPromptTarget();if(!target)return setStatus('Capture or select a photo first');
- promptContext=target;promptText=prefill;
+function openPrompt(prefill=''){const target=currentPromptTarget();
+ promptContext=target||{captureId:null,objectId:null,card:null,label:'New generated image'};promptText=prefill;
  closeImageMenu();
  setStatus('PROMPT · Quest keyboard opens in XR · Enter sends the instruction',12000);
  keyboardPrompt();}
@@ -1735,7 +1735,7 @@ async function confirmVoice(){
  const direct=transcript.toLowerCase().trim();
  if(/^(extract|segment|recognize)( the (image|picture|objects?))?[.!]?$/.test(direct))return runExtract();
  if(/^(take (a )?(photo|picture|snapshot)|capture)( now)?[.!]?$/.test(direct))return makeCapture();
- if(!context){setStatus('HEARD · '+transcript+' · select an image to use this instruction',13000);return;}
+ if(!context){promptContext={captureId:null,objectId:null,card:null,label:'New generated image'};promptText=transcript;return applyPrompt();}
  promptContext=context;promptText=transcript;
  return applyPrompt();
 }
@@ -1756,6 +1756,7 @@ async function finishVoiceRecording(){
  try{const wav=await record.stop();const recognized=String(await window.FreeLab.transcribeXR(wav)||'').trim();
   if(!recognized)throw Error('No recognizable speech');
   voicePending={text:recognized,context:target};setVoicePhase('heard',recognized,Infinity);mascotEmotion('happy');
+  if(!window.FreeLab?.pref?.('voiceConfirm')){busy=false;setStatus('HEARD · sending instruction directly',5000);await confirmVoice();return;}
   voiceOk=makeRoundel('voice-accept','voiceok',.080);refreshRoundel(voiceOk,'ok');
   voiceCancel=makeRoundel('voice-reject','voicecancel',.080);refreshRoundel(voiceCancel,'cancel');
   if(latestPose)syncRoundels(latestPose);setStatus('TRANSCRIPT READY · choose OK or × · no keyboard required',8500);
@@ -1763,9 +1764,11 @@ async function finishVoiceRecording(){
  finally{busy=false;}
 }
 async function applyPrompt(){if(!promptContext)return openPrompt();if(busy)return;
- if(!promptText.trim())return setStatus('Speak or Type your instruction before Apply');
- const context=promptContext;busy=true;inferenceCard=context.card;inferenceStarted=performance.now();setStatus('GENERATING · original image stays in the room',24000);
- try{const o=await window.FreeLab.promptXR(context.captureId,context.objectId,promptText);
+ if(!promptText.trim())return setStatus('Speak or type your instruction before Enter');
+ const context=promptContext;busy=true;inferenceCard=context.card;inferenceStarted=performance.now();setStatus(context.captureId?'GENERATING · original image stays in the room':'CREATING FROM TEXT · Muse Image · no camera needed',24000);
+ try{if(!context.captureId){const generated=await window.FreeLab.generateXRImage(promptText);
+    closePrompt();clouds=await window.FreeLab.listXRClouds();await showCloud(generated.capture_id);setStatus('NEW IMAGE READY · source saved in your spatial Collection',12500);return;}
+  const o=await window.FreeLab.promptXR(context.captureId,context.objectId,promptText);
   if(cloud&&cloud.id===context.captureId){cloud.objects.push(o);
    const parentId=context.objectId??null;
    if(branchFocusId!==parentId||!activeBranchView().children.some(x=>x.id===o.id))
@@ -1782,8 +1785,8 @@ async function keyboardPrompt(){if(!promptContext)return openPrompt();
   Object.assign(xrKeyboard.style,{position:'fixed',top:'12px',left:'12px',width:'min(60vw,420px)',height:'46px',opacity:'1',background:'#33423b',color:'#ffffff',border:'0',borderRadius:'23px',fontSize:'17px',padding:'0 16px',zIndex:'25'});
   (document.getElementById('xrPromptEditor')||document.body).appendChild(xrKeyboard);
   xrKeyboard.oninput=()=>{promptText=xrKeyboard.value.slice(0,750);setStatus('TEXT: '+promptText.slice(0,72)+' · press Enter to send',25000);};
-  xrKeyboard.onkeydown=evt=>{if(evt.key==='Enter'&&!evt.isComposing){evt.preventDefault();promptText=xrKeyboard.value.trim();xrKeyboard.blur();applyPrompt();}};
-  xrKeyboard.onblur=()=>{if(promptContext)setStatus('Keyboard closed · reopen PROMPT to submit with Enter',9000);};
+  xrKeyboard.onkeydown=evt=>{if(evt.key==='Enter'&&!evt.isComposing){evt.preventDefault();evt.stopPropagation();promptText=xrKeyboard.value.trim();xrKeyboard.blur();document.getElementById('xrPromptEditor')?.classList.add('hidden');void applyPrompt();}};
+  xrKeyboard.onblur=()=>{};
  }
  const editor=document.getElementById('xrPromptEditor');editor?.classList.remove('hidden');editor?.classList.add('xr-native-open');
  xrKeyboard.value=promptText||'';xrKeyboard.focus();setStatus('QUEST KEYBOARD · Enter sends the image instruction',24000);
@@ -2008,9 +2011,9 @@ function navigateCinema(direction){
  selected=cinemaCards[cinemaIndex];enterDarkroom(selected);
 }
 function renderCinema(frame,pose){
- const anchor=point(poseForwardAnchor(pose,.86,.19),[0,0,0]);const q=lookingQuat(anchor,[pose.transform.matrix[12],pose.transform.matrix[13],pose.transform.matrix[14]]);
+ const anchor=point(poseForwardAnchor(pose,.78,-.22),[0,0,0]);const q=lookingQuat(anchor,[pose.transform.matrix[12],pose.transform.matrix[13],pose.transform.matrix[14]]);
  // All three controls remain near the eyes, below the central visual field.
- for(const [button,x] of [[darkPrevious,.02],[darkNext,.16],[darkClose,.30]])if(button){button.pos=vadd(anchor,quatVec(q,[x,0,0]));button.q=q;button.size=[.122,.122];}
+ for(const [button,x] of [[darkPrevious,-.145],[darkNext,0],[darkClose,.145]])if(button){button.pos=vadd(anchor,quatVec(q,[x,0,0]));button.q=q;button.size=[.132,.132];}
  const layer=session.renderState.baseLayer;
  gl.bindFramebuffer(gl.FRAMEBUFFER,layer.framebuffer);
  gl.clearColor(0,0,0,1);gl.colorMask(true,true,true,true);
@@ -2047,7 +2050,7 @@ async function action(id){const t=performance.now();if(t-lastAction<200)return;l
  case 'imagemenu':return toggleImageMenu(selected);case 'imageclose':return selected?.kind==='source'?collapse():closeSelectedCard();
  case 'debug':debugShowing=!debugShowing;if(debugShowing){serverPoll=0;loadServerDiagnostic();}return setStatus(debugShowing?'LOG OPEN · API errors and server request status':'LOG CLOSED',6500);
  case 'branch':return selected?.kind==='object'?openBranch(selected.data.id):null;case 'parent':return upBranch();
- case 'prompt':return openPrompt();case 'segment':return selected?.kind==='source'?runExtract():extractParts();case 'refine':return restoreSelected();case 'apply':return applyPrompt();
+ case 'createimage':return openPrompt();case 'prompt':return openPrompt();case 'segment':return selected?.kind==='source'?runExtract():extractParts();case 'refine':return restoreSelected();case 'apply':return applyPrompt();
  case 'follow':return toggleFollow();case 'gallery':galleryPage=0;return openGallery(0);
  case 'exit':held=null;return darkroom?closeDarkroom():session?.end();}}
 

@@ -6,7 +6,7 @@ from functools import wraps
 from flask import Flask,abort,g,jsonify,request,send_file,session
 from itsdangerous import URLSafeTimedSerializer,BadSignature,SignatureExpired
 from werkzeug.middleware.proxy_fix import ProxyFix
-from . import db,providers,secrets as keyvault,sam,provider_checks,media,meshy3d,aholo3d,glb_preview,glb_xr,model_cache
+from . import db,providers,secrets as keyvault,sam,provider_checks,media,meshy3d,aholo3d,glb_preview,glb_xr,model_cache,avatar_optimizer
 
 APP_ROOT=Path(__file__).resolve().parents[1]
 DATA_DIR=Path(os.getenv('FREE_LAB_DATA_DIR',APP_ROOT/'var')).resolve()
@@ -18,15 +18,19 @@ app=Flask(__name__,static_folder=str(APP_ROOT/'frontend'),static_url_path='')
 app.config.update(SECRET_KEY=os.getenv('FREE_LAB_SESSION_KEY',secrets.token_hex(32)),
                   SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE='Lax',
                   SESSION_COOKIE_SECURE=os.getenv('FREE_LAB_HTTPS','0')=='1',
-                  MAX_CONTENT_LENGTH=4_250_000,JSON_SORT_KEYS=False)
+                  MAX_CONTENT_LENGTH=22_000_000,JSON_SORT_KEYS=False)
 app.wsgi_app=ProxyFix(app.wsgi_app,x_for=1,x_proto=1,x_host=0)
 db.init(DB)
+avatar_optimizer.init(DB)
 IMAGE_DIR.mkdir(parents=True,exist_ok=True)
 MODEL_DIR.mkdir(parents=True,exist_ok=True)
 
 @app.before_request
 def before():
     if request.path.startswith('/api/'):
+        max_body=(22_000_000 if request.path=='/api/me/avatar-3d/optimize' and request.method=='POST'
+                  else 5_800_000 if request.path=='/api/me/avatar-3d' and request.method=='PUT' else 4_250_000)
+        if request.content_length and request.content_length>max_body:abort(413)
         g.con=db.connect(DB)
         uid=session.get('uid')
         g.user=db.user_from_id(g.con,uid) if isinstance(uid,int) else None
@@ -137,10 +141,10 @@ def set_my_avatar():
 
 # Small, private GLB avatar. The full original, including rigging, is retained.
 # XR guests receive only the bounded geometry preview; animated rigs are not yet synchronized.
-MAX_AVATAR_GLB=2_000_000
+MAX_AVATAR_GLB=4_000_000
 
-def valid_avatar_glb(raw):
-    if not isinstance(raw,bytes) or not 20<=len(raw)<=MAX_AVATAR_GLB:return False
+def valid_avatar_glb(raw,limit=MAX_AVATAR_GLB):
+    if not isinstance(raw,bytes) or not 20<=len(raw)<=limit:return False
     if raw[:4]!=b'glTF' or int.from_bytes(raw[4:8],'little')!=2 or int.from_bytes(raw[8:12],'little')!=len(raw):return False
     try:
         import struct
@@ -160,14 +164,37 @@ def valid_avatar_glb(raw):
 @require_user
 def upload_3d_avatar():
     data=body().get('glb','')
-    if not isinstance(data,str) or len(data)>2_800_000 or not data.startswith('data:model/gltf-binary;base64,'):
-        return jsonify(error='Upload one self-contained GLB model no larger than 2 MB'),400
+    if not isinstance(data,str) or len(data)>5_400_000 or not data.startswith('data:model/gltf-binary;base64,'):
+        return jsonify(error='Upload one self-contained GLB model no larger than 4 MB'),400
     try:raw=base64.b64decode(data.split(',',1)[1],validate=True)
     except (ValueError,base64.binascii.Error):return jsonify(error='Invalid GLB encoding'),400
     if not valid_avatar_glb(raw):return jsonify(error='Invalid, oversized or externally linked GLB avatar'),422
     with g.con:g.con.execute('''INSERT INTO user_avatar_models(user_id,glb) VALUES(?,?) ON CONFLICT(user_id)
       DO UPDATE SET glb=excluded.glb,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')''',(g.user['id'],raw))
     return jsonify(ok=True,bytes=len(raw),limit=MAX_AVATAR_GLB)
+
+@app.post('/api/me/avatar-3d/optimize')
+@require_user
+def optimize_3d_avatar():
+    """Opt-in: queue one private 4 MB target from a <=16 MB self-contained GLB."""
+    value=body().get('glb','')
+    if not isinstance(value,str) or not value.startswith('data:model/gltf-binary;base64,') or len(value)>21_400_000:
+        return jsonify(error='Avatar optimization accepts a single GLB up to 16 MB'),400
+    try:raw=base64.b64decode(value.split(',',1)[1],validate=True)
+    except (ValueError,base64.binascii.Error):return jsonify(error='Invalid GLB encoding'),400
+    if not valid_avatar_glb(raw,limit=avatar_optimizer.MAX_UPLOAD):
+        return jsonify(error='Invalid or externally linked GLB avatar (16 MB maximum)'),422
+    try:jid=avatar_optimizer.submit(DB,g.user['id'],raw,valid_avatar_glb)
+    except ValueError as e:return jsonify(error=str(e)),409
+    except RuntimeError as e:return jsonify(error=str(e)),503
+    return jsonify(id=jid,status='QUEUED',original_size=len(raw),target_size=MAX_AVATAR_GLB),202
+
+@app.get('/api/me/avatar-3d/optimize/<int:job_id>')
+@require_user
+def avatar_optimization_status(job_id):
+    job=avatar_optimizer.status(DB,g.user['id'],job_id)
+    if not job:abort(404)
+    return jsonify(**job)
 
 @app.get('/api/me/avatar-3d')
 @require_user
@@ -897,6 +924,36 @@ def media_3d_preview(jid):
         return jsonify(**geometry)
     except urllib.error.HTTPError as e:return jsonify(error=f'3D model download HTTP {e.code}; renew the link in Library'),502
     except (ValueError,OSError,KeyError,IndexError,TypeError) as e:return jsonify(error=str(e)),422
+
+@app.post('/api/media/text-to-image')
+@require_user
+def generate_text_only_image():
+    """Generate a new saved source from a text instruction; no camera required."""
+    v=body();prompt=v.get('prompt','')
+    if not isinstance(prompt,str) or not 3<=len(prompt.strip())<=750:
+        return jsonify(error='Prompt must be 3–750 characters'),400
+    if v.get('confirm_paid') is not True:return jsonify(error='Explicit image generation consent required'),400
+    key=request_meta_key(v)
+    if not key:return jsonify(error='Configure Meta API key first'),503
+    digest=hashlib.sha256(prompt.strip().encode()+secrets.token_bytes(12)+b'|muse-image-1.0:text').hexdigest()
+    try:call=db.begin_inference(g.con,g.user['id'],digest,'muse-image-1.0',
+        daily_cap=application_inference_limits()['daily_cap'],user_cap=application_inference_limits()['user_cap'],
+        cooldown=application_inference_limits()['cooldown'])
+    except ValueError as e:return jsonify(error=str(e)),429
+    try:
+        jpeg,usage=media.generate_meta_image(prompt.strip(),key)
+        name=secrets.token_hex(16)+'.jpg';dest=IMAGE_DIR/name;dest.write_bytes(jpeg)
+        try:
+            with g.con:
+                cid=g.con.execute('INSERT INTO captures(owner_id,image_name,sha256,description) VALUES(?,?,?,?)',
+                     (g.user['id'],name,hashlib.sha256(jpeg).hexdigest(),prompt.strip()[:240])).lastrowid
+        except Exception:
+            dest.unlink(missing_ok=True);raise
+        db.finish_inference(g.con,call,'ok',usage)
+        return jsonify(capture_id=cid,image_url=f'/api/captures/{cid}/image',provider='meta',usage=usage),201
+    except (ValueError,RuntimeError,OSError) as e:
+        db.finish_inference(g.con,call,'error');return jsonify(error=str(e)),502
+
 
 @app.post('/api/media/edit')
 @require_user

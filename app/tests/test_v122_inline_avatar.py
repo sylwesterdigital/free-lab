@@ -1,4 +1,4 @@
-"""FREELAB v0.10.24: source-only regressions. Never contacts paid providers."""
+"""FREELAB v0.10.25: source-only regressions. Never contacts paid providers."""
 import json,re,tempfile,unittest
 from pathlib import Path
 from backend import db,model_cache,glb_preview
@@ -43,7 +43,7 @@ class InlineModelAvatar122(unittest.TestCase):
  def test_avatar_ownership_and_model_limit(self):
   for route in ("@app.put('/api/me/avatar-3d')","@app.get('/api/me/avatar-3d')","@app.delete('/api/me/avatar-3d')","@app.get('/api/me/avatar-3d/preview')","@app.get('/api/rooms/<int:rid>/avatar/<int:uid>/preview')"):
    self.assertIn(route,BACK)
-  self.assertIn('MAX_AVATAR_GLB=2_000_000',BACK)
+  self.assertIn('MAX_AVATAR_GLB=4_000_000',BACK)
   self.assertIn('valid_avatar_glb(raw)',BACK)
   self.assertIn('_room_access(rid)',BACK)
   self.assertIn('profile3DAvatarInput',HTML)
@@ -59,7 +59,7 @@ class InlineModelAvatar122(unittest.TestCase):
  def test_controls_and_downloads(self):
   self.assertIn('followOffset=[0,-.85,-1.16]',XR)
   self.assertIn('poseForwardAnchor(pose,1.04,-.49)',XR)
-  self.assertIn('[[darkPrevious,.02],[darkNext,.16],[darkClose,.30]]',XR)
+  self.assertIn('[[darkPrevious,-.145],[darkNext,0],[darkClose,.145]]',XR)
   self.assertIn('data-capture-tool="download"',HTML)
   self.assertIn('data-gallery-action="download"',HTML)
   self.assertIn('downloadImage(',APP)
@@ -70,7 +70,7 @@ class InlineModelAvatar122(unittest.TestCase):
    self.assertIn("'--porcelain=v1','-z'",WATCH)
    self.assertIn(".stdout.split('\\0')",WATCH)
   for file in ('version.json','frontend/version.json','changelog.json','frontend/changelog.json'):
-   self.assertEqual(json.loads((ROOT/file).read_text())['version'],'0.10.24')
+   self.assertEqual(json.loads((ROOT/file).read_text())['version'],'0.10.25')
   for src in re.findall(r'(?:src|href)="(/assets/[^"]+)"',HTML):
    self.assertTrue((ROOT/'frontend'/src.split('?')[0].lstrip('/')).is_file(),src)
 if __name__=='__main__':unittest.main()

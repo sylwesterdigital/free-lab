@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.24",
-  "description": "Textured bounded GLB previews with scene-linked XR model lifecycle"
+  "version": "0.10.25",
+  "description": "XR voice composer and text-only generation, private avatar preview/optimization"
 }
