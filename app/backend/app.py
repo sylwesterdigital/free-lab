@@ -135,6 +135,63 @@ def set_my_avatar():
       (g.user['id'],mime,payload))
     return jsonify(ok=True)
 
+# Small, private GLB avatar. The full original, including rigging, is retained.
+# XR guests receive only the bounded geometry preview; animated rigs are not yet synchronized.
+MAX_AVATAR_GLB=2_000_000
+
+def valid_avatar_glb(raw):
+    if not isinstance(raw,bytes) or not 20<=len(raw)<=MAX_AVATAR_GLB:return False
+    if raw[:4]!=b'glTF' or int.from_bytes(raw[4:8],'little')!=2 or int.from_bytes(raw[8:12],'little')!=len(raw):return False
+    try:
+        import struct
+        chunk_len,chunk_type=struct.unpack_from('<I4s',raw,12)
+        if chunk_type!=b'JSON' or chunk_len>500000 or 20+chunk_len>len(raw):return False
+        document=json.loads(raw[20:20+chunk_len])
+        if not isinstance(document,dict) or document.get('asset',{}).get('version')!='2.0':return False
+        # Do not allow external URLs or embedded executable extensions in private shared-avatar files.
+        for buff in document.get('buffers',[]):
+            if 'uri' in buff:return False
+        for image in document.get('images',[]):
+            if 'uri' in image:return False
+        return True
+    except (ValueError,TypeError,KeyError,UnicodeError):return False
+
+@app.put('/api/me/avatar-3d')
+@require_user
+def upload_3d_avatar():
+    data=body().get('glb','')
+    if not isinstance(data,str) or len(data)>2_800_000 or not data.startswith('data:model/gltf-binary;base64,'):
+        return jsonify(error='Upload one self-contained GLB model no larger than 2 MB'),400
+    try:raw=base64.b64decode(data.split(',',1)[1],validate=True)
+    except (ValueError,base64.binascii.Error):return jsonify(error='Invalid GLB encoding'),400
+    if not valid_avatar_glb(raw):return jsonify(error='Invalid, oversized or externally linked GLB avatar'),422
+    with g.con:g.con.execute('''INSERT INTO user_avatar_models(user_id,glb) VALUES(?,?) ON CONFLICT(user_id)
+      DO UPDATE SET glb=excluded.glb,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')''',(g.user['id'],raw))
+    return jsonify(ok=True,bytes=len(raw),limit=MAX_AVATAR_GLB)
+
+@app.get('/api/me/avatar-3d')
+@require_user
+def own_3d_avatar():
+    row=g.con.execute('SELECT glb FROM user_avatar_models WHERE user_id=?',(g.user['id'],)).fetchone()
+    if not row:abort(404)
+    response=send_file(io.BytesIO(row['glb']),mimetype='model/gltf-binary',as_attachment=True,download_name='freelab-avatar.glb',max_age=0)
+    response.headers['Cache-Control']='private, no-store';response.headers['X-Content-Type-Options']='nosniff'
+    return response
+
+@app.delete('/api/me/avatar-3d')
+@require_user
+def remove_3d_avatar():
+    with g.con:g.con.execute('DELETE FROM user_avatar_models WHERE user_id=?',(g.user['id'],))
+    return jsonify(ok=True)
+
+@app.get('/api/me/avatar-3d/preview')
+@require_user
+def own_avatar_preview():
+    row=g.con.execute('SELECT glb FROM user_avatar_models WHERE user_id=?',(g.user['id'],)).fetchone()
+    if not row:abort(404)
+    try:return jsonify(**glb_preview.decode(row['glb']))
+    except (ValueError,KeyError,IndexError,TypeError) as e:return jsonify(error=str(e)),422
+
 @app.post('/api/logout')
 def logout():
     session.clear();return jsonify(ok=True)
@@ -394,7 +451,7 @@ def capture_cloud_image(cid):
     if not row:abort(404)
     path=IMAGE_DIR/row['image_name']
     if not path.is_file():abort(404)
-    response=send_file(path,mimetype='image/jpeg',conditional=True,max_age=0)
+    response=send_file(path,mimetype='image/jpeg',conditional=True,max_age=0,as_attachment=request.args.get('download')=='1',download_name=f'freelab-source-{cid}.jpg')
     response.headers['Cache-Control']='private, no-store'
     return response
 
@@ -440,7 +497,7 @@ def image(oid):
     if row['visibility']!='public' and (not user or user['id']!=row['owner_id']):abort(404)
     path=IMAGE_DIR/row['image_name']
     if not path.is_file():abort(404)
-    return send_file(path,mimetype='image/png' if path.suffix.lower()=='.png' else 'image/jpeg',conditional=True,max_age=0)
+    return send_file(path,mimetype='image/png' if path.suffix.lower()=='.png' else 'image/jpeg',conditional=True,max_age=0,as_attachment=request.args.get('download')=='1',download_name=f'freelab-object-{oid}'+path.suffix.lower())
 
 @app.get('/api/shared/<token>')
 def shared(token):
@@ -1134,7 +1191,19 @@ def room_my_visitors():
          JOIN room_members m ON m.room_id=p.room_id AND m.user_id=p.user_id AND m.accepted=1
          JOIN users u ON u.id=p.user_id WHERE p.room_id=? AND p.last_seen>=? AND u.blocked_until<=?
          ORDER BY p.last_seen DESC LIMIT 12''',(room['id'],int(time.time())-25,int(time.time()))).fetchall()
-    return jsonify(visitors=[dict(row) for row in rows])
+    return jsonify(visitors=[{**dict(row),'avatar_preview_url':('/api/rooms/'+str(room['id'])+'/avatar/'+str(row['id'])+'/preview' if g.con.execute('SELECT 1 FROM user_avatar_models WHERE user_id=?',(row['id'],)).fetchone() else None)} for row in rows])
+
+@app.get('/api/rooms/<int:rid>/avatar/<int:uid>/preview')
+@require_user
+def room_guest_avatar_preview(rid,uid):
+    room=_room_access(rid)
+    if not room:abort(404)
+    visitor=g.con.execute('SELECT 1 FROM room_presence WHERE room_id=? AND user_id=? AND last_seen>=?',(rid,uid,int(time.time())-35)).fetchone()
+    if not visitor and uid!=room['owner_id']:abort(404)
+    row=g.con.execute('SELECT glb FROM user_avatar_models WHERE user_id=?',(uid,)).fetchone()
+    if not row:abort(404)
+    try:return jsonify(**glb_preview.decode(row['glb']))
+    except (ValueError,TypeError,KeyError,IndexError) as e:return jsonify(error=str(e)),422
 
 @app.put('/api/rooms/mine/state')
 @require_user
@@ -1202,6 +1271,11 @@ def read_room_state(rid):
           'description':row['description'],'created_at':row['created_at']} for row in rows})
     scene['cards']=[{**c,**metadata[(c['kind'],c['id'])]} for c in published
         if isinstance(c,dict) and (c.get('kind'),c.get('id')) in metadata]
+    guests=g.con.execute('''SELECT u.id,u.display_name FROM room_presence p JOIN users u ON u.id=p.user_id
+        WHERE p.room_id=? AND p.user_id!=? AND p.last_seen>=? LIMIT 12''',(rid,owner,int(time.time())-35)).fetchall()
+    scene['visitors']=[{'id':v['id'],'name':v['display_name'],
+      'avatar_preview_url':('/api/rooms/'+str(rid)+'/avatar/'+str(v['id'])+'/preview'
+       if g.con.execute('SELECT 1 FROM user_avatar_models WHERE user_id=?',(v['id'],)).fetchone() else None)} for v in guests]
     return jsonify(room=_room_dict(r),scene=scene)
 
 @app.get('/api/rooms/<int:rid>/media/<kind>/<int:item_id>')

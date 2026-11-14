@@ -92,7 +92,7 @@ export async function createRoomViewer({canvas,inspector,viewer,status,count,bac
  const roomEdges=new T.LineSegments(new T.EdgesGeometry(new T.BoxGeometry(5,3.6,5)),new T.LineBasicMaterial({color:0xaabcca,transparent:true,opacity:.40}));scene.add(roomEdges);
  const poseGroup=cameraModel(T);scene.add(poseGroup);poseGroup.position.set(0,1.55,0);
  const avatarTarget=new T.Vector3(0,1.55,0),avatarQuat=new T.Quaternion();
- const cards=new Map(),links=new Map(),hits=[],sharedShapes=[];let shapeKey='';
+ const cards=new Map(),links=new Map(),hits=[],sharedShapes=[],guestModels=new Map(),guestLoading=new Set();let shapeKey='';
  const aim=new T.Vector3(0,1.5,0),orbit={yaw:.48,pitch:.22,radius:6.2,vyaw:0,vpitch:0,pan:new T.Vector3()};
  let selected=null,roomId=null,active=false,raf=0,lastFrame=0,mode='orbit',hover=null,pointers=new Map(),dragTravel=0;
  const keys=new Set();const raycaster=new T.Raycaster();const mouse=new T.Vector2();
@@ -174,10 +174,24 @@ export async function createRoomViewer({canvas,inspector,viewer,status,count,bac
    sharedShapes.push(line);scene.add(line);
   }
  }
+ async function updateGuestModels(visitors,rid){
+  const guests=(Array.isArray(visitors)?visitors:[]).filter(g=>Number.isInteger(g.id)&&typeof g.avatar_preview_url==='string').slice(0,8),ids=new Set(guests.map(g=>g.id));
+  for(const [id,mesh] of guestModels)if(!ids.has(id)){scene.remove(mesh);mesh.geometry.dispose();mesh.material.dispose();guestModels.delete(id);}
+  for(const [index,guest] of guests.entries()){
+   if(guestModels.has(guest.id)||guestLoading.has(guest.id))continue;guestLoading.add(guest.id);
+   try{const response=await fetch(guest.avatar_preview_url,{credentials:'same-origin'});if(!response.ok)throw Error('avatar HTTP '+response.status);
+    const data=await response.json(),p=data.positions;if(!Array.isArray(p)||p.length%9||!p.length||p.length>35000)throw Error('Unsupported avatar');
+    if(roomId!==rid||!active)return;
+    const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(p,3));geometry.computeVertexNormals();
+    const mesh=new T.Mesh(geometry,new T.MeshStandardMaterial({color:0x9be8bb,roughness:.65,side:T.DoubleSide}));mesh.scale.setScalar(1.1);
+    mesh.position.copy(avatarTarget).add(new T.Vector3((index%4-1.5)*.95,-.4,.6+Math.floor(index/4)*.95));scene.add(mesh);guestModels.set(guest.id,mesh);
+   }catch(e){console.warn('Guest avatar preview:',e.message);}finally{guestLoading.delete(guest.id);}
+  }
+ }
  function setState(payload,rid,room){
   if(!payload||!Array.isArray(payload.cards))return;
   const newRoom=roomId!==rid;roomId=rid;rebuildShapes(payload.shapes);
-  if(validPoint(payload.pose))avatarTarget.set(...payload.pose);
+  if(validPoint(payload.pose))avatarTarget.set(...payload.pose);void updateGuestModels(payload.visitors,rid);
   if(Array.isArray(payload.q)&&payload.q.length===4&&payload.q.every(Number.isFinite))avatarQuat.set(...payload.q).normalize();
   const incoming=new Set();let changed=false;
   for(const c of payload.cards){if(!validPoint(c.p)||!['object','capture'].includes(c.kind)||!Number.isInteger(c.id))continue;
@@ -276,6 +290,6 @@ export async function createRoomViewer({canvas,inspector,viewer,status,count,bac
  button('roomImageClose',()=>{$('roomImageLightbox').classList.add('hidden');});
  button('roomInspectFocus',()=>selected&&focusOn(selected));
  function start(){if(active)return;active=true;resize();lastFrame=0;raf=requestAnimationFrame(tick);}
- function stop(){active=false;cancelAnimationFrame(raf);rebuildShapes([]);keys.clear();pointers.clear();select(null);$('roomImageLightbox').classList.add('hidden');}
+ function stop(){active=false;cancelAnimationFrame(raf);rebuildShapes([]);for(const m of guestModels.values()){scene.remove(m);m.geometry.dispose();m.material.dispose();}guestModels.clear();keys.clear();pointers.clear();select(null);$('roomImageLightbox').classList.add('hidden');}
  return {start,stop,setState,fit,select};
 }

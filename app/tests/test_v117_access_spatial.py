@@ -1,4 +1,4 @@
-"""v0.10.21 regression checks: retained accounts, opt-in shared frames, XR depth and release notes."""
+"""v0.10.22 regression checks: retained accounts, opt-in shared frames, XR depth and release notes."""
 import sqlite3
 import tempfile
 import unittest
@@ -54,8 +54,8 @@ class AccountAndSpatial117(unittest.TestCase):
         self.assertIn('options.requireDepth',xr)
         self.assertIn('id="depthXR"',(APP/'frontend/index.html').read_text())
         self.assertIn('window.FreeLabRooms.chooseXR(true)',app)
-        self.assertIn('const anchor=point(poseForwardAnchor(pose,.72,-.24)',xr)
-        self.assertIn('for(const [button,x] of [[darkPrevious,-.14],[darkNext,0],[darkClose,.14]]',xr)
+        self.assertIn('const anchor=point(poseForwardAnchor(pose,.86,.19)',xr)
+        self.assertIn('for(const [button,x] of [[darkPrevious,.02],[darkNext,.16],[darkClose,.30]]',xr)
 
     def test_visitors_and_shared_frames_default_off(self):
         server=(BACKEND/'app.py').read_text()

@@ -1,4 +1,4 @@
-/* FREELAB v0.10.21. Capture is independent from the live camera preview.
+/* FREELAB v0.10.22. Capture is independent from the live camera preview.
  * Source/branch actions call the same authenticated XR API functions. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id),FL=()=>window.FreeLab;
@@ -13,12 +13,22 @@ function inspect(item){chosen=keyOf(item);inspecting=true;
  /* A different source must load its own pixels before billed extraction. */
  if(item.type==='capture')requestedCapture=null;render();void showSavedMetadata(item);
  }
-function resultPanel(title,message,link=null,jobId=null){
- const area=$('captureResult');if(!area)return;area.classList.remove('hidden');area.replaceChildren();
+function resultPanel(title,message,link=null,jobId=null,kind='info'){
+ const area=$('captureResult');if(!area)return;area.classList.remove('hidden');area.dataset.state=kind;area.replaceChildren();
  const heading=document.createElement('strong');heading.textContent=title;area.append(heading);
  const para=document.createElement('p');para.textContent=message||'';area.append(para);
- if(link){const a=document.createElement('a');a.textContent='View / download 3D model';a.href=link;a.rel='noopener noreferrer';a.target='_blank';area.append(a);}
- if(jobId){const check=document.createElement('button');check.type='button';check.textContent='Check 3D status';check.onclick=()=>void check3DJob(jobId);area.append(check);}
+ if(jobId&&kind==='success'){
+  const view=document.createElement('button');view.type='button';view.textContent='View model in 3D';view.onclick=()=>window.FreeLabModelStage?.open(jobId);area.append(view);
+ }
+ if(link&&kind==='success'){const a=document.createElement('a');a.textContent='Download GLB';a.href=link;a.rel='noopener noreferrer';a.target='_blank';area.append(a);}
+ if(jobId&&kind!=='success'){
+  const check=document.createElement('button');check.type='button';check.textContent='Refresh task status';check.onclick=()=>void check3DJob(jobId);area.append(check);
+ }
+}
+function showJob(job){if(!job)return;
+ if(job.status==='SUCCEEDED')resultPanel('3D COMPLETE · '+job.provider.toUpperCase(),job.cached?'Model is saved privately. Open the 3D viewer below.':'Generation succeeded; '+(job.cache_error||'the provider download is not cached yet.'),job.glb_url,job.id,'success');
+ else if(job.status==='FAILED'||job.status==='CANCELED')resultPanel('3D FAILED · '+job.provider.toUpperCase(),job.error||'Provider failed without reporting a reason.',null,job.id,'error');
+ else resultPanel('3D '+job.status+' · '+job.provider.toUpperCase(),`Task ${job.id} · ${job.progress}% · processing remotely. You can continue capturing, editing or browsing.`,null,job.id,'running');
 }
 async function showSavedMetadata(item){
  const marker=++metadataRequest;const itemKey=keyOf(item);
@@ -28,23 +38,19 @@ async function showSavedMetadata(item){
    FL().list3DJobs()]);
   if(marker!==metadataRequest||chosen!==itemKey)return;
   const history=notes.history||[],latest=history.at(-1),job=jobs.find(j=>j.capture_id===item.cid&&(j.object_id||null)===(item.oid||null));
-  if(job&&job.status==='SUCCEEDED')resultPanel('Saved 3D · '+job.provider,job.cached?'Model saved privately on FREELAB.':('Model ready but local caching failed: '+(job.cache_error||'provider link may expire')),job.glb_url||null,null);
-  else if(job&&job.status==='FAILED')resultPanel('3D failed · '+job.provider,job.error||'Provider reported failure without a reason. See AHOLO dashboard for task diagnostics.',null,job.id);
-  else if(latest)resultPanel('Saved description'+(history.length>1?' · '+history.length+' notes':''),latest.answer);
-  else if(job)resultPanel('Saved 3D task · '+job.provider,job.status+' · '+job.progress+'% · Created '+(job.created_at||''),null,job.id);
+  if(job)showJob(job);
+  else if(latest)resultPanel('SAVED DESCRIPTION'+(history.length>1?' · '+history.length+' notes':''),latest.answer,null,null,'success');
   else{$('captureResult').replaceChildren();$('captureResult').classList.add('hidden');}
  }catch(e){if(marker===metadataRequest)resultPanel('Saved metadata unavailable',e.message);}
 }
-async function check3DJob(id){try{const job=await FL().checkXR3D(id);if(job.status==='SUCCEEDED')resultPanel('3D ready · '+job.provider,job.cached?'GLB stored privately.':('Provider link available; local cache issue: '+(job.cache_error||'not yet saved')),job.glb_url);
- else if(job.status==='FAILED'||job.status==='CANCELED')resultPanel('3D '+job.status.toLowerCase()+' · '+job.provider,job.error||'The provider did not supply a failure reason.',null,id);
- else resultPanel('3D '+job.status+' · '+job.provider,'Task '+id+' · '+job.progress+'%. Read-only status check; no extra generation charge.',null,id);
+async function check3DJob(id){try{const job=await FL().checkXR3D(id);showJob(job);
  if(['FAILED','SUCCEEDED','CANCELED'].includes(job.status))stopJobMonitor();return job;
- }catch(e){resultPanel('3D status unavailable',e.message,null,id);}}
+ }catch(e){resultPanel('3D STATUS UNAVAILABLE',e.message,null,id,'error');}}
 function stopJobMonitor(){if(jobMonitor){clearTimeout(jobMonitor);jobMonitor=null;}}
 function monitorJob(id,itemKey){stopJobMonitor();let count=0;
- const tick=async()=>{if(chosen!==itemKey||$('cameraPanel').classList.contains('hidden')){stopJobMonitor();return;}
-  const job=await check3DJob(id);if(job&&['FAILED','SUCCEEDED','CANCELED'].includes(job.status))return;
-  if(++count<70)jobMonitor=setTimeout(tick,13000);else resultPanel('3D task still running','Open Collection → Your 3D Models to check the result later.',null,id);
+ const tick=async()=>{if(document.visibilityState==='hidden'){jobMonitor=setTimeout(tick,25000);return;}
+  const job=chosen===itemKey?await check3DJob(id):await FL().checkXR3D(id).catch(()=>null);if(job&&['FAILED','SUCCEEDED','CANCELED'].includes(job.status))return;
+  if(++count<100)jobMonitor=setTimeout(tick,25000);else if(chosen===itemKey)resultPanel('3D TASK STILL RUNNING','Check the model in Collection later. The server has retained the job.',null,id,'running');
  };jobMonitor=setTimeout(tick,13000);
 }
 function applyView(){const item=inspecting&&chosen?getItem(chosen):null;
@@ -64,7 +70,7 @@ function node(container,item,depth=0){const wrapper=document.createElement('div'
  const date=document.createElement('small');date.textContent=String(item.record.created_at||'').slice(0,16)||(item.type==='capture'?'Source':'Segment');
  caption.append(name,date);button.append(img,caption);button.onclick=()=>inspect(item);
  const menu=document.createElement('details');menu.className='capture-node-menu';const summary=document.createElement('summary');summary.textContent='⋯';summary.title='Actions for '+label(item);summary.setAttribute('aria-label','Actions for '+label(item));menu.append(summary);
- const actions=document.createElement('div');actions.className='capture-node-popover';for(const [text,id] of [['Inspect','inspect'],['Extract','extract'],['Describe','describe'],['Extract object','segment'],['Refine image','refine'],['Edit','prompt'],['Voice','voice'],['3D','3d'],['Fullscreen','theater']]){const action=document.createElement('button');action.textContent=text;action.type='button';action.onclick=e=>{e.stopPropagation();menu.open=false;inspect(item);void activate(id);};actions.append(action);}menu.append(actions);wrapper.append(button,menu);container.append(wrapper);
+ const actions=document.createElement('div');actions.className='capture-node-popover';for(const [text,id] of [['Inspect','inspect'],['Extract','extract'],['Describe','describe'],['Extract object','segment'],['Refine image','refine'],['Edit','prompt'],['Voice','voice'],['3D','3d'],['Download image','download'],['Fullscreen','theater']]){const action=document.createElement('button');action.textContent=text;action.type='button';action.onclick=e=>{e.stopPropagation();menu.open=false;inspect(item);void activate(id);};actions.append(action);}menu.append(actions);wrapper.append(button,menu);container.append(wrapper);
 }
 function render(){const box=$('captureTree');box.replaceChildren();if(!clouds.length){const note=document.createElement('p');note.className='capture-tree-empty';note.textContent='Your sources will appear here. Capture an image to begin.';box.append(note);}
  for(const cloud of clouds){const group=document.createElement('section');group.className='capture-cloud';const heading=document.createElement('div');heading.className='capture-cloud-head';heading.textContent='SOURCE '+cloud.id+' · '+(cloud.objects||[]).length+' SEGMENTS';group.append(heading);
@@ -96,7 +102,20 @@ async function recognize(){const item=selected();if(!await paid('EXTRACT'))retur
  await execute(async()=>{await ensureFrame(item);const result=await FL().recognizeXR(item.cid,item.oid||null,true);expanded=true;await load(chosen);inform('Extracted '+(result.items||[]).length+' segments. Open Library to inspect them.');},'Extracting objects…');}
 async function segment(noun=null){const item=selected();const text=(noun||$('captureRefineText').value||'').trim();if(text.length<2){inform('Name one object to extract, for example chair');return;}if(!await paid('EXTRACT OBJECT'))return;
  await execute(async()=>{await ensureFrame(item);const r=await FL().segmentXR(item.cid,text,item.oid||null,true);expanded=true;$('captureRefineRow').classList.add('hidden');await load(chosen);inform('Created '+(r.items||[]).length+' named cutouts.');},'Extracting named object…');}
-function refineImage(instruction=''){const seed=String(instruction||'').trim()||'Improve image quality, reduce noise, sharpen details, and improve lighting.';promptEditor(false,seed);inform('Refine opens the image editor. Adjust the prompt if needed, then apply it.');}
+async function submitImageEdit(instruction='',refine=false){
+ const item=selected(),text=String(instruction||'').trim()||(refine?'Improve image quality, reduce noise, sharpen details and improve lighting.':'');
+ if(text.length<3){$('captureCommandText').focus();resultPanel('WRITE AN INSTRUCTION','Enter the image change in the message box, then press Send.',null,null,'info');return;}
+ if(text.length>750){resultPanel('PROMPT TOO LONG','Image-edit instructions must be 750 characters or fewer.',null,null,'error');return;}
+ if(!await paid(refine?'REFINE IMAGE':'EDIT IMAGE'))return;
+ await execute(async()=>{
+  resultPanel(refine?'REFINING IMAGE':'GENERATING IMAGE','Meta is creating a new private variation. The image stays visible while processing.',null,null,'running');
+  const result=await FL().promptXR(item.cid,item.oid||null,text);
+  expanded=true;await load(chosen);
+  resultPanel('IMAGE GENERATED','Saved a new image variation in this source. Select the new thumbnail to inspect or edit again.',null,null,'success');
+  inform('Image generated and saved to your collection.');
+ },refine?'Refining image…':'Generating edited image…');
+}
+function refineImage(instruction=''){return submitImageEdit(instruction,true);}
 async function describe(query=''){const item=selected();
  if(!query.trim()){
   try{const saved=await FL().api('/media/descriptions?capture_id='+item.cid+(item.oid?'&object_id='+item.oid:''));
@@ -108,7 +127,12 @@ async function describe(query=''){const item=selected();
  await execute(async()=>{const result=await FL().describeXR(item.cid,item.oid||null,query,false);
  resultPanel(result.cached?'Saved description':'Description saved to this image',result.description||'No description returned');
  inform(result.cached?'Loaded saved description':'Description saved');},'Describing selected image…');}
-function promptEditor(voice=false,instruction=''){const item=selected();$('captureRefineRow').classList.add('hidden');FL().openPromptEditor({captureId:item.cid,objectId:item.oid||null,label:item.record.label||'source'},instruction,async()=>{expanded=true;await load(chosen);inform('Image generated. Find it in Library.');});if(voice){$('xrPromptVoice')?.focus();inform('Record your instruction, then explicitly confirm the edit.');}}
+function promptEditor(voice=false,instruction=''){
+ selected();$('captureRefineRow').classList.add('hidden');$('captureCommandMode').value='prompt';
+ if(instruction)$('captureCommandText').value=instruction;
+ $('captureCommandText').focus();resizeComposer();
+ if(voice)void recordVoice();
+}
 async function generate3D(instruction=''){
  const item=selected(),prompt=String(instruction||'').trim();
  if(prompt.length>750)return inform('3D guidance must be 750 characters or fewer');
@@ -117,28 +141,28 @@ async function generate3D(instruction=''){
  if(!await paid('GENERATE 3D',`Provider: ${check.provider.toUpperCase()} · ${prompt?'Text-guided model + reference image':'Image-to-3D model'} · Each submission is a separate paid task.`))return;
  await execute(async()=>{
   const result=await FL().createXR3D(item.cid,item.oid||null,prompt);
-  resultPanel('3D task submitted · '+result.provider,'Task '+result.id+' is queued in the background. Keep working while FREELAB checks its status.',null,result.id);
+  resultPanel('3D QUEUED · '+result.provider.toUpperCase(),`Task ${result.id} started on the provider. Keep working while it generates; status continues updating.`,null,result.id,'running');
   monitorJob(result.id,chosen);inform('3D task '+result.id+' queued in the background. You can keep using the studio while it runs.');
  },'Submitting 3D task…');
 }
 async function connection3D(){try{const check=await FL().api('/media/3d/check');
- resultPanel('3D connection · '+check.provider,(check.configured?'API key configured.':'No usable API key for this profile.')+' This is read-only, not a generation test. '+(check.recent||[]).map(j=>'#'+j.id+' '+j.status+(j.error?' · '+j.error:'')).join(' / '));
+ resultPanel('3D CONNECTION · '+check.provider.toUpperCase(),(check.configured?'API key configured.':'No usable API key for this profile.')+' This is read-only, not a generation test. '+(check.recent||[]).map(j=>'#'+j.id+' '+j.status+(j.error?' · '+j.error:'')).join(' / '));
  }catch(e){resultPanel('3D connection check failed',e.message);}}
 async function recordVoice(){if(voiceRecorder){const old=voiceRecorder;voiceRecorder=null;
- resultPanel('Voice recognition','Transcribing microphone recording…');
- try{const wav=await old.stop();const text=await FL().transcribeXR(wav);$('captureCommandText').value=text;resizeComposer();resultPanel('Recognized speech','Text ready in composer. Choose an action and press send.');}
+ resultPanel('TRANSCRIBING','Converting voice into text…',null,null,'running');
+ try{const wav=await old.stop();const text=await FL().transcribeXR(wav);$('captureCommandText').value=text;resizeComposer();resultPanel('VOICE READY','Transcription placed in the composer. Press Send to use it.',null,null,'success');}
  catch(e){resultPanel('Voice recognition failed',e.message);}return;}
  try{if(!await paid('VOICE TRANSCRIPTION','Audio is processed by the configured transcription provider when recording stops.'))return;
  if(!FL().micReady())await FL().armMicrophone();voiceRecorder=FL().startWavPrompt();
- resultPanel('Recording','Speak, then press the microphone again to stop. Transcription may incur provider charges.');}
+ resultPanel('RECORDING','Press the microphone to stop and transcribe.',null,null,'running');}
  catch(e){resultPanel('Microphone unavailable',e.message);}
 }
-function resizeComposer(){const field=$('captureCommandText');field.style.height='auto';field.style.height=Math.min(field.scrollHeight,150)+'px';}
+function resizeComposer(){const field=$('captureCommandText');field.style.height='auto';field.style.height=Math.min(field.scrollHeight,210)+'px';}
 function theater(){const item=selected();const id=item.type==='object'?item.oid:null;return FL().openGallery(id,item.type==='capture'?item.cid:null);}
-async function activate(id){try{if(id==='inspect')return;if(id==='extract')return recognize();if(id==='describe')return describe();if(id==='segment'){$('captureRefineRow').classList.remove('hidden');return $('captureRefineText').focus();}if(id==='refine')return refineImage();if(id==='prompt')return promptEditor();if(id==='voice')return recordVoice();if(id==='3d')return generate3D();if(id==='check3d')return connection3D();if(id==='source')return beginNew();if(id==='import')return $('fileInput').click();if(id==='theater')return theater();}catch(e){inform(e.message);}}
+async function activate(id){try{if(id==='inspect')return;if(id==='extract')return recognize();if(id==='describe')return describe();if(id==='segment'){$('captureRefineRow').classList.remove('hidden');return $('captureRefineText').focus();}if(id==='refine')return refineImage();if(id==='prompt')return promptEditor();if(id==='voice')return recordVoice();if(id==='3d')return generate3D();if(id==='check3d')return connection3D();if(id==='download')return FL().downloadImage(imageURL(selected()),label(selected()));if(id==='source')return beginNew();if(id==='import')return $('fileInput').click();if(id==='theater')return theater();}catch(e){inform(e.message);}}
 function beginNew(){const state=FL().getState();requestedCapture=null;chosen=null;inspecting=false;expanded=false;if(state.stream?.getVideoTracks?.().some(t=>t.readyState==='live'&&!t.muted)){FL().resumeCamera();render();}else{$('fileInput').click();} $('captureResult').replaceChildren();$('captureResult').classList.add('hidden');stopJobMonitor();}
 async function chatSubmit(e){e.preventDefault();const mode=$('captureCommandMode').value,text=$('captureCommandText').value.trim();
- try{if(!selected())return;switch(mode){case 'extract':await recognize();break;case 'describe':await describe(text);break;case 'segment':await segment(text);break;case 'refine':refineImage(text);break;case '3d':await generate3D(text);break;default:promptEditor(false,text);break;}}catch(error){inform(error.message);} }
+ try{if(!selected())return;switch(mode){case 'extract':await recognize();break;case 'describe':await describe(text);break;case 'segment':await segment(text);break;case 'refine':await refineImage(text);break;case '3d':await generate3D(text);break;default:await submitImageEdit(text);break;}}catch(error){inform(error.message);} }
 function setup(){if(!$('captureShutter'))return;
  const legacy=$('captureAdvancedTools'),panel=$('captureMorePanel');if(legacy&&panel)panel.append(legacy);
  $('captureShutter').onclick=()=>execute(saveSource,'Saving source privately…');$('captureNewSource').onclick=beginNew;$('captureUpload').onclick=()=>$('fileInput').click();

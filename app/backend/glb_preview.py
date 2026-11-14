@@ -5,12 +5,12 @@ read-only XR geometry preview while the original GLB link remains downloadable.
 """
 import json,math,struct
 
-MAX_FILE = 12_000_000
+MAX_FILE = 32_000_000
 MAX_TRIANGLES = 3600
 
 def decode(data):
     if not isinstance(data,bytes) or len(data)<20 or len(data)>MAX_FILE:
-        raise ValueError('GLB preview exceeds 12 MB: download the original from Collection')
+        raise ValueError('GLB preview exceeds 32 MB: download the original from Collection')
     magic,version,total=struct.unpack_from('<4sII',data)
     if magic!=b'glTF' or version!=2 or total!=len(data):raise ValueError('Invalid GLB v2 file')
     i=12;obj=None;binbuf=None

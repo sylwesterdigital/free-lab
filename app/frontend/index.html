@@ -1,13 +1,13 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.21">
+<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.22">
 <title>FREELAB — Step into the spatial world</title>
-<link rel="stylesheet" href="/assets/style.css?v=0.10.21">
+<link rel="stylesheet" href="/assets/style.css?v=0.10.22">
 </head><body>
 <div id="app" class="app-shell">
 <header class="header" aria-label="Site navigation">
-  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.21</span></a>
+  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.22</span></a>
   <nav class="header-right" aria-label="Workspace">
     <span class="live-pill"><span class="server-dot" id="connectionDot"></span><span id="healthStatus">Connecting</span></span>
     <button id="roomButton" class="nav-pill" type="button">Rooms</button>
@@ -51,8 +51,8 @@
 <p>Who can join this XR session?</p><div class="room-choice"><button id="roomPrivate" class="secondary-btn">Private · invited guests</button><button id="roomPublic" class="secondary-btn">Public · server profiles</button></div>
 <p class="small-muted">Private is the default. People cannot view your images until they join your room. You can invite specific signed-in profiles later.</p>
 <button id="roomConfirm" class="primary-btn">Enter XR and start room</button></div></div>
-<div id="desktopGallery" class="hidden" role="dialog" aria-label="Image gallery"><header><strong id="galleryTitle">Gallery</strong><div class="gallery-tools"><details id="galleryToolMenu"><summary aria-label="Image AI actions" title="Image actions">⋯</summary><div class="gallery-tool-list"><button type="button" data-gallery-action="describe">Describe</button><button type="button" data-gallery-action="extract">Extract objects</button><button type="button" data-gallery-action="segment">Extract named object</button><button type="button" data-gallery-action="refine">Refine image</button><button type="button" data-gallery-action="prompt">Edit / prompt</button><button type="button" data-gallery-action="voice">Voice</button><button type="button" data-gallery-action="3d">Generate 3D</button></div></details><button id="galleryClose" aria-label="Close gallery">×</button></div></header>
-<div class="gallery-stage"><button id="galleryPrev" aria-label="Previous image">‹</button><img id="galleryImage" alt="Selected collection image"><button id="galleryNext" aria-label="Next image">›</button></div><p id="galleryDetail"></p><p id="galleryAIStatus" class="hidden" role="status"></p><div id="galleryFilmstrip"></div></div>
+<div id="desktopGallery" class="hidden" role="dialog" aria-label="Image gallery"><header><strong id="galleryTitle">Gallery</strong><div class="gallery-tools"><details id="galleryToolMenu"><summary aria-label="Image AI actions" title="Image actions">⋯</summary><div class="gallery-tool-list"><button type="button" data-gallery-action="describe">Describe</button><button type="button" data-gallery-action="extract">Extract objects</button><button type="button" data-gallery-action="segment">Extract named object</button><button type="button" data-gallery-action="refine">Refine image</button><button type="button" data-gallery-action="prompt">Edit / prompt</button><button type="button" data-gallery-action="voice">Voice</button><button type="button" data-gallery-action="3d">Generate 3D</button><button type="button" data-gallery-action="download">Download photo</button></div></details><button id="galleryClose" aria-label="Close gallery">×</button></div></header>
+<div class="gallery-stage"><button id="galleryPrev" aria-label="Previous image">‹</button><img id="galleryImage" alt="Selected collection image"><button id="galleryNext" aria-label="Next image">›</button></div><p id="galleryDetail"></p><p id="galleryAIStatus" class="hidden" role="status"></p><form id="galleryComposer" class="gallery-composer hidden"><select id="galleryMode" aria-label="Image editing mode"><option value="prompt">Edit image</option><option value="refine">Refine quality</option></select><textarea id="galleryPromptText" rows="2" maxlength="750" aria-label="Image editing instruction" placeholder="Describe what to change in this picture…"></textarea><button id="galleryPromptSend" type="submit" aria-label="Send image edit">↑</button></form><div id="galleryFilmstrip"></div></div>
 <div id="roomsPanel" class="rooms-modal hidden" role="dialog" aria-label="Spatial rooms"><header><h2>Shared spatial rooms</h2><button id="roomsClose">×</button></header>
 <div id="roomLobby"><p class="small-muted">Only signed-in users can join. Private rooms require an invitation.</p><div id="roomList"></div><h3>Invite to your room</h3><div id="roomInviteList"></div></div>
 <div id="roomViewer" class="hidden" aria-label="Live interactive Three.js room">
@@ -85,7 +85,7 @@
     <button type="button" data-capture-tool="3d">Generate 3D model</button><button type="button" data-capture-tool="check3d">Check 3D connection & jobs</button>
     <button type="button" data-capture-tool="prompt">Edit / generate image</button><button type="button" data-capture-tool="refine">Refine image</button><button type="button" data-capture-tool="segment">Extract named object</button>
     <button type="button" data-capture-tool="describe">Describe / saved notes</button><button type="button" data-capture-tool="theater">Fullscreen preview</button>
-    <button type="button" data-capture-tool="source">New source</button><button type="button" data-capture-tool="import">Import photo</button>
+    <button type="button" data-capture-tool="download">Download photo</button><button type="button" data-capture-tool="source">New source</button><button type="button" data-capture-tool="import">Import photo</button>
    </div></div></details>
   </div>
   <div id="captureResult" class="capture-result hidden" role="status" aria-live="polite"></div>
@@ -114,7 +114,7 @@
   </div>
   <div class="profile-scroll" id="profileScroll">
    <section id="profileExperience" role="tabpanel" data-profile-view="experience">
-    <p class="profile-account" id="profileSummary"></p><div class="profile-photo-setting"><span>PROFILE PICTURE</span><label for="profileAvatarInput" class="profile-avatar-round" title="Upload or take a profile photo" aria-label="Upload or take profile photo"><img id="settingsAvatar" class="hidden" alt="Current profile picture"><span id="settingsAvatarInitials">+</span></label><input type="file" id="profileAvatarInput" accept="image/png,image/jpeg" class="visually-hidden"><span class="small-muted">Tap the circle to upload or take a photograph</span></div>
+    <p class="profile-account" id="profileSummary"></p><div class="profile-photo-setting"><span>PROFILE PICTURE</span><label for="profileAvatarInput" class="profile-avatar-round" title="Upload or take a profile photo" aria-label="Upload or take profile photo"><img id="settingsAvatar" class="hidden" alt="Current profile picture"><span id="settingsAvatarInitials">+</span></label><input type="file" id="profileAvatarInput" accept="image/png,image/jpeg" class="visually-hidden"><span class="small-muted">Tap the circle to upload or take a photograph</span></div><section class="avatar3d-section"><strong>3D AVATAR</strong><p>Upload a self-contained GLB model, up to 2 MB. Rigged models are accepted, but the current XR room preview displays a static lightweight mesh.</p><input type="file" id="profile3DAvatarInput" accept=".glb,model/gltf-binary" aria-label="Upload 3D avatar GLB"><div class="avatar3d-actions"><button type="button" id="profile3DAvatarPreview">Preview avatar</button><button type="button" id="profile3DAvatarRemove">Remove 3D avatar</button></div><p id="profile3DAvatarStatus" role="status">No 3D avatar selected.</p></section>
     <div class="experience-preferences"><p class="eyebrow">XR / PERSONALIZATION</p>
      <label for="pref-mascotMode">MASCOT IN XR<select id="pref-mascotMode"><option value="3d">3D character</option><option value="2d">2D character</option><option value="none">Off</option></select></label>
      <label for="pref-frameHoldSeconds">FRAME DETACH TIMER<select id="pref-frameHoldSeconds"><option value="1.5">1.5 seconds</option><option value="3" selected>3 seconds</option><option value="5">5 seconds</option></select></label>
@@ -158,21 +158,24 @@
 </div></div>
 <div id="scanConsent" class="modal hidden"><div class="modal-card"><p class="eyebrow">COST CONFIRMATION</p><h2>Enable periodic scans?</h2><p class="small-muted">One JPEG every 20 seconds can consume a paid Meta Muse API request. This is disabled by default and stops when the page becomes hidden. It counts against FREE LAB's daily request quotas, which are not dollar limits.</p><div class="provider-actions"><button id="cancelScan" class="secondary-btn">Cancel</button><button id="confirmScan" class="primary-btn">Start paid scan</button></div></div></div>
 <div id="changelog" class="modal hidden"><div class="modal-card changelog-card"><div class="modal-title"><div><p class="eyebrow">WHAT'S NEW / DEVELOPMENT LOG</p><h2 id="logTitle">Release notes</h2><p id="logDate" class="small-muted"></p></div><button class="round-btn" id="dismissChangelog" aria-label="Close development log">×</button></div><div class="log-tabs" role="tablist" aria-label="Release notes"><button type="button" id="logLatest" class="active" role="tab" aria-selected="true">Latest</button><button type="button" id="logHistory" role="tab" aria-selected="false">History</button></div><div class="log-scroll"><ul id="logItems"></ul><div id="logArchive" class="hidden"></div></div><button class="primary-btn" id="continueChangelog">Start exploring ↗</button></div></div>
+<div id="modelStage" class="model-stage hidden" role="dialog" aria-label="Interactive 3D model viewer" aria-modal="true"><header><div><span class="eyebrow">FREELAB / MODEL VIEWER</span><h2 id="modelStageTitle">3D model</h2></div><div class="model-stage-tools"><a id="modelStageDownload" class="secondary-btn hidden" download>Download GLB</a><button id="modelStageClose" type="button" aria-label="Close 3D model viewer">×</button></div></header><canvas id="modelStageCanvas" aria-label="Interactive 3D model. Drag to rotate, scroll to zoom."></canvas><p id="modelStageStatus" role="status">Preparing 3D scene…</p><p class="model-stage-hint">Drag to rotate · scroll or pinch to zoom · model loads privately</p></div>
 <div id="toast" class="toast hidden" role="status"></div>
-<script src="/assets/sound.js?v=0.10.21" defer></script>
-<script src="/assets/gestures.js?v=0.10.21" defer></script>
-<script src="/assets/strand-geometry.js?v=0.10.21" defer></script>
-<script src="/assets/string-lab.js?v=0.10.21" defer></script>
-<script src="/assets/finger-lab.js?v=0.10.21" defer></script>
-<script src="/assets/frame-lab.js?v=0.10.21" defer></script>
-<script src="/assets/lab-selector.js?v=0.10.21" defer></script>
-<script src="/assets/frame-games.js?v=0.10.21" defer></script>
-<script src="/assets/shape-sort.js?v=0.10.21" defer></script>
-<script src="/assets/rooms.js?v=0.10.21" defer></script>
-<script src="/assets/cloud-tree.js?v=0.10.21" defer></script>
-<script src="/assets/xr-ui.js?v=0.10.21" defer></script>
-<script src="/assets/dialog.js?v=0.10.21" defer></script>
-<script src="/assets/app.js?v=0.10.21" defer></script><script src="/assets/xr.js?v=0.10.21" defer></script>
-<script src="/assets/capture-studio.js?v=0.10.21" defer></script>
-<script src="/assets/scene.mjs?v=0.10.21" type="module"></script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.module.js"}}</script>
+<script type="module" src="/assets/model-stage.mjs?v=0.10.22"></script>
+<script src="/assets/sound.js?v=0.10.22" defer></script>
+<script src="/assets/gestures.js?v=0.10.22" defer></script>
+<script src="/assets/strand-geometry.js?v=0.10.22" defer></script>
+<script src="/assets/string-lab.js?v=0.10.22" defer></script>
+<script src="/assets/finger-lab.js?v=0.10.22" defer></script>
+<script src="/assets/frame-lab.js?v=0.10.22" defer></script>
+<script src="/assets/lab-selector.js?v=0.10.22" defer></script>
+<script src="/assets/frame-games.js?v=0.10.22" defer></script>
+<script src="/assets/shape-sort.js?v=0.10.22" defer></script>
+<script src="/assets/rooms.js?v=0.10.22" defer></script>
+<script src="/assets/cloud-tree.js?v=0.10.22" defer></script>
+<script src="/assets/xr-ui.js?v=0.10.22" defer></script>
+<script src="/assets/dialog.js?v=0.10.22" defer></script>
+<script src="/assets/app.js?v=0.10.22" defer></script><script src="/assets/xr.js?v=0.10.22" defer></script>
+<script src="/assets/capture-studio.js?v=0.10.22" defer></script>
+<script src="/assets/scene.mjs?v=0.10.22" type="module"></script>
 </body></html>

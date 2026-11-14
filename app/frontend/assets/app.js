@@ -47,7 +47,7 @@ async function openGallery(objectId=null,captureId=null){
  const target=captureId?'capture:'+captureId:objectId?'object:'+objectId:null;const found=target?galleryItems.findIndex(x=>x.id===target):-1;galleryIndex=found<0?0:found;
  $('desktopGallery').classList.remove('hidden');renderGallery();
 }
-function renderGallery(){const item=galleryItems[galleryIndex];if(!item)return;
+function renderGallery(){const item=galleryItems[galleryIndex];if(!item)return;$('galleryComposer').classList.add('hidden');
  $('galleryTitle').textContent=item.label+' · '+(galleryIndex+1)+' / '+galleryItems.length;
  $('galleryImage').src=item.url;$('galleryDetail').textContent=item.detail;
  $('galleryToolMenu').open=false;$('galleryAIStatus').classList.add('hidden');
@@ -87,7 +87,7 @@ function renderObjects(){const box=$('items');box.replaceChildren();if(state.tab
  const menu=el('details','object-menu');const summary=el('summary','', '⋯');summary.title='Object actions';summary.setAttribute('aria-label','Actions for '+o.label);menu.append(summary);
  const tools=el('div','object-menu-popover');
  const add=(name,cb)=>{const button=el('button','',name);button.type='button';button.onclick=async()=>{menu.open=false;try{await cb();}catch(e){notify(e.message);}};tools.append(button);};
- add('Full preview',()=>openGallery(o.id));
+ add('Full preview',()=>openGallery(o.id));if(o.has_image)add('Download photo',()=>{downloadImage('/api/objects/'+o.id+'/image',o.label);return Promise.resolve();});
  if(state.tab==='mine'){
   add('Private',()=>changeVisibility(o.id,'private'));add('Public',()=>changeVisibility(o.id,'public'));add('Copy share link',()=>changeVisibility(o.id,'link'));
   add('Folder: '+(o.folder||'Unsorted'),()=>cycleFolder(o));add('Move to bin',()=>changeShelf(o.id,'bin'));
@@ -99,16 +99,33 @@ function renderObjects(){const box=$('items');box.replaceChildren();if(state.tab
 }
 async function galleryAI(action){const item=galleryItems[galleryIndex];if(!item)return;
  $('galleryToolMenu').open=false;const status=$('galleryAIStatus');status.classList.remove('hidden');
- if(!item.cid){status.textContent='This is an older image without a source. Capture/import it as a new source to use AI tools.';return;}
- try{if(['extract','describe','refine','3d'].includes(action)&&!await window.FreeLabDialog.confirm(action.toUpperCase()+' may incur a provider charge. Continue?')){status.classList.add('hidden');return;}
-  status.textContent='Running '+action+'…';status.classList.add('working');let result;
-  if(action==='extract'){result=await recognizeXR(item.cid,item.oid||null,true);status.textContent='Extracted '+(result.items||[]).length+' segments. Open Collection to see them.';}
-  else if(action==='describe'){result=await describeXR(item.cid,item.oid||null,'',false);status.textContent=result.description||'No description returned';}
-  else if(action==='segment'){const noun=await window.FreeLabDialog.input('Name one object to extract from this image (for example: chair).','',{title:'Extract named object'});if(!noun||noun.trim().length<2){status.classList.add('hidden');return;}result=await segmentXR(item.cid,noun.trim(),item.oid||null,true);status.textContent='Created '+(result.items||[]).length+' new cutouts.';}
-  else if(action==='refine'){openPromptEditor({captureId:item.cid,objectId:item.oid||null,label:item.label},'Improve image quality, reduce noise, sharpen details, and improve lighting.',()=>{status.textContent='Refined image saved. Reopen Collection to inspect it.';});status.textContent='Refine opens the editor. Adjust the prompt if needed, then apply it.';}
-  else if(action==='3d'){result=await createXR3D(item.cid,item.oid||null);status.textContent='3D job '+result.id+' queued in the background. Keep working and check Collection → Your 3D Models for status.';}
-  else {openPromptEditor({captureId:item.cid,objectId:item.oid||null,label:item.label},'',()=>{status.textContent='New image saved. Reopen Collection to inspect it.';});if(action==='voice')$('xrPromptVoice')?.focus();status.textContent='Use the editor to submit your image instruction.';}
+ if(action==='download'){downloadImage(item.url,item.label);status.textContent='Downloading image';return;}
+ if(!item.cid){status.textContent='This older image has no source. Import it as a new source to use AI tools.';return;}
+ if(['refine','prompt','voice'].includes(action)){
+  $('galleryComposer').classList.remove('hidden');$('galleryMode').value=action==='refine'?'refine':'prompt';
+  if(action==='refine'&&!$('galleryPromptText').value.trim())$('galleryPromptText').value='Improve image quality, reduce noise and sharpen details while preserving the composition.';
+  $('galleryPromptText').focus();status.textContent='Write an instruction below the image and press Send.';return;
+ }
+ try{if(!await window.FreeLabDialog.confirm(action.toUpperCase()+' may incur a provider charge. Continue?'))return;
+  status.classList.add('working');status.textContent=action==='3d'?'Submitting 3D job…':action==='describe'?'Describing image…':'Extracting…';let result;
+  if(action==='extract'){result=await recognizeXR(item.cid,item.oid||null,true);status.textContent='Extracted '+(result.items||[]).length+' segments. View in Collection.';}
+  else if(action==='describe'){result=await describeXR(item.cid,item.oid||null,'',false);status.textContent='Description saved: '+(result.description||'No description returned');}
+  else if(action==='segment'){const noun=await window.FreeLabDialog.input('Name one object to extract (for example: chair).',{title:'Extract named object'});if(!noun?.trim())return;result=await segmentXR(item.cid,noun.trim(),item.oid||null,true);status.textContent='Created '+(result.items||[]).length+' cutouts.';}
+  else if(action==='3d'){result=await createXR3D(item.cid,item.oid||null);status.textContent='3D task '+result.id+' queued. Generation continues remotely while you work.';}
  }catch(error){status.textContent='Request failed: '+error.message;}finally{status.classList.remove('working');}
+}
+async function galleryComposerSubmit(event){event.preventDefault();const item=galleryItems[galleryIndex],text=$('galleryPromptText').value.trim();
+ if(!item?.cid||text.length<3)return;
+ if(text.length>750){$('galleryAIStatus').textContent='Image edit is limited to 750 characters.';return;}
+ if(!await window.FreeLabDialog.confirm('Send this image edit to Meta? A provider charge may apply.'))return;
+ const status=$('galleryAIStatus'),button=$('galleryPromptSend');button.disabled=true;status.classList.remove('hidden');status.classList.add('working');status.textContent='Generating image…';
+ try{await promptXR(item.cid,item.oid||null,text);status.textContent='Image generated and saved privately. Refresh Collection to inspect it.';$('galleryComposer').classList.add('hidden');await loadObjects();}
+ catch(e){status.textContent='Image edit failed: '+e.message;}
+ finally{status.classList.remove('working');button.disabled=false;}
+}
+function downloadImage(url,label='freelab-image'){
+ if(typeof url!=='string'||!(url.startsWith('/api/captures/')||url.startsWith('/api/objects/')))throw Error('Only stored FREELAB images can be downloaded');
+ const a=document.createElement('a');a.href=url+(url.includes('?')?'&':'?')+'download=1';a.download=(label||'freelab-image').replace(/[^a-z0-9 _-]/gi,'_').slice(0,50)+'.jpg';document.body.append(a);a.click();a.remove();
 }
 async function changeShelf(id,shelf){try{await api('/objects/'+id,{method:'PATCH',body:JSON.stringify({shelf})});await loadObjects();notify(shelf==='bin'?'Moved to private Bin':'Restored to collection');}catch(e){notify(e.message);}}
 async function cycleFolder(o){const folders=['Unsorted','Keep','Room','Objects'];const next=folders[(folders.indexOf(o.folder)+1)%folders.length];try{await api('/objects/'+o.id,{method:'PATCH',body:JSON.stringify({folder:next})});await loadObjects();notify('Folder: '+next);}catch(e){notify(e.message);}}
@@ -260,7 +277,7 @@ async function afterAuth(user){state.user=user;
  const portrait=$('profileAvatar');portrait.onload=()=>{portrait.classList.remove('hidden');$('profileInitials').classList.add('hidden');$('settingsAvatar').src=portrait.src;$('settingsAvatar').classList.remove('hidden');$('settingsAvatarInitials').classList.add('hidden');};
  portrait.onerror=()=>{portrait.classList.add('hidden');$('profileInitials').classList.remove('hidden');$('settingsAvatar').classList.add('hidden');$('settingsAvatarInitials').classList.remove('hidden');};
  $('settingsAvatarInitials').textContent=initials||'+';portrait.src='/api/me/avatar?v='+encodeURIComponent(user.id);
-$('main').classList.remove('hidden');$('loginView').classList.add('hidden');$('profileSummary').textContent=user.display_name+' · @'+user.username+' · '+user.role;$('adminTools').classList.toggle('hidden',user.role!=='admin');document.querySelectorAll('.admin-tab').forEach(e=>e.classList.toggle('hidden',user.role!=='admin'));await refresh();await loadObjects();presentLog();if(user.role==='admin'){await loadProviderList().catch(e=>notify(e.message));}}
+$('main').classList.remove('hidden');$('loginView').classList.add('hidden');$('profileSummary').textContent=user.display_name+' · @'+user.username+' · '+user.role;$('adminTools').classList.toggle('hidden',user.role!=='admin');document.querySelectorAll('.admin-tab').forEach(e=>e.classList.toggle('hidden',user.role!=='admin'));await refresh();await loadObjects();startBackground3DMonitor();presentLog();if(user.role==='admin'){await loadProviderList().catch(e=>notify(e.message));}}
 async function init(){
  wirePromptEditor();
  $('loginForm').onsubmit=async e=>{e.preventDefault();$('loginError').textContent='';try{const data=await api('/login',{method:'POST',body:JSON.stringify({username:$('username').value,password:$('password').value})});$('password').value='';await afterAuth(data.user);}catch(error){$('loginError').textContent=error.message;}};
@@ -270,7 +287,7 @@ async function init(){
  const updateEntry=async()=>{const canXR=await supportsAR();if(portalMode)portalMode.textContent=canXR?'XR':'3D';if(portalTitle)portalTitle.textContent=canXR?'ENTER SPATIAL REALITY':'ENTER 3D COLLECTION';if(portalHint)portalHint.textContent=canXR?'QUEST · IMMERSIVE AR':'BROWSER · THREE.JS · ORBIT / EXPLORE';$('depthXR').classList.toggle('hidden',!canXR);};void updateEntry();
  $('enterXR').onclick=async()=>{window.FreeLabSound?.unlock();window.FreeLabSound?.play('enter');if(!state.user)return notify('Sign in before entering 3D');if(await supportsAR())window.FreeLabRooms.chooseXR();else window.FreeLabRooms.previewLocal().catch(e=>notify('3D preview: '+e.message));};
  $('depthXR')?.addEventListener('click',()=>{if(!state.user)return notify('Sign in before entering XR');window.FreeLabRooms.chooseXR(true);notify('Depth is requested on XR entry. If unsupported or denied, use normal XR instead.');});
- $('collectionSearch').addEventListener('input',renderObjects);document.querySelectorAll('[data-gallery-action]').forEach(b=>b.onclick=()=>void galleryAI(b.dataset.galleryAction));$('toggleLibrary').onclick=()=>setLibrary($('workspace').classList.contains('hidden'));$('refresh3DJobs').onclick=refresh3DJobs;
+ $('collectionSearch').addEventListener('input',renderObjects);$('galleryComposer').onsubmit=galleryComposerSubmit;document.querySelectorAll('[data-gallery-action]').forEach(b=>b.onclick=()=>void galleryAI(b.dataset.galleryAction));$('toggleLibrary').onclick=()=>setLibrary($('workspace').classList.contains('hidden'));$('refresh3DJobs').onclick=refresh3DJobs;
  $('closeLibrary').onclick=()=>setLibrary(false);$('galleryClose').onclick=()=>$('desktopGallery').classList.add('hidden');$('galleryPrev').onclick=()=>browseGallery(-1);$('galleryNext').onclick=()=>browseGallery(1);let swipeX=null;$('galleryImage').addEventListener('touchstart',e=>{swipeX=e.changedTouches[0].clientX;},{passive:true});$('galleryImage').addEventListener('touchend',e=>{if(swipeX!==null&&Math.abs(e.changedTouches[0].clientX-swipeX)>35)browseGallery(e.changedTouches[0].clientX<swipeX?1:-1);swipeX=null;},{passive:true});document.addEventListener('keydown',e=>{if($('desktopGallery').classList.contains('hidden'))return;if(e.key==='Escape')$('galleryClose').click();else if(e.key==='ArrowLeft')browseGallery(-1);else if(e.key==='ArrowRight')browseGallery(1);});
  document.querySelectorAll('.model-option').forEach(btn=>btn.onclick=()=>{$('modelChoice').value=btn.dataset.model;document.querySelectorAll('.model-option').forEach(b=>b.classList.toggle('selected',b===btn));});
  $('saveUploadCloud')?.addEventListener('click',async()=>{const button=$('saveUploadCloud');button.disabled=true;
@@ -297,6 +314,20 @@ async function init(){
     const data=cv.toDataURL('image/jpeg',.76);await api('/me/avatar',{method:'PUT',body:JSON.stringify({image:data})});
     const portrait=$('profileAvatar');portrait.src='/api/me/avatar?v='+Date.now();notify('Profile picture saved');
    }catch(err){notify('Profile image: '+err.message);}e.target.value='';};
+ $('profile3DAvatarInput').onchange=async event=>{
+  const file=event.target.files?.[0],status=$('profile3DAvatarStatus');if(!file)return;
+  if(file.size>2_000_000||file.size<20||!file.name.toLowerCase().endsWith('.glb')){status.textContent='Choose a .glb file smaller than 2 MB.';event.target.value='';return;}
+  status.textContent='Uploading private 3D avatar…';
+  try{const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=16000)binary+=String.fromCharCode(...bytes.subarray(i,i+16000));
+   const data='data:model/gltf-binary;base64,'+btoa(binary);
+   const reply=await api('/me/avatar-3d',{method:'PUT',body:JSON.stringify({glb:data})});
+   status.textContent='3D avatar saved · '+Math.round(reply.bytes/1024)+' KB. Room guests with permission can see a lightweight model preview.';
+  }catch(err){status.textContent='3D avatar upload failed: '+err.message;}finally{event.target.value='';}
+ };
+ $('profile3DAvatarPreview').onclick=()=>window.FreeLabModelStage?.open(null,true);
+ $('profile3DAvatarRemove').onclick=async()=>{if(!await window.FreeLabDialog.confirm('Remove your 3D avatar?'))return;
+   try{await api('/me/avatar-3d',{method:'DELETE'});$('profile3DAvatarStatus').textContent='3D avatar removed.';}
+   catch(err){$('profile3DAvatarStatus').textContent=err.message;}};
  $('profileButton').onclick=()=>{$('profilePanel').classList.remove('hidden');profileTab(state.user?.role==='admin'?'apis':'experience');};$('closeProfile').onclick=()=>$('profilePanel').classList.add('hidden');
  $('logout').onclick=async()=>{state.sessionKeys.clear();stopScan();closeCamera();await api('/logout',{method:'POST'});location.reload()};
  $('createProfile').onsubmit=async e=>{e.preventDefault();try{await api('/admin/profiles',{method:'POST',body:JSON.stringify({username:$('newUsername').value,display_name:$('newDisplayName').value,password:$('newPassword').value})});e.target.reset();notify('New private profile created');await loadAdminProfiles();}catch(error){notify(error.message)}};
@@ -304,9 +335,10 @@ async function init(){
 }
 
 // Spatial cloud interface: no background inference, all writes are profile-scoped.
+function cameraFrameReady(){const v=$('cameraVideo'),track=state.stream?.getVideoTracks?.()[0];return Boolean(track&&track.readyState==='live'&&!track.muted&&v?.videoWidth&&v?.videoHeight);}
 async function saveXRFrame(onLocal){
  // XR capture always samples the current live camera, never an earlier uploaded JPEG.
- if(state.stream?.getVideoTracks?.().some(t=>t.readyState==='live'&&!t.muted))snapshot();
+ if(cameraFrameReady())snapshot();
  if(!state.snapshot)throw Error('No readable frame. Press the central eye to enable the camera, or upload an image in the desktop view.');
  if(typeof onLocal==='function')onLocal(state.snapshot);
  const r=await api('/captures',{method:'POST',body:JSON.stringify({image:state.snapshot})});
@@ -327,7 +359,8 @@ async function refresh3DJobs(){
    row.append(el('strong','',`3D · ${job.provider} · ${job.status} · ${job.progress}%`));
    row.append(el('span','small-muted',`Source #${job.capture_id||'-'} · ${job.credits===null?'Credits pending':job.credits+' credits'}`));
    if(job.error)row.append(el('p','small-muted',job.error));
-   if(job.glb_url){const a=el('a','tiny-btn','Open / download GLB');a.href=job.glb_url;a.rel='noopener noreferrer';a.target='_blank';row.append(a);
+   if(job.status==='SUCCEEDED'){const view=el('button','tiny-btn','View in 3D');view.type='button';view.onclick=()=>window.FreeLabModelStage?.open(job.id);row.append(view);}
+   if(job.glb_url){const a=el('a','tiny-btn','Download GLB');a.href=job.glb_url;a.rel='noopener noreferrer';a.target='_blank';row.append(a);
     const renew=el('button','tiny-btn','Renew link');renew.onclick=async()=>{try{await checkXR3D(job.id,true);await refresh3DJobs();}catch(e){notify(e.message)}};row.append(renew);}
    if(!['SUCCEEDED','FAILED','CANCELED'].includes(job.status)){
     const button=el('button','tiny-btn','Check status');button.onclick=async()=>{try{await checkXR3D(job.id);await refresh3DJobs();}catch(e){notify(e.message)}};row.append(button);}
@@ -335,6 +368,16 @@ async function refresh3DJobs(){
   }
  }catch(e){panel.append(el('p','small-muted','3D jobs unavailable · '+e.message));}
 }
+let background3DTimer=null,background3DBusy=false,reported3DJobs=new Set();
+async function background3DCheck(){if(background3DBusy||document.visibilityState==='hidden'||!state.user)return;
+ background3DBusy=true;
+ try{const jobs=await list3DJobs(),pending=jobs.filter(j=>!['SUCCEEDED','FAILED','CANCELED'].includes(j.status)).slice(0,2);
+  for(const item of pending){try{const job=await checkXR3D(item.id);
+    if(['SUCCEEDED','FAILED'].includes(job.status)&&!reported3DJobs.has(job.id)){reported3DJobs.add(job.id);notify('3D '+job.id+' '+job.status.toLowerCase()+(job.error?' · '+job.error:''));window.dispatchEvent(new CustomEvent('freelab-3d-status',{detail:job}));}
+   }catch(e){traceEvent('Background 3D task '+item.id+': '+e.message,'warn');}}
+  if(!$('workspace').classList.contains('hidden'))void refresh3DJobs();
+ }catch(e){traceEvent('3D polling unavailable: '+e.message,'warn');}finally{background3DBusy=false;}}
+function startBackground3DMonitor(){if(background3DTimer)return;background3DTimer=setInterval(background3DCheck,30000);}
 async function recognizeXR(cid,objectId=null,cutouts=true){
  if(!objectId&&!state.snapshot)throw Error('Capture an image first');
  const payload={recognize:true,cutouts:Boolean(cutouts),capture_id:cid,model:$('modelChoice').value};
@@ -461,7 +504,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.21');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.22');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{
@@ -517,6 +560,6 @@ function wirePromptEditor(){
  };
 }
 
-window.FreeLab={openGallery,silenceXRVoice,api,startWavPrompt,currentRecording,describeXR,modelXRPreview,get3DPreference,save3DPreference,list3DJobs,loadElevenVoices,createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,resumeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
+window.FreeLab={cameraFrameReady,downloadImage,openGallery,silenceXRVoice,api,startWavPrompt,currentRecording,describeXR,modelXRPreview,get3DPreference,save3DPreference,list3DJobs,loadElevenVoices,createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,resumeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
 document.addEventListener('DOMContentLoaded',()=>{window.FreeLabRooms?.init?.();init().catch(e=>notify('Initialization failed: '+e.message));const bloom=$('featureBloom');if(bloom){setTimeout(()=>window.FreeLabSound?.play('arrival'),3000);bloom.querySelectorAll('.feature-seed').forEach(button=>{button.addEventListener('mouseenter',()=>window.FreeLabSound?.hover());button.addEventListener('focus',()=>window.FreeLabSound?.hover());});}});
 })();

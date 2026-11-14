@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.21",
-  "description": "Release identity correction for v0.10.20 UI hotfix; no feature changes"
+  "version": "0.10.22",
+  "description": "Inline image editing, persistent 3D viewer, small GLB guest avatars, camera-backed frames and watcher fixes"
 }

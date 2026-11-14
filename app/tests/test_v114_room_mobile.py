@@ -1,4 +1,4 @@
-"""Release v0.10.21: MIME gate, mobile capture parity and readable spatial labels."""
+"""Release v0.10.22: MIME gate, mobile capture parity and readable spatial labels."""
 from pathlib import Path
 import json,re,sqlite3,tempfile,unittest,subprocess
 from backend import db
@@ -20,10 +20,10 @@ class RoomMobile114(unittest.TestCase):
   if watcher_path.is_file():
    watcher=watcher_path.read_text()
    self.assertIn("'assets/room-viewer.mjs'",watcher)
-   self.assertIn("VERSION='0.9.1'",watcher)
+   self.assertIn("VERSION='0.9.2'",watcher)
  def test_webgl_loop_and_fixed_size_spatial_labels(self):
   rooms=(ROOT/'frontend/assets/rooms.js').read_text()
-  self.assertIn('/assets/room-viewer.mjs?v=0.10.21',rooms)
+  self.assertIn('/assets/room-viewer.mjs?v=0.10.22',rooms)
   room=(ROOT/'frontend/assets/room-viewer.mjs').read_text()
   for phrase in ('requestAnimationFrame(tick)','renderer.render(scene,camera)','updateScreenLabels()','screenPoint.project(camera)','roomFPS','roomLabels','roomInspectDescription'):
    self.assertIn(phrase,room)
@@ -32,7 +32,7 @@ class RoomMobile114(unittest.TestCase):
   self.assertIn('#roomCanvas{position:absolute!important;',css)
  def test_mobile_capture_has_real_workflow_and_explicit_cost_guard(self):
   js=(ROOT/'frontend/assets/capture-studio.js').read_text()
-  for phrase in ("FL().listXRClouds()","/captures'","FL().recognizeXR(","FL().segmentXR(","FL().describeXR(","FL().openPromptEditor(","FL().createXR3D(","FL().resumeCamera()", "window.FreeLabDialog.confirm(", "captureShutter"):
+  for phrase in ("FL().listXRClouds()","/captures'","FL().recognizeXR(","FL().segmentXR(","FL().describeXR(","FL().promptXR(","FL().createXR3D(","FL().resumeCamera()", "window.FreeLabDialog.confirm(", "captureShutter"):
    self.assertIn(phrase,js)
   self.assertNotIn('setInterval(',js)
   for value in ('captureShutter','captureTree','captureSelection','captureRefineApply','captureVoice','captureMake3D'):
@@ -63,7 +63,7 @@ class RoomMobile114(unittest.TestCase):
   self.assertIn('brand-version',page)
   for legacy in ('FREELAB LABORATORY © 2026','BUILT FOR CURIOSITY','LIVE EXPERIMENT /'):
    self.assertNotIn(legacy,page)
-  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.21')
+  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.22')
  def test_frontend_syntax(self):
   for f in ('room-viewer.mjs','scene.mjs','capture-studio.js','app.js','xr.js'):
    p=ROOT/'frontend/assets'/f

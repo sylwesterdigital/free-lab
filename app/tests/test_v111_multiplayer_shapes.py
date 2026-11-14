@@ -1,4 +1,4 @@
-"""v0.10.21: shape matching, room permissions, provider scopes, gallery and XR navigation."""
+"""v0.10.22: shape matching, room permissions, provider scopes, gallery and XR navigation."""
 import os,sys,tempfile,sqlite3,subprocess,unittest
 from pathlib import Path
 from backend import db,aholo3d

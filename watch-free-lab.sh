@@ -10,7 +10,7 @@ from pathlib import Path,PurePosixPath
 
 ROOT=Path(sys.argv[1]).resolve();sys.argv=[sys.argv[0]]+sys.argv[2:]
 UPDATES=ROOT/'updates';UPLOADS=ROOT/'uploads';STATE=ROOT/'.free-lab'
-VERSION='0.9.1';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
+VERSION='0.9.2';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
 REPO='git@github.com:sylwesterdigital/free-lab.git'
 HOST=os.getenv('FREE_LAB_SSH_HOST','root@46.62.232.64')
 PORT=os.getenv('FREE_LAB_SSH_PORT','333')
@@ -134,9 +134,9 @@ def preflight(stage):
     origin=run(['git','remote','get-url','origin'],cwd=ROOT).stdout.strip()
     if origin not in (REPO,'ssh://git@github.com/sylwesterdigital/free-lab.git'):
         raise Failure('Unexpected Git origin: '+origin)
-    changes=run(['git','status','--porcelain=v1','--untracked-files=all'],cwd=ROOT).stdout.splitlines()
+    changes=[line for line in run(['git','status','--porcelain=v1','-z','--untracked-files=all'],cwd=ROOT).stdout.split('\0') if line]
     for line in changes:
-        name=line[3:]
+        name=line[3:]  # NUL-delimited --porcelain -z paths are unquoted, even with spaces
         if line.startswith('?? ') and (name.startswith(('uploads/','updates/','.free-lab/')) or name=='.DS_Store'):continue
         if name=='watch-free-lab.sh' and not name.startswith(' D') and (ROOT/name).is_file() and (ROOT/name).read_bytes()==(stage/'watch-free-lab.sh').read_bytes():continue
         raise Failure('Local worktree has unrelated modifications. Commit/stash first: '+line)
