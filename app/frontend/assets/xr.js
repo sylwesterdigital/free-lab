@@ -17,7 +17,7 @@ let mascotSpeech=null,mascotSpeechUntil=0,gestureSpeechTimes=new Map(),mascotRea
 let pointerHover=null,lastFrame=0,lastUi=0,lastAction=0,latestPose=null,nextPaidAt=0,busy=false,mode='capture',statusText='Capture your space',statusUntil=0;
 let followMode=true,followBase=null,eyeBase=null,captureEye=null,voiceButton=null,extractButton=null,extractVisualActive=null,eyeResource=null,eyeState='idle',eyeUntil=0,rootYaw=0,menuYaw=0,promptPanel=null,promptContext=null,promptText='',xrDomOverlay=false;
 let cameraHint=null,cameraHintState='',lastHintCheck=0;
-let debugPanel=null,debugShowing=false,debugLast=0,serverPoll=0,serverDiagnostic=[],descriptionPanel=null,meshPreviews=[],meshLoadingJobs=new Set(),mascotPointer=null,mascotTex=null,lastAvatar=0,mixBucket=[],xrKeyboard=null,visitorBadges=[],visitorPollAt=0;
+let debugPanel=null,debugShowing=false,debugLast=0,serverPoll=0,serverDiagnostic=[],descriptionPanel=null,meshPreviews=[],meshLoadingJobs=new Set(),meshJobBadges=new Map(),meshPreviewFailures=new Set(),mascotPointer=null,mascotTex=null,lastAvatar=0,mixBucket=[],xrKeyboard=null,visitorBadges=[],visitorPollAt=0;
 let followOffset=[0,-.85,-1.16],followWorld=null,eyeWorld=null,depthState='unknown',depthChecked=false,depthFeature=false,depthBinding=null,meshyJob=null,meshyPollAt=0,meshConfirm=null;
 let voiceRecord=null,voiceRecordStarted=0,voiceMeterLast=0,cameraHintUntil=0,meshJobOrigin=null;
 let particles=[],handPinch=new WeakMap(),lastNative=new WeakMap(),clickState=new WeakMap(),lastEyeUpdate=0,lastMicUpdate=0,inferenceCard=null,inferenceStarted=0;
@@ -962,10 +962,12 @@ function releaseMeshPreview(mesh){
  for(const part of mesh.parts||[]){if(part.buffer)gl.deleteBuffer(part.buffer);if(part.texture)gl.deleteTexture(part.texture);}
 }
 function clearCollectionMeshes(){
- // Every GLB belongs to the current capture. Closing or paging that capture must
- // also remove its models; guest avatars are independent room presences.
+ // Each job/model is owned by the source branch, never by the headset's global scene.
+ // Do not discard provider jobs: those survive branch navigation in SQLite.
  meshGeneration++;
  meshPreviews=meshPreviews.filter(m=>{if(m.guestId)return true;releaseMeshPreview(m);return false;});
+ for(const badge of meshJobBadges.values())if(badge.front&&gl)gl.deleteTexture(badge.front);
+ meshJobBadges.clear();meshPreviewFailures.clear();
 }
 function clearCards(){if(!gl)return;clearCollectionMeshes();closeImageMenu();for(const c of cards)for(const t of c.resources||[])gl.deleteTexture(t);cards=[];selected=null;}
 function rootPos(c){return cloud&&!['config','toolbar','status','captureeye','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics','description','labmenu','darkroom','darkroomexit','cinema-floor','visitor'].includes(c.kind)?vadd(c.pos,cloud.offset||[0,0,0]):c.pos;}
@@ -995,6 +997,8 @@ function syncTrackedUI(pose,t){
  lastFrame=t;
 }
 function cardModel(c){
+ // 3D job chips are in world space and re-anchor to a source card each XR frame.
+ if(c.kind==='3djob')return matmul(translate(...c.pos),matmul(quatMatrix(c.q),scale(c.size[0]*(c.animScale??1),c.size[1]*(c.animScale??1),1)));
  if(c.kind==='contextbar'&&c.parentCard){const parent=c.parentCard,sc=parent.scale*(parent.animScale===undefined?1:parent.animScale);
   // A single vertical popover sits to the right and slightly BEHIND the image plane.
   const parentWorld=point(baseFor(parent),rootPos(parent));
@@ -1421,7 +1425,7 @@ function renderView(t,frame){if(!session||gl.isContextLost()){return;}const pose
  pollRoomVisitors(t);placeRoomVisitors(pose);poll3d(t);pollLabSelector(frame,t,pose);pollStringLab(frame,t);pollFingerLab(frame,t);pollFrameLab(frame,t);pollPlacedFrameTouch(frame,t);pollFrameGames(t,pose);advanceGrab(frame);for(const src of session.inputSources)pinchPoll(frame,src);pollGestures(frame,t);tween(t);faceCloudCards(pose,t);updateMascot(frame,t);tickMascotSpeech(t);tickVoiceIndicator(t,pose);typeStatus(t);updateMicVisual(t);updateDebugCard(t);if(captureEye&&t-lastEyeUpdate>67){if(eyeState!=='idle'&&t>eyeUntil)eyeState='idle';paintEye(t);lastEyeUpdate=t;}if(cameraHint&&t-lastHintCheck>180){lastHintCheck=t;const label=cameraHintMode();if(label!==cameraHintState){cameraHintState=label;cameraHintUntil=t+(label==='off'||label==='ready'?10000:7000);gl.deleteTexture(cameraHint.front);cameraHint.front=cameraHintTexture(label);cameraHint.back=cameraHint.front;cameraHint.resources=[cameraHint.front];}cameraHint.visible=t<cameraHintUntil&&voicePhase!=='listening'&&voicePhase!=='processing';}if(t-lastUi>150){updateHover(frame);lastUi=t;}
  gl.bindFramebuffer(gl.FRAMEBUFFER,session.renderState.baseLayer.framebuffer);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
  for(const view of pose.views){const vp0=session.renderState.baseLayer.getViewport(view);gl.viewport(vp0.x,vp0.y,vp0.width,vp0.height);const vp=matmul(view.projectionMatrix,view.transform.inverse.matrix);
- decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(statusCard?.visible)drawCard(statusCard,vp);if(editbar)drawCard(editbar,vp);if(captureEye&&voicePhase!=='listening'&&voicePhase!=='processing')drawCard(captureEye,vp);if(cameraHint)drawCard(cameraHint,vp);if(voiceButton&&uiSettings.voice!==false)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(configShowing&&configPanel)drawCard(configPanel,vp);/* description is composited after mascot for legibility */for(const m of meshPreviews)drawMeshPreview(m,vp,t);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);drawStringLab(vp,t,pose);drawFingerLab(vp,t,pose);drawFramePhotos(vp);drawSpatialFrames(vp,t,pose);drawShapeTargets(vp,t,pose);drawFrameCubes(vp);if(labMenu?.visible)drawCard(labMenu,vp);for(const visitor of visitorBadges)drawCard(visitor,vp);depthCapability(frame,view);
+ decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(statusCard?.visible)drawCard(statusCard,vp);if(editbar)drawCard(editbar,vp);if(captureEye&&voicePhase!=='listening'&&voicePhase!=='processing')drawCard(captureEye,vp);if(cameraHint)drawCard(cameraHint,vp);if(voiceButton&&uiSettings.voice!==false)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(configShowing&&configPanel)drawCard(configPanel,vp);/* description is composited after mascot for legibility */for(const m of meshPreviews)drawMeshPreview(m,vp,t);draw3DJobBadges(vp,t);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);drawStringLab(vp,t,pose);drawFingerLab(vp,t,pose);drawFramePhotos(vp);drawSpatialFrames(vp,t,pose);drawShapeTargets(vp,t,pose);drawFrameCubes(vp);if(labMenu?.visible)drawCard(labMenu,vp);for(const visitor of visitorBadges)drawCard(visitor,vp);depthCapability(frame,view);
  for(const src of session.inputSources){const r=ray(frame,src);if(!r)continue;const h=pick(r),end=vadd(r.o,vmul(r.d,h?.dist||1.2));const colour=src.hand?[.72,1,.75,.7]:[.77,.88,1,.72];line(vp,[r.o,end],colour);line(vp,[end],colour,true,h?16:9);}
  if(mascotPointer?.visible){if(mascotMode()==='2d'){
    if(!mascotPointer.front){mascotTex=mascotTexture();mascotPointer.front=mascotTex;mascotPointer.back=mascotTex;}
@@ -1500,7 +1504,7 @@ async function showCloud(id,focusId=null,page=0){if(latestPose){root=viewerAncho
  selected=null;updateEditbar();setStatus(`TREE · ${next.objects.length} images · depth ${tree.chain.length} · ${tree.totalChildren} direct children · page ${tree.page+1}/${tree.pages}`,8500);
  // Reuse the saved JPEG for additional explicit Muse/SAM operations.
  if(id>0)await window.FreeLab.useXRFrame?.(next.image||next.image_url).catch(e=>setStatus(e.message));
- if(id>0)void reopenCloudModels(id); // Read-only, no paid generation or job creation.
+ if(id>0){meshSyncAt=performance.now();void reopenCloudModels(id);} // Read-only: never creates another paid task.
 }
 async function openBranch(id){if(!cloud?.id)return;
  const node=cloud.objects.find(o=>o.id===id&&o.shelf!=='bin');if(!node)return setStatus('Branch not found');
@@ -1806,8 +1810,11 @@ async function collapse(){if(!cloud)return openGallery();if(cloud.collapsed){awa
  setTimeout(()=>{if(cloud?.collapsed){clearCards();cloud=null;branchFocusId=null;branchPage=0;selected=null;updateEditbar();}},1350);}
 async function submit3d(){if(!meshConfirm||busy)return;const target=meshConfirm;
  meshJobOrigin=target.origin;closeImageMenu();busy=true;setStatus('3D SUBMITTING · selected provider · one confirmed billable job',11000);
- try{const job=await window.FreeLab.createXR3D(target.captureId,target.objectId);meshyJob=job.id;pending3dJobs.push({id:job.id,provider:job.provider,captureId:target.captureId,objectId:target.objectId});meshyPollAt=0;
-  meshConfirm=null;setStatus('3D QUEUED · '+job.provider.toUpperCase()+' job '+job.id+' · keep collecting while it generates; progress in LOG',14000);
+ try{const job=await window.FreeLab.createXR3D(target.captureId,target.objectId);meshyJob=job.id;
+  pending3dJobs.push({id:job.id,provider:job.provider,captureId:target.captureId,objectId:target.objectId});meshyPollAt=0;
+  syncMeshJobBadge({...job,capture_id:target.captureId,object_id:target.objectId,progress:0});
+  const anchor=meshAnchor({captureId:target.captureId,objectId:target.objectId});if(anchor)launchParticles(anchor.pos);
+  meshConfirm=null;setStatus('3D BRANCH CREATED · '+job.provider.toUpperCase()+' task '+job.id+' · keep exploring while it grows',14000);
  }catch(e){setStatus('3D generation failed · '+e.message,16000);}finally{busy=false;}}
 function close3d(){meshConfirm=null;updateEditbar();}
 function open3d(){if(!selected||!['source','object'].includes(selected.kind)||!cloud?.id)return setStatus('Select an image to generate a 3D model');
@@ -1819,13 +1826,98 @@ function open3d(){if(!selected||!['source','object'].includes(selected.kind)||!c
 function meshNormals(a,b,c){const u=vsub(b,a),v=vsub(c,a);return norm([u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]]);}
 function meshOwnerCard(model){
  if(!cloud||model.captureId!==cloud.id||cloud.hidden||cloud.collapsed)return null;
- return cards.find(c=>c.visible!==false&&(
-  model.objectId?c.kind==='object'&&c.data?.id===model.objectId:c.kind==='source'))||null;
+ // In a focused branch the source card is deliberately hidden: its visible
+ // ancestor thumbnail is the correct 3D attachment point instead.
+ if(model.objectId)return cards.find(c=>c.visible!==false&&(
+  (c.kind==='object'||c.kind==='ancestor')&&c.data?.id===model.objectId))||null;
+ return cards.find(c=>c.visible!==false&&c.kind==='source')||
+  cards.find(c=>c.visible!==false&&c.kind==='ancestor'&&c.data?.id==null)||null;
 }
 function meshAnchor(model){
  const card=meshOwnerCard(model);if(!card||!root)return null;
  const anchor=point(root,rootPos(card)),q=worldCardQuat(card);
  return {pos:vadd(anchor,quatVec(q,[card.size[0]*.58+.20,-.065,.055])),q};
+}
+// 3D jobs are asynchronous branches. Their badges persist while the parent
+// image is visible, follow that image's spatial transform, and make failures
+// explicit instead of silently leaving an empty XR scene.
+function meshJobCaption(job){
+ const status=String(job.status||'PENDING').toUpperCase();
+ if(status==='FAILED'||status==='CANCELED')return '3D '+status;
+ if(status==='PREVIEW_ERROR')return '3D PREVIEW UNAVAILABLE';
+ if(status==='SUCCEEDED')return '3D MODEL READY';
+ if(status==='LOADING')return '3D MODEL LOADING';
+ return 'GENERATING 3D';
+}
+function meshJobTexture(job){
+ const [c,ctx]=canvas2d(580,216),bad=['FAILED','CANCELED','PREVIEW_ERROR'].includes(job.status);
+ panelSkin(ctx,580,216,26);
+ const accent=bad?'#ffb5bb':job.status==='SUCCEEDED'?'#b6ffd7':'#a8ebed';
+ text(ctx,meshJobCaption(job),27,57,32,accent,750);
+ text(ctx,`${String(job.provider||'3D').toUpperCase()}  ·  TASK ${job.id}`,27,97,20,uiPalette().text,550);
+ if(job.status==='PREVIEW_ERROR'){
+  text(ctx,'Open model in Collection',27,134,19,uiPalette().text,500);
+ }else if(job.status==='FAILED'){
+  text(ctx,String(job.error||'Provider task failed').slice(0,47),27,134,18,uiPalette().text,500);
+ }else{
+  const progress=Math.max(0,Math.min(100,Number(job.progress)||0));
+  text(ctx,job.status==='SUCCEEDED'?'Linked to this photo':`Processing ${progress}% · keep exploring`,27,134,19,uiPalette().text,500);
+  rrect(ctx,27,158,526,12,6,'#314740');
+  rrect(ctx,27,158,526*Math.max(.035,progress/100),12,6,accent);
+ }
+ return texture(c);
+}
+function syncMeshJobBadge(job){
+ if(!cloud||job.capture_id!==cloud.id||!Number.isInteger(job.id))return;
+ const status=String(job.status||'PENDING').toUpperCase();
+ let badge=meshJobBadges.get(job.id);
+ // A completed preview only needs its chip during the pop-out animation.
+ if(!badge&&status==='SUCCEEDED'&&meshPreviews.some(m=>m.jobId===job.id))return;
+ const progress=Number(job.progress)||0;
+ if(!badge){
+  badge={id:job.id,jobId:job.id,captureId:job.capture_id,objectId:job.object_id||null,
+    provider:job.provider||'3D',status,progress,error:job.error||'',born:performance.now(),front:null,
+    kind:'3djob',size:[.32,.119],scale:1,animScale:0,alpha:1,visible:true,
+    pos:[0,0,-1],q:[0,0,0,1],lastChange:0,completeAt:0};
+  meshJobBadges.set(job.id,badge);
+ }
+ const changed=badge.status!==status||Math.abs(badge.progress-progress)>=3||badge.error!==(job.error||'');
+ badge.status=status;badge.progress=progress;badge.error=job.error||'';
+ if(status==='SUCCEEDED'&&!badge.completeAt)badge.completeAt=performance.now();
+ if(!badge.front||changed){const tex=meshJobTexture(badge);if(badge.front&&gl)gl.deleteTexture(badge.front);badge.front=tex;badge.back=tex;badge.lastChange=performance.now();}
+}
+function markMeshPreviewError(jobId,error){
+ const badge=meshJobBadges.get(jobId);if(!badge||!gl)return;
+ const value=String(error||'Unsupported 3D model').slice(0,120);
+ if(badge.status==='PREVIEW_ERROR'&&badge.error===value)return;
+ badge.status='PREVIEW_ERROR';badge.error=value;badge.completeAt=0;
+ const tex=meshJobTexture(badge);if(badge.front)gl.deleteTexture(badge.front);badge.front=badge.back=tex;
+}
+function draw3DJobBadges(vp,t){
+ if(!cloud||!session||!root)return;
+ for(const badge of meshJobBadges.values()){
+  const owner=meshOwnerCard(badge);if(!owner)continue;
+  const anchor=meshAnchor(badge);if(!anchor)continue;
+  if(badge.status==='SUCCEEDED'&&meshPreviews.some(m=>m.jobId===badge.jobId)&&t-badge.completeAt>3600){
+   if(badge.front)gl.deleteTexture(badge.front);meshJobBadges.delete(badge.id);continue;
+  }
+  const start=point(root,rootPos(owner)),age=t-badge.born,ease=easing(clamp(age/850,0,1));
+  badge.animScale=Math.max(.08,ease);badge.pos=blend(start,vadd(anchor.pos,quatVec(anchor.q,[0,.255,.0])),ease);
+  badge.pos[1]+=Math.sin(Math.PI*ease)*.12;
+  badge.q=anchor.q;
+  badge.alpha=badge.status==='SUCCEEDED'?1:.84+.13*Math.sin(t/520+badge.jobId);
+  drawCard(badge,vp);
+  // Spatial lineage: the 3D result grows from the selected source image.
+  const end=anchor.pos,mid=vadd(vmul(vadd(start,end),.5),[0,.09,0]);
+  const curve=[];for(let i=0;i<=9;i++){const u=i/9;curve.push(vadd(vadd(vmul(start,(1-u)**2),vmul(mid,2*u*(1-u))),vmul(end,u*u)));}
+  const edges=[];for(let i=1;i<curve.length;i++)edges.push(curve[i-1],curve[i]);
+  line(vp,edges,[.46,1,.77,.64]);
+ }
+ // Once the status chip disappears, the model itself remains linked to source.
+ for(const m of meshPreviews){if(!m.parts?.length||m.captureId!==cloud.id||meshJobBadges.has(m.jobId))continue;
+  const owner=meshOwnerCard(m),anchor=meshAnchor(m);if(!owner||!anchor)continue;
+  line(vp,[point(root,rootPos(owner)),anchor.pos],[.46,.94,.76,.42]);
+ }
 }
 async function xrEmbeddedTexture(encoded){
  if(!encoded)return null;
@@ -1858,7 +1950,7 @@ function createMeshPart(raw){
 }
 async function spawnMeshPreview(job,origin=null){
  const jobId=typeof job==='number'?job:job.id;
- if(meshPreviews.some(m=>m.jobId===jobId)||meshLoadingJobs.has(jobId)||meshLoadingJobs.size>=2||!session)return;
+ if(meshPreviews.some(m=>m.jobId===jobId)||meshPreviewFailures.has(jobId)||meshLoadingJobs.has(jobId)||meshLoadingJobs.size>=2||!session)return;
  const captureId=typeof job==='number'?cloud?.id:job.capture_id;
  const objectId=typeof job==='number'?null:(job.object_id||null);
  if(!captureId||!cloud||cloud.id!==captureId)return;
@@ -1877,9 +1969,12 @@ async function spawnMeshPreview(job,origin=null){
   const model={jobId,captureId,objectId,parts:pieces,pos:origin||[0,0,-1],q:[0,0,0,1],created:performance.now()};
   if(!meshAnchor(model))return;
   meshPreviews.push(model);pieces.length=0;
-  setStatus('3D READY · '+(result.texture_omitted?'solid material mesh':'textured mesh')+' · attached to source · close source to hide',12500);
+  syncMeshJobBadge({...job,id:jobId,capture_id:captureId,object_id:objectId,
+    provider:typeof job==='number'?'3D':job.provider,status:'SUCCEEDED',progress:100});
+  const a=meshAnchor(model);if(a)launchParticles(a.pos);
+  setStatus('3D POPPED INTO XR · '+(result.texture_omitted?'solid model':'textured model')+' · linked to source',12500);
   cue('bloom');
- }catch(e){if(scope===meshGeneration)setStatus('3D PREVIEW: '+e.message+' · full GLB in Collection',15000);}
+ }catch(e){if(scope===meshGeneration){meshPreviewFailures.add(jobId);markMeshPreviewError(jobId,e.message);setStatus('3D PREVIEW UNAVAILABLE · '+e.message+' · full GLB in Collection',15000);}}
  finally{for(const part of pieces){if(part.buffer)gl.deleteBuffer(part.buffer);if(part.texture)gl.deleteTexture(part.texture);}meshLoadingJobs.delete(jobId);}
 }
 function drawMeshPreview(mesh,vp,t){
@@ -1916,14 +2011,31 @@ async function reopenCloudModels(captureId){
  try{
   const all=await window.FreeLab.list3DJobs?.()||[];
   if(scope!==meshGeneration||cloud?.id!==captureId||!session)return;
-  for(const job of all.filter(j=>j.status==='SUCCEEDED'&&j.capture_id===captureId).slice(0,2)){
+  // Do not silently ignore every model after the first two. Keep a bounded set
+  // of visible XR previews for performance, but surface every recent job state.
+  const related=all.filter(j=>j.capture_id===captureId).slice(0,12);
+  for(const job of related){
+   if(scope!==meshGeneration||cloud?.id!==captureId)return;
+   if(!['SUCCEEDED'].includes(job.status))syncMeshJobBadge(job);
+   if(['PENDING','IN_PROGRESS','UNKNOWN'].includes(job.status)&&
+       !pending3dJobs.some(j=>j.id===job.id)&&pending3dJobs.length<24){
+    pending3dJobs.push({id:job.id,provider:job.provider,captureId:job.capture_id,objectId:job.object_id});
+   }
+  }
+  let loaded=meshPreviews.filter(m=>m.parts?.length&&m.captureId===captureId).length;
+  for(const job of related){
+   if(scope!==meshGeneration||cloud?.id!==captureId||loaded>=6)return;
+   if(job.status!=='SUCCEEDED')continue;
+   if(meshPreviews.some(m=>m.jobId===job.id)||meshLoadingJobs.has(job.id))continue;
+   if(!meshOwnerCard({captureId,objectId:job.object_id||null}))continue;
    await spawnMeshPreview(job);
    if(scope!==meshGeneration)return;
+   loaded=meshPreviews.filter(m=>m.parts?.length&&m.captureId===captureId).length;
   }
  }catch(e){window.FreeLab?.traceEvent?.('3D model reload: '+e.message,'warn');}
 }
 async function poll3d(t){
- if(cloud?.id&&t-meshSyncAt>31000&&!meshSyncBusy){
+ if(cloud?.id&&t-meshSyncAt>17000&&!meshSyncBusy){
   meshSyncAt=t;meshSyncBusy=true;
   void reopenCloudModels(cloud.id).catch(e=>window.FreeLab?.traceEvent?.('3D sync: '+e.message,'warn')).finally(()=>{meshSyncBusy=false;});
  }
@@ -1931,11 +2043,13 @@ async function poll3d(t){
  const jobs=pending3dJobs.slice(0,2);
  for(const item of jobs){try{
   const job=await window.FreeLab.checkXR3D(item.id);
+  if(cloud?.id===job.capture_id)syncMeshJobBadge(job);
   if(job.status==='SUCCEEDED'){
    pending3dJobs=pending3dJobs.filter(j=>j.id!==item.id);
-   setStatus(job.provider.toUpperCase()+' 3D READY · '+(job.glb_url?'saved with original source':'checking provider outputs'),15000);
-   if(job.glb_url&&cloud?.id===job.capture_id)void spawnMeshPreview(job);
-   else setStatus('3D READY · model stored in its source Collection. Open that source to view.',15000);
+   setStatus(job.provider.toUpperCase()+' 3D READY · placing model by its source image',15000);
+   // A model is already stored on the server; reloading must never submit a paid task.
+   if(cloud?.id===job.capture_id)void spawnMeshPreview(job);
+   else setStatus('3D READY · reopen its source in LIB to see the model',15000);
   }else if(['FAILED','CANCELED'].includes(job.status)){
    pending3dJobs=pending3dJobs.filter(j=>j.id!==item.id);
    setStatus(job.provider.toUpperCase()+' 3D '+job.status+' · '+(job.error||'check provider account'),16000);

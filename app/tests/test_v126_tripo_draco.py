@@ -1,4 +1,4 @@
-"""v0.10.26: offline tests for real Tripo v3 and Draco GLB loading."""
+"""v0.10.27: offline tests for real Tripo v3 and Draco GLB loading."""
 from __future__ import annotations
 import json, tempfile, unittest
 from pathlib import Path
@@ -76,8 +76,26 @@ class TripoUI(unittest.TestCase):
   self.assertIn('setDRACOLoader(draco)',STAGE)
   self.assertLess(STAGE.index('loader.setDRACOLoader(draco)'),STAGE.index('loader.parse(raw'))
   self.assertIn('if(localFile)throw e',STAGE)
+ def test_xr_async_models_bloom_from_their_source(self):
+  self.assertIn('meshJobBadges=new Map()',XR)
+  self.assertIn('function syncMeshJobBadge(job)',XR)
+  self.assertIn('function draw3DJobBadges(vp,t)',XR)
+  self.assertIn('function meshJobCaption(job)',XR)
+  self.assertIn("if(c.kind==='3djob')",XR)
+  self.assertIn('draw3DJobBadges(vp,t)',XR)
+  self.assertIn('syncMeshJobBadge({...job,capture_id:target.captureId',XR)
+  self.assertIn('launchParticles(a.pos)',XR)
+  self.assertIn('3D POPPED INTO XR',XR)
+  self.assertIn('related=all.filter(j=>j.capture_id===captureId).slice(0,12)',XR)
+  self.assertNotIn("j.status==='SUCCEEDED'&&j.capture_id===captureId).slice(0,2)",XR)
+  self.assertIn('meshPreviews.some(m=>m.jobId===job.id)',XR)
+  self.assertIn('meshJobBadges.clear();meshPreviewFailures.clear();',XR)
+  self.assertIn('meshOwnerCard(badge)',XR)
+  self.assertIn('m.captureId!==cloud.id',XR)
+  self.assertIn('model_cache.store(',APP)
+
  def test_new_version(self):
-  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.26')
-  self.assertEqual(json.loads((ROOT/'frontend/version.json').read_text())['version'],'0.10.26')
+  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.27')
+  self.assertEqual(json.loads((ROOT/'frontend/version.json').read_text())['version'],'0.10.27')
 
 if __name__=='__main__':unittest.main()

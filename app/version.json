@@ -1,1 +1,5 @@
-{"project":"free-lab","version":"0.10.26","description":"Tripo v3 image-to-3D, real balance diagnostics, Draco-compressed GLB preview and cross-device provider choice"}
+{
+  "project": "free-lab",
+  "version": "0.10.27",
+  "description": "XR source-linked asynchronous 3D job badges, visible model pop-in, restored multi-model collection previews and explicit error states"
+}

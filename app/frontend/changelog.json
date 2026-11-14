@@ -1,1 +1,206 @@
-{"version":"0.10.26","title":"FREELAB v0.10.26 \u2014 Tripo generation and Draco GLBs","datetime":"2026-11-14","changes":["Tripo v3 image-to-model generation now works with private image uploads and asynchronous job status, using the same source-linked collection as AHOLO and Meshy.","Tripo Test now calls the read-only account balance API and checks real authentication and credits without generating or billing a model.","Choose AHOLO, Meshy or Tripo from desktop/mobile Settings, the capture composer or the XR configuration panel; the preference follows the profile.","The browser 3D viewer now configures a Three.js Draco loader for Draco-compressed avatars and generated GLB files.","XR refreshes the active source\u2019s completed model previews periodically so jobs submitted on another device can appear beside their source image.","Existing profile settings remain compatible through a non-destructive SQLite provider-choice extension."],"history":[{"version":"0.10.25","title":"FREELAB v0.10.25 \u2014 XR voice, text creation and avatar optimization","datetime":"2026-11-14","changes":["Profile 3D avatar size limit increased to 4 MB. Files up to 16 MB can be inspected locally and optionally submitted to a separate opt-in Blender optimizer targeting 4 MB.","Private headless Blender optimization jobs are bounded, stored with owner-scoped read-only status, and never replace a working avatar unless a valid GLB under 4 MB is produced. Server-side Blender must be installed.","Avatar preview shows the selected GLB locally even above the XR upload limit, including exact file size and the reduction needed.","XR listening controls and transcripts follow the head near the middle of the view; transcripts use significantly larger type and are placed beside the microphone.","XR keyboard Enter submits the instruction without requiring another editor action. Recognized voice commands and image prompts send automatically unless the new voice-confirmation preference is enabled.","Text-only Muse Image generation creates a saved source without a camera or existing source. CREATE is available in XR; desktop/mobile message composer also supports text-only creation.","Theater previous, next, and exit controls are grouped together in one head-relative row, with the caption size increased for XR source/object cards."]},{"version":"0.10.24","title":"FREELAB v0.10.24 \u2014 Textured XR models linked to source captures","datetime":"2026-11-14","changes":["XR-generated models now use a bounded texture-aware GLB decoder that preserves embedded base-colour images, material colour, UVs and scene-node transforms.","Dense generated meshes are simplified by spatial vertex clustering instead of skipping faces that appeared as disjoint green star fragments; geometry that cannot be simplified coherently produces a clear fallback message.","3D previews are normalised and displayed at a compact ~30 cm largest-axis scale beside their parent source or object, moving with the source card.","Completed models are retrieved read-only from the source-linked job history when the source is reopened; no paid job is re-submitted.","Closing, hiding, binning or navigating away from a capture removes linked model geometry and textures from the active XR scene; the 3D job and full original GLB remain saved in Collection.","Existing static guest-avatar previews and desktop full-GLB viewer remain available. Headset renderer performance and unusual GLB formats require Quest verification."]},{"version":"0.10.23","title":"FREELAB v0.10.23 \u2014 Upright framed photos, bounded crop and spatial grab","datetime":"2026-11-14","changes":["Fixed upside-down FRAME photograph textures with correct top-to-bottom UV mapping for browser-camera images.","Frame photos now crop a live browser-camera JPEG using the hand-drawn rectangle projected through WebXR viewer matrices, with an aspect-preserving bounded crop, rather than stretching the whole camera image.","The projection approximates the selected field of view; a separate browser camera is not calibrated to Quest passthrough and cannot supply pixel-perfect crops.","Pinching anywhere inside or near the filled spatial photo now grabs and moves/rotates its linked frame; releasing pins the photograph at the new pose.","Erasing or expiring a frame now discards its attached photo and GPU texture/buffer; up to 12 image panels remain resident.","Normal XR eye capture still saves an independent full camera frame and selected image state is not overwritten by rectangle photo captures."]},{"version":"0.10.22","title":"FREELAB v0.10.22 \u2014 Inline editing, live models and spatial camera frames","datetime":"2026-11-14","changes":["Send in Capture Studio now edits or refines the selected image directly; no second text-entry modal. The gallery has its own inline editor.","3D jobs are monitored globally when the site is visible, with distinct queued/running/completed/failed states. Completed GLBs load into an interactive private Three.js scene with geometry fallback.","Private model cache limit raised from 12 to 32 MB with SHA/GLB checks, size cap, provider URL allowlist and authenticated access. Models above the new limit still depend on the provider link.","Profiles accept self-contained GLB avatars under 2 MB; XR guests and browser-room spectators receive static decimated 3D avatar previews where supported. Rigging is preserved in storage; no body-pose streaming yet.","Desktop and mobile capture/gallery/collection menus include Download photo. The three XR roundels move higher, the LIB/PIN/LOG bar lower and cinema controls form a compact grouped row.","Placing an experimental FRAME saves a photo only if a separately permissioned, readable browser camera stream exists; it maps the snapshot on the frame. Standard Quest XR passthrough framebuffer pixels cannot be captured.","Watcher v0.9.2 uses NUL-delimited Git status so allowed update ZIP filenames containing spaces do not falsely block preflight."]},{"version":"0.10.22","title":"FREELAB v0.10.22 \u2014 Watcher-safe release identity","datetime":"2026-11-14","changes":["Repackaged the v0.10.20 UX hotfix under a unique v0.10.22 release identity so the watcher can pick it up.","Retains the refine/extract separation, bottom image editor, asynchronous 3D task UI, gradient feedback and XR/theater layout changes.","No provider configuration, database reset, watcher replacement or paid API operation is introduced."]},{"version":"0.10.20","title":"FREELAB v0.10.20 \u2014 Refine flow, spatial controls and packaging repair","datetime":"2026-11-14","changes":["Refine image now opens a multiline image-quality editor rather than asking for an object to segment; named-object extraction remains a separate command.","Bottom-aligned image editor keeps the original photo visible. Removed redundant instructions and added animated rainbow text during processing.","3D tasks remain asynchronous; clearer queued-status messages explain users can continue working while the model is generated.","XR navigation now sits lower beneath the capture roundels; microphone icons and captions are adjusted for headset legibility.","Desktop room fullscreen groups previous, next and close controls. Cards use larger captions.","Deployment ZIP excludes Python bytecode and test caches; release manifest lists only application source files."]},{"version":"0.10.19","title":"FREELAB v0.10.19 \u2014 Unified AI controls & reliable 3D","datetime":"2026-11-14","changes":["Desktop/mobile and gallery now use one in-page confirmation/entry overlay; no browser-native confirm, prompt or alert dialogs for AI and account actions.","Capture actions reuse three roundels (microphone, describe, extract) over selected photo, with extra tools including 3D under a contextual three-dot menu; a second shutter row is hidden while inspecting.","Multiline, expandable instruction composer supports image edits, questions, extraction, targeted segment refinement and image-guided 3D prompt submissions. The microphone uses an actual microphone icon.","Live AI requests show an animated active border and progress chip, keeping results below the photo rather than disappearing in notifications.","Read-only saved-description history is restored to capture and gallery views without new paid inference calls.","3D connection check distinguishes configured provider key from a successful generation and shows recent job states without charging credits. Paid submissions require explicit confirmation.","AHOLO Lux3D receives encoded JPEG pixels directly instead of a temporary private image URL; creative prompts select its text-to-3D route with an optional reference image, not silently ignored.","3D status checks display real provider state and error text, with polling only while the capture view is open. Completed GLBs are downloaded into a 12 MB bounded private server cache when the provider download host is allowlisted; owners can retrieve saved assets after link expiry.","Audio recording uses AudioWorkletNode when available, with legacy ScriptProcessor fallback only for older browsers.","XR capture roundels moved slightly lower to reduce panel overlap. Live AHOLO billing, task success and Quest positioning require production/device verification."]},{"version":"0.10.18","title":"FREELAB v0.10.18 \u2014 Quest renderer and compact capture experience","datetime":"2026-11-14","changes":["Quest immersive AR now prefers WebGL2, uses an XRWebGLLayer without unsupported DOM overlay, reduces compositor framebuffer scale and stops GPU work after context loss. Landing Three.js renderer is disabled in Quest Browser to prevent competing contexts.","Mobile browsers without immersive-ar support show ENTER 3D; launch an interactive private Three.js spatial preview of existing sources and branches (not a claim of AR passthrough).","Development log uses shorter copy, compact scroll window, round borderless close button and smaller release typography.","Top navigation pills use consistent desktop heights and spacing and reduce on narrow screens.","Camera studio distinguishes live video from an inspected image. Selected source or segment shows overlaid Voice, Describe and Extract controls; library is toggled, not required to use AI.","More menu contains full advanced camera, extraction quality, named segmentation, manual save and optional sampling controls without a separate legacy-controls section.","Image instruction composer supports prompt edits, descriptions, extraction, refined segmentation, 3D generation and voice. Provider calls remain explicit and billable work requires confirmation.","Collection uses image-first thumbnails, name/date overlays, a 3-dot per-object contextual menu and live filtering by label, date, description and metadata.","Full-screen gallery fills the available viewport, has compact white circular side arrows, mobile swipe navigation and a contextual menu for image AI actions.","Live Quest rendering and all webcam/AI combinations still require device verification; fallback never fabricates readable passthrough camera pixels."]},{"version":"0.10.17","title":"FREELAB v0.10.17 \u2014 XR controls, collaboration and profile management","datetime":"2026-11-14","changes":["Development log now shows current release and scrollable previous release history.","Settings profile photo uses a clickable circular upload control, with upload or camera choice supported by the device.","Administrators can list users, reset passwords, temporarily block/unblock accounts, and remove non-admin users; sensitive changes revoke sessions.","XR image labels render only once in the viewer-sized caption (white); card action labels turn pink on hover.","Theater navigation buttons form a near-eye bottom row with white background and dark symbols.","Lower and shrink voice transcript and confirmation controls; move capture roundels away from game actions; reposition description panel and billboard config panel.","Mascot speech is stopped when hidden; contextual comments have larger variety, per-phrase repetition cooldown and audio overlap protection.","Voice search highlights and temporarily brings forward matching saved segments. Global restyle commands ask for second confirmation and cap edits to six billed images.","New optional XR depth entry requests depth-sensing before session begins, checks enabledFeatures correctly and reports sensor availability without claiming occlusion.","Joined spectators appear as named room-presence badges in host XR, and optional experimental frame outlines are shared to desktop room viewers (off by default).","Provider API test remains separate from asynchronous AHOLO Lux3D creation, polling and result retrieval.","WebRTC audio/video, physical passthrough rectangle screenshots and texture bin require additional permissions, signaling and calibration; not claimed as available in this release."]},{"version":"0.10.16","title":"FREELAB v0.10.16 \u2014 Active nginx virtual host repair","datetime":"2026-11-13","changes":["Fix ES module MIME on the nginx vhost that is actually loaded, even if sites-available differs from sites-enabled","Add active-vhost discovery and safe refusal for multiple or unrelated virtual hosts","Back up and roll back both nginx config files when live and canonical locations differ","Make room-viewer.mjs and scene.mjs explicit application/javascript locations and verify via real HTTPS before completing","Retain the v0.10.15 desktop rooms, mobile capture studio, XR accessibility and brand updates"]},{"version":"0.10.15","title":"FREELAB v0.10.15 \u2014 Server-layout deployment fix","datetime":"2026-11-13","changes":["Correct deployment test to work without the repository-root watcher in Ubuntu release directories","Preserve v0.10.14 desktop room, mobile capture, XR typography and branding improvements","Keep nginx JavaScript MIME verification and rollback protection for ES modules"]},{"version":"0.10.14","title":"FREELAB v0.10.14 \u2014 Spatial rooms & capture studio","datetime":"2026-11-13","changes":["Fix nginx MIME for all ES modules; pre-deploy check catches broken room viewer","Spatial room captions use fixed CSS text size with clickable branches and live FPS display","Mobile capture studio: source photography, image tree, voice, refine, describe, edit and 3D actions","XR menus: white text by default, pastel pink on hover; borderless theatrical fullscreen","Pastel animated brand, private profile picture, subtle mascot particles, updated footer"]},{"version":"0.10.13","title":"Three.js Spatial Rooms \u00b7 v0.10.13","datetime":"2026-11-13 UTC","changes":["Replaced the canvas-based room mockup with a fullscreen, continuously rendered Three.js spatial viewer","Added fluid orbit/zoom with pointer inertia, Fit Scene, and free-flight exploration with WASD, Q/E and Shift","Spectators see a tracked headset avatar with live head orientation, actual 3D image planes and parent-child branch links","Click a floating image to inspect the full media, saved description, ancestor or child links, and enlarge it","The room feed now includes authenticated metadata and headset/card orientations; camera pixels are never streamed","XR room publishing and desktop state polling run multiple times per second; Three.js rendering is independent of polling","Room UI and gallery fill the viewport and do not alter the private-by-default invitation model or archive data"]}]}
+{
+  "version": "0.10.27",
+  "title": "FREELAB v0.10.27 — Source-linked 3D pop-in and job visibility",
+  "datetime": "2026-11-14",
+  "changes": [
+    "Each XR 3D generation request now creates a visible spatial job branch anchored to the selected source or segment, showing provider and task progress while generation runs in the background.",
+    "Completed textured GLBs pop outward beside the source with spatial particles and a connecting lineage line; they remain attached when the parent image is moved.",
+    "Quest refreshes active-source job states asynchronously, including tasks submitted from another device. Reopening a source restores up to six XR model previews instead of silently limiting recovery to two.",
+    "When focused deeper in a branch, source-level models can attach to the visible ancestor source thumbnail instead of disappearing because the main source card is hidden.",
+    "Provider task failures and unsupported model previews appear as explicit, source-linked spatial status cards. Models still remain saved in Collection and no extra generation charges are triggered by previews.",
+    "Closing or collapsing a source releases its temporary model meshes, status cards, buffers and textures. Quest device-level verification remains necessary."
+  ],
+  "history": [
+    {
+      "version": "0.10.26",
+      "title": "FREELAB v0.10.26 — Tripo generation and Draco GLBs",
+      "datetime": "2026-11-14",
+      "changes": [
+        "Tripo v3 image-to-model generation now works with private image uploads and asynchronous job status, using the same source-linked collection as AHOLO and Meshy.",
+        "Tripo Test now calls the read-only account balance API and checks real authentication and credits without generating or billing a model.",
+        "Choose AHOLO, Meshy or Tripo from desktop/mobile Settings, the capture composer or the XR configuration panel; the preference follows the profile.",
+        "The browser 3D viewer now configures a Three.js Draco loader for Draco-compressed avatars and generated GLB files.",
+        "XR refreshes the active source’s completed model previews periodically so jobs submitted on another device can appear beside their source image.",
+        "Existing profile settings remain compatible through a non-destructive SQLite provider-choice extension."
+      ]
+    },
+    {
+      "version": "0.10.25",
+      "title": "FREELAB v0.10.25 — XR voice, text creation and avatar optimization",
+      "datetime": "2026-11-14",
+      "changes": [
+        "Profile 3D avatar size limit increased to 4 MB. Files up to 16 MB can be inspected locally and optionally submitted to a separate opt-in Blender optimizer targeting 4 MB.",
+        "Private headless Blender optimization jobs are bounded, stored with owner-scoped read-only status, and never replace a working avatar unless a valid GLB under 4 MB is produced. Server-side Blender must be installed.",
+        "Avatar preview shows the selected GLB locally even above the XR upload limit, including exact file size and the reduction needed.",
+        "XR listening controls and transcripts follow the head near the middle of the view; transcripts use significantly larger type and are placed beside the microphone.",
+        "XR keyboard Enter submits the instruction without requiring another editor action. Recognized voice commands and image prompts send automatically unless the new voice-confirmation preference is enabled.",
+        "Text-only Muse Image generation creates a saved source without a camera or existing source. CREATE is available in XR; desktop/mobile message composer also supports text-only creation.",
+        "Theater previous, next, and exit controls are grouped together in one head-relative row, with the caption size increased for XR source/object cards."
+      ]
+    },
+    {
+      "version": "0.10.24",
+      "title": "FREELAB v0.10.24 — Textured XR models linked to source captures",
+      "datetime": "2026-11-14",
+      "changes": [
+        "XR-generated models now use a bounded texture-aware GLB decoder that preserves embedded base-colour images, material colour, UVs and scene-node transforms.",
+        "Dense generated meshes are simplified by spatial vertex clustering instead of skipping faces that appeared as disjoint green star fragments; geometry that cannot be simplified coherently produces a clear fallback message.",
+        "3D previews are normalised and displayed at a compact ~30 cm largest-axis scale beside their parent source or object, moving with the source card.",
+        "Completed models are retrieved read-only from the source-linked job history when the source is reopened; no paid job is re-submitted.",
+        "Closing, hiding, binning or navigating away from a capture removes linked model geometry and textures from the active XR scene; the 3D job and full original GLB remain saved in Collection.",
+        "Existing static guest-avatar previews and desktop full-GLB viewer remain available. Headset renderer performance and unusual GLB formats require Quest verification."
+      ]
+    },
+    {
+      "version": "0.10.23",
+      "title": "FREELAB v0.10.23 — Upright framed photos, bounded crop and spatial grab",
+      "datetime": "2026-11-14",
+      "changes": [
+        "Fixed upside-down FRAME photograph textures with correct top-to-bottom UV mapping for browser-camera images.",
+        "Frame photos now crop a live browser-camera JPEG using the hand-drawn rectangle projected through WebXR viewer matrices, with an aspect-preserving bounded crop, rather than stretching the whole camera image.",
+        "The projection approximates the selected field of view; a separate browser camera is not calibrated to Quest passthrough and cannot supply pixel-perfect crops.",
+        "Pinching anywhere inside or near the filled spatial photo now grabs and moves/rotates its linked frame; releasing pins the photograph at the new pose.",
+        "Erasing or expiring a frame now discards its attached photo and GPU texture/buffer; up to 12 image panels remain resident.",
+        "Normal XR eye capture still saves an independent full camera frame and selected image state is not overwritten by rectangle photo captures."
+      ]
+    },
+    {
+      "version": "0.10.22",
+      "title": "FREELAB v0.10.22 — Inline editing, live models and spatial camera frames",
+      "datetime": "2026-11-14",
+      "changes": [
+        "Send in Capture Studio now edits or refines the selected image directly; no second text-entry modal. The gallery has its own inline editor.",
+        "3D jobs are monitored globally when the site is visible, with distinct queued/running/completed/failed states. Completed GLBs load into an interactive private Three.js scene with geometry fallback.",
+        "Private model cache limit raised from 12 to 32 MB with SHA/GLB checks, size cap, provider URL allowlist and authenticated access. Models above the new limit still depend on the provider link.",
+        "Profiles accept self-contained GLB avatars under 2 MB; XR guests and browser-room spectators receive static decimated 3D avatar previews where supported. Rigging is preserved in storage; no body-pose streaming yet.",
+        "Desktop and mobile capture/gallery/collection menus include Download photo. The three XR roundels move higher, the LIB/PIN/LOG bar lower and cinema controls form a compact grouped row.",
+        "Placing an experimental FRAME saves a photo only if a separately permissioned, readable browser camera stream exists; it maps the snapshot on the frame. Standard Quest XR passthrough framebuffer pixels cannot be captured.",
+        "Watcher v0.9.2 uses NUL-delimited Git status so allowed update ZIP filenames containing spaces do not falsely block preflight."
+      ]
+    },
+    {
+      "version": "0.10.22",
+      "title": "FREELAB v0.10.22 — Watcher-safe release identity",
+      "datetime": "2026-11-14",
+      "changes": [
+        "Repackaged the v0.10.20 UX hotfix under a unique v0.10.22 release identity so the watcher can pick it up.",
+        "Retains the refine/extract separation, bottom image editor, asynchronous 3D task UI, gradient feedback and XR/theater layout changes.",
+        "No provider configuration, database reset, watcher replacement or paid API operation is introduced."
+      ]
+    },
+    {
+      "version": "0.10.20",
+      "title": "FREELAB v0.10.20 — Refine flow, spatial controls and packaging repair",
+      "datetime": "2026-11-14",
+      "changes": [
+        "Refine image now opens a multiline image-quality editor rather than asking for an object to segment; named-object extraction remains a separate command.",
+        "Bottom-aligned image editor keeps the original photo visible. Removed redundant instructions and added animated rainbow text during processing.",
+        "3D tasks remain asynchronous; clearer queued-status messages explain users can continue working while the model is generated.",
+        "XR navigation now sits lower beneath the capture roundels; microphone icons and captions are adjusted for headset legibility.",
+        "Desktop room fullscreen groups previous, next and close controls. Cards use larger captions.",
+        "Deployment ZIP excludes Python bytecode and test caches; release manifest lists only application source files."
+      ]
+    },
+    {
+      "version": "0.10.19",
+      "title": "FREELAB v0.10.19 — Unified AI controls & reliable 3D",
+      "datetime": "2026-11-14",
+      "changes": [
+        "Desktop/mobile and gallery now use one in-page confirmation/entry overlay; no browser-native confirm, prompt or alert dialogs for AI and account actions.",
+        "Capture actions reuse three roundels (microphone, describe, extract) over selected photo, with extra tools including 3D under a contextual three-dot menu; a second shutter row is hidden while inspecting.",
+        "Multiline, expandable instruction composer supports image edits, questions, extraction, targeted segment refinement and image-guided 3D prompt submissions. The microphone uses an actual microphone icon.",
+        "Live AI requests show an animated active border and progress chip, keeping results below the photo rather than disappearing in notifications.",
+        "Read-only saved-description history is restored to capture and gallery views without new paid inference calls.",
+        "3D connection check distinguishes configured provider key from a successful generation and shows recent job states without charging credits. Paid submissions require explicit confirmation.",
+        "AHOLO Lux3D receives encoded JPEG pixels directly instead of a temporary private image URL; creative prompts select its text-to-3D route with an optional reference image, not silently ignored.",
+        "3D status checks display real provider state and error text, with polling only while the capture view is open. Completed GLBs are downloaded into a 12 MB bounded private server cache when the provider download host is allowlisted; owners can retrieve saved assets after link expiry.",
+        "Audio recording uses AudioWorkletNode when available, with legacy ScriptProcessor fallback only for older browsers.",
+        "XR capture roundels moved slightly lower to reduce panel overlap. Live AHOLO billing, task success and Quest positioning require production/device verification."
+      ]
+    },
+    {
+      "version": "0.10.18",
+      "title": "FREELAB v0.10.18 — Quest renderer and compact capture experience",
+      "datetime": "2026-11-14",
+      "changes": [
+        "Quest immersive AR now prefers WebGL2, uses an XRWebGLLayer without unsupported DOM overlay, reduces compositor framebuffer scale and stops GPU work after context loss. Landing Three.js renderer is disabled in Quest Browser to prevent competing contexts.",
+        "Mobile browsers without immersive-ar support show ENTER 3D; launch an interactive private Three.js spatial preview of existing sources and branches (not a claim of AR passthrough).",
+        "Development log uses shorter copy, compact scroll window, round borderless close button and smaller release typography.",
+        "Top navigation pills use consistent desktop heights and spacing and reduce on narrow screens.",
+        "Camera studio distinguishes live video from an inspected image. Selected source or segment shows overlaid Voice, Describe and Extract controls; library is toggled, not required to use AI.",
+        "More menu contains full advanced camera, extraction quality, named segmentation, manual save and optional sampling controls without a separate legacy-controls section.",
+        "Image instruction composer supports prompt edits, descriptions, extraction, refined segmentation, 3D generation and voice. Provider calls remain explicit and billable work requires confirmation.",
+        "Collection uses image-first thumbnails, name/date overlays, a 3-dot per-object contextual menu and live filtering by label, date, description and metadata.",
+        "Full-screen gallery fills the available viewport, has compact white circular side arrows, mobile swipe navigation and a contextual menu for image AI actions.",
+        "Live Quest rendering and all webcam/AI combinations still require device verification; fallback never fabricates readable passthrough camera pixels."
+      ]
+    },
+    {
+      "version": "0.10.17",
+      "title": "FREELAB v0.10.17 — XR controls, collaboration and profile management",
+      "datetime": "2026-11-14",
+      "changes": [
+        "Development log now shows current release and scrollable previous release history.",
+        "Settings profile photo uses a clickable circular upload control, with upload or camera choice supported by the device.",
+        "Administrators can list users, reset passwords, temporarily block/unblock accounts, and remove non-admin users; sensitive changes revoke sessions.",
+        "XR image labels render only once in the viewer-sized caption (white); card action labels turn pink on hover.",
+        "Theater navigation buttons form a near-eye bottom row with white background and dark symbols.",
+        "Lower and shrink voice transcript and confirmation controls; move capture roundels away from game actions; reposition description panel and billboard config panel.",
+        "Mascot speech is stopped when hidden; contextual comments have larger variety, per-phrase repetition cooldown and audio overlap protection.",
+        "Voice search highlights and temporarily brings forward matching saved segments. Global restyle commands ask for second confirmation and cap edits to six billed images.",
+        "New optional XR depth entry requests depth-sensing before session begins, checks enabledFeatures correctly and reports sensor availability without claiming occlusion.",
+        "Joined spectators appear as named room-presence badges in host XR, and optional experimental frame outlines are shared to desktop room viewers (off by default).",
+        "Provider API test remains separate from asynchronous AHOLO Lux3D creation, polling and result retrieval.",
+        "WebRTC audio/video, physical passthrough rectangle screenshots and texture bin require additional permissions, signaling and calibration; not claimed as available in this release."
+      ]
+    },
+    {
+      "version": "0.10.16",
+      "title": "FREELAB v0.10.16 — Active nginx virtual host repair",
+      "datetime": "2026-11-13",
+      "changes": [
+        "Fix ES module MIME on the nginx vhost that is actually loaded, even if sites-available differs from sites-enabled",
+        "Add active-vhost discovery and safe refusal for multiple or unrelated virtual hosts",
+        "Back up and roll back both nginx config files when live and canonical locations differ",
+        "Make room-viewer.mjs and scene.mjs explicit application/javascript locations and verify via real HTTPS before completing",
+        "Retain the v0.10.15 desktop rooms, mobile capture studio, XR accessibility and brand updates"
+      ]
+    },
+    {
+      "version": "0.10.15",
+      "title": "FREELAB v0.10.15 — Server-layout deployment fix",
+      "datetime": "2026-11-13",
+      "changes": [
+        "Correct deployment test to work without the repository-root watcher in Ubuntu release directories",
+        "Preserve v0.10.14 desktop room, mobile capture, XR typography and branding improvements",
+        "Keep nginx JavaScript MIME verification and rollback protection for ES modules"
+      ]
+    },
+    {
+      "version": "0.10.14",
+      "title": "FREELAB v0.10.14 — Spatial rooms & capture studio",
+      "datetime": "2026-11-13",
+      "changes": [
+        "Fix nginx MIME for all ES modules; pre-deploy check catches broken room viewer",
+        "Spatial room captions use fixed CSS text size with clickable branches and live FPS display",
+        "Mobile capture studio: source photography, image tree, voice, refine, describe, edit and 3D actions",
+        "XR menus: white text by default, pastel pink on hover; borderless theatrical fullscreen",
+        "Pastel animated brand, private profile picture, subtle mascot particles, updated footer"
+      ]
+    },
+    {
+      "version": "0.10.13",
+      "title": "Three.js Spatial Rooms · v0.10.13",
+      "datetime": "2026-11-13 UTC",
+      "changes": [
+        "Replaced the canvas-based room mockup with a fullscreen, continuously rendered Three.js spatial viewer",
+        "Added fluid orbit/zoom with pointer inertia, Fit Scene, and free-flight exploration with WASD, Q/E and Shift",
+        "Spectators see a tracked headset avatar with live head orientation, actual 3D image planes and parent-child branch links",
+        "Click a floating image to inspect the full media, saved description, ancestor or child links, and enlarge it",
+        "The room feed now includes authenticated metadata and headset/card orientations; camera pixels are never streamed",
+        "XR room publishing and desktop state polling run multiple times per second; Three.js rendering is independent of polling",
+        "Room UI and gallery fill the viewport and do not alter the private-by-default invitation model or archive data"
+      ]
+    }
+  ]
+}
