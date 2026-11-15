@@ -1,15 +1,27 @@
 {
-  "version": "0.10.31",
-  "title": "FREELAB v0.10.31 — Tripo result recovery and uncluttered XR",
+  "version": "0.10.32",
+  "title": "FREELAB v0.10.32 — Quest performance and 3D recovery",
   "datetime": "2026-11-15",
   "changes": [
-    "Tripo v3 output handling accepts model_url, PBR, base model and nested legacy variants, including URL object forms; textured output is preferred.",
-    "Completed Tripo jobs recover their GLB through the original task ID and refresh short-lived signed URLs without starting or billing another generation task.",
-    "Private model downloads accept provider-authenticated HTTPS object-storage URLs with DNS/redirect safety checks, retain the 32 MB GLB cap and cache validated models locally.",
-    "Quest XR no longer opens a floating server-diagnostics panel when a model fails to load; the source-linked red cube and existing status UI report a concise retry action.",
-    "Existing paid jobs and profiles are preserved. Detailed pipeline reports remain available through the explicitly opened LOG/Collection diagnostics only."
+    "Tripo/AHOLO/Meshy provider status checks are now scheduled in bounded background workers instead of holding XR API requests open.",
+    "Signed GLB retrieval, private caching, Quest geometry decoding, and optional Blender preparation are asynchronous, with a private cached geometry response and no second paid generation.",
+    "Quest 3D preview responds with preparing/waiting until model bytes are ready; a permanent failure is returned once, and the user can explicitly retry the original task.",
+    "XR shared-room publishing slows to a safe rate and backs off after gateway failures; unexpected HTML responses produce a clear connection status instead of a JSON parse exception.",
+    "The existing spatial source/3D attachment and quiet error badge are retained; no extra floating diagnostics window is introduced."
   ],
   "history": [
+    {
+      "version": "0.10.31",
+      "title": "FREELAB v0.10.31 — Tripo result recovery and uncluttered XR",
+      "datetime": "2026-11-15",
+      "changes": [
+        "Tripo v3 output handling accepts model_url, PBR, base model and nested legacy variants, including URL object forms; textured output is preferred.",
+        "Completed Tripo jobs recover their GLB through the original task ID and refresh short-lived signed URLs without starting or billing another generation task.",
+        "Private model downloads accept provider-authenticated HTTPS object-storage URLs with DNS/redirect safety checks, retain the 32 MB GLB cap and cache validated models locally.",
+        "Quest XR no longer opens a floating server-diagnostics panel when a model fails to load; the source-linked red cube and existing status UI report a concise retry action.",
+        "Existing paid jobs and profiles are preserved. Detailed pipeline reports remain available through the explicitly opened LOG/Collection diagnostics only."
+      ]
+    },
     {
       "version": "0.10.30",
       "title": "FREELAB v0.10.30 — 3D model pipeline diagnostics and recovery",

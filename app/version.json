@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.31",
-  "description": "Tripo v3 signed model recovery and clean XR scene diagnostics"
+  "version": "0.10.32",
+  "description": "Nonblocking Tripo GLB recovery and resilient Quest room synchronization"
 }

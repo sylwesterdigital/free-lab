@@ -1,4 +1,4 @@
-"""v0.10.31 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
+"""v0.10.32 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -38,10 +38,36 @@ class Tripo31(unittest.TestCase):
    self.assertTrue(tripo3d.verify_public_download_host('https://files.example.com/model.glb'))
  def test_existing_jobs_recovered_by_read_only_status(self):
   self.assertIn("tripo3d.status(row['provider_task'],key)",APP)
-  self.assertIn("row['provider']=='tripo' and not row['model_path'] and not row['glb_url']",APP)
-  self.assertIn("tripo3d.open_model_download(safe",APP)
+  self.assertIn("if row['provider']=='tripo'",APP)
+  self.assertIn('name=model_cache.store(',APP)
   self.assertIn("tripo3d.open_model_download(good",CACHE)
-  self.assertIn('provider_task,glb_url,model_path FROM jobs_3d',APP)
+  self.assertIn('def _xr_existing_job_worker(owner,jid,key):',APP)
+
+ def test_async_quest_preview_does_not_download_during_request(self):
+  section=APP.split("@app.get('/api/media/3d/<int:jid>/preview')",1)[1].split("@app.post('/api/media/text-to-image')",1)[0]
+  self.assertIn('_xr_ensure_preview_worker(owner,jid,key)',section)
+  self.assertIn('return jsonify(status=state,',section)
+  self.assertNotIn('tripo3d.status(',section)
+  self.assertNotIn('model_cache.store(',section)
+  self.assertNotIn('glb_xr.decode_visual(',section)
+  self.assertIn('cached.read_bytes()',section)
+ def test_poll_does_not_block_request_or_charge(self):
+  section=APP.split("@app.get('/api/media/3d/<int:jid>')",1)[1].split("@app.get('/api/media/3d/<int:jid>/asset')",1)[0]
+  self.assertIn('_xr_ensure_task_poll(',section)
+  self.assertNotIn('.status(row[',section)
+  self.assertNotIn('model_cache.store(',section)
+  self.assertIn('return jsonify(job_3d_dict(row))',section)
+  worker=APP.split('def _xr_existing_job_worker(',1)[1].split('def _xr_ensure_preview_worker(',1)[0]
+  self.assertNotIn('tripo3d.submit(',worker)
+  self.assertIn('model_cache.store(',worker)
+  self.assertIn('avatar_optimizer.optimize_xr_preview(raw)',worker)
+ def test_room_reduces_publish_rate_and_survives_non_json_gateway(self):
+  room=(ROOT/'frontend/assets/rooms.js').read_text()
+  self.assertIn('lastSent<1500',room)
+  self.assertIn('retryAfter=Date.now()',room)
+  self.assertIn('body=await r.text()',room)
+  self.assertIn("Room server unavailable (HTTP ",room)
+
  def test_no_auto_debug_pane(self):
   self.assertIn('async function showMeshDiagnostics(jobId){',XR)
   self.assertNotIn('void showMeshDiagnostics(jobId);',XR)

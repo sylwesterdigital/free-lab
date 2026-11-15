@@ -31,6 +31,122 @@ _xr_preview_guard=threading.Lock()
 _xr_preview_active=set()
 _XR_PREVIEW_CONCURRENT=1  # Avoid multiple simultaneous headless Blender instances.
 
+# Offload Tripo polling, signed downloads and model conversion. Neither a paid
+# provider call nor an external network request runs inside an XR HTTP response.
+_xr_poll_guard=threading.Lock()
+_xr_poll_active=set()
+_xr_poll_times={}
+
+def _xr_preview_json_path(owner,jid):
+    return MODEL_DIR/f'{owner}_{jid}.xr.json'
+
+def _xr_existing_job_worker(owner,jid,key):
+    # Read-only recovery of an already paid job. All database access belongs to
+    # this thread; never use Flask request globals or share SQLite connections.
+    output,error,pending=_xr_preview_paths(owner,jid)
+    prepared=_xr_preview_json_path(owner,jid)
+    con=None
+    try:
+        con=db.connect(DB)
+        row=con.execute('SELECT * FROM jobs_3d WHERE id=? AND owner_id=?',(jid,owner)).fetchone()
+        if not row or row['status']!='SUCCEEDED':raise ValueError('3D job is not completed')
+        if output.is_file():raw=output.read_bytes()
+        elif row['model_path'] and (MODEL_DIR/row['model_path']).is_file():
+            raw=(MODEL_DIR/row['model_path']).read_bytes()
+        else:
+            url=row['glb_url']
+            if row['provider']=='tripo':
+                if not key:raise ValueError('Tripo key unavailable for read-only model recovery')
+                info=tripo3d.status(row['provider_task'],key)
+                if info['status']!='SUCCEEDED':raise ValueError('Tripo task status: '+str(info['status']))
+                url=info['glb_url'] or url
+                if url:
+                    with con:con.execute('UPDATE jobs_3d SET glb_url=?,thumbnail_url=? WHERE id=? AND owner_id=?',
+                      (url,info['thumbnail_url'] or row['thumbnail_url'],jid,owner))
+            if not url:raise ValueError('Provider reported success but supplied no downloadable GLB URL')
+            name=model_cache.store(url,row['provider'],MODEL_DIR,owner,jid)
+            with con:con.execute('UPDATE jobs_3d SET model_path=?,cache_error=? WHERE id=? AND owner_id=?',
+                                  (name,'',jid,owner))
+            raw=(MODEL_DIR/name).read_bytes()
+        try:result=glb_xr.decode_visual(raw)
+        except (ValueError,TypeError,KeyError,IndexError):
+            if not avatar_optimizer.blender_command():
+                raise ValueError('Quest conversion required but headless Blender is unavailable')
+            optimized=avatar_optimizer.optimize_xr_preview(raw)
+            result=glb_xr.decode_visual(optimized)
+            temp=MODEL_DIR/(f'{owner}_{jid}.xr.glb.tmp-'+secrets.token_hex(4))
+            try:
+                with temp.open('xb') as f:os.fchmod(f.fileno(),0o600);f.write(optimized)
+                temp.replace(output)
+            finally:temp.unlink(missing_ok=True)
+        encoded=json.dumps(result,separators=(',',':')).encode('utf-8')
+        if len(encoded)>18_000_000:raise ValueError('Quest decoded mesh exceeds 18 MB preview limit')
+        temp=MODEL_DIR/(f'{owner}_{jid}.xr.json.tmp-'+secrets.token_hex(4))
+        try:
+            with temp.open('xb') as f:os.fchmod(f.fileno(),0o600);f.write(encoded)
+            temp.replace(prepared)
+        finally:temp.unlink(missing_ok=True)
+        error.unlink(missing_ok=True)
+    except Exception as exc:
+        # Keep signed URLs, credentials and server filesystem paths private.
+        reason=str(exc).replace('\n',' ')[:170]
+        reason=re.sub(r'https?://\S+','[provider link]',reason)
+        reason=re.sub(r'/[^ \t]+','[server file]',reason)
+        error.write_text(reason or 'Unable to prepare completed GLB for Quest')
+        if con is not None:
+            try:
+                with con:con.execute('UPDATE jobs_3d SET cache_error=? WHERE id=? AND owner_id=?',
+                    ((reason or 'XR preview preparation failed')[:180],jid,owner))
+            except sqlite3.Error:pass
+    finally:
+        if con is not None:con.close()
+        pending.unlink(missing_ok=True)
+        with _xr_preview_guard:_xr_preview_active.discard((owner,jid))
+
+def _xr_ensure_preview_worker(owner,jid,key):
+    output,error,pending=_xr_preview_paths(owner,jid)
+    with _xr_preview_guard:
+        identity=(owner,jid)
+        if identity in _xr_preview_active:return 'PREPARING'
+        if pending.is_file():
+            if time.time()-pending.stat().st_mtime<600:return 'PREPARING'
+            pending.unlink(missing_ok=True)
+        if len(_xr_preview_active)>=_XR_PREVIEW_CONCURRENT:return 'WAITING'
+        _xr_preview_active.add(identity);pending.touch()
+    threading.Thread(target=_xr_existing_job_worker,args=(owner,jid,key),daemon=True,
+                     name=f'freelab-glb-recovery-{jid}').start()
+    return 'PREPARING'
+
+def _xr_poll_task_worker(owner,jid,key):
+    con=None
+    try:
+        con=db.connect(DB)
+        row=con.execute('SELECT * FROM jobs_3d WHERE owner_id=? AND id=?',(owner,jid)).fetchone()
+        if not row or row['status'] not in ('PENDING','IN_PROGRESS','UNKNOWN'):return
+        adapter={'aholo':aholo3d,'meshy':meshy3d,'tripo':tripo3d}.get(row['provider'])
+        if not adapter or not key:return
+        info=adapter.status(row['provider_task'],key)
+        with con:
+            con.execute("""UPDATE jobs_3d SET status=?,progress=?,credits=?,glb_url=?,thumbnail_url=?,error=?,
+            updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND owner_id=?""",
+            (info['status'],info['progress'],info['credits'],info['glb_url'] or row['glb_url'],
+             info['thumbnail_url'] or row['thumbnail_url'],info['error'],jid,owner))
+    except Exception:
+        # A transient poll failure does not change a provider task to FAILED.
+        pass
+    finally:
+        if con is not None:con.close()
+        with _xr_poll_guard:_xr_poll_active.discard((owner,jid))
+
+def _xr_ensure_task_poll(owner,jid,key):
+    with _xr_poll_guard:
+        identity=(owner,jid);now=time.monotonic()
+        if identity in _xr_poll_active or now-_xr_poll_times.get(identity,0)<12:return
+        if len(_xr_poll_active)>=2:return
+        _xr_poll_times[identity]=now;_xr_poll_active.add(identity)
+    threading.Thread(target=_xr_poll_task_worker,args=(owner,jid,key),daemon=True,
+                     name=f'freelab-3d-status-{jid}').start()
+
 
 def _xr_preview_paths(owner,jid):
     base=f'{owner}_{jid}.xr'
@@ -938,29 +1054,14 @@ def media_3d_start():
 def media_3d_status(jid):
     row=g.con.execute('SELECT * FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
     if not row:abort(404)
-    # The read-only status call never creates an additional billable task.
-    if (row['status'] in ('PENDING','IN_PROGRESS','UNKNOWN') or
-        (row['status']=='SUCCEEDED' and (request.args.get('refresh')=='1' or
-          (row['provider']=='tripo' and not row['model_path'] and not row['glb_url'])))):
-        key=provider_key(row['provider'])
-        if not key:return jsonify(error=row['provider'].upper()+' key missing: cannot poll task'),503
-        try:
-            adapter={'aholo':aholo3d,'meshy':meshy3d,'tripo':tripo3d}.get(row['provider'])
-            if not adapter:raise ValueError('Unknown 3D provider')
-            info=adapter.status(row['provider_task'],key)
-        except (RuntimeError,ValueError) as e:return jsonify(error=str(e)),502
-        with g.con:
-            g.con.execute('''UPDATE jobs_3d SET status=?,progress=?,credits=?,glb_url=?,thumbnail_url=?,error=?,
-                  updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND owner_id=?''',
-                  (info['status'],info['progress'],info['credits'],info['glb_url'] or row['glb_url'],info['thumbnail_url'] or row['thumbnail_url'],info['error'],jid,g.user['id']))
-        row=g.con.execute('SELECT * FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
-    if row['status']=='SUCCEEDED' and row['glb_url'] and not row['model_path'] and (not row['cache_error'] or request.args.get('refresh')=='1'):
-        try:
-            filename=model_cache.store(row['glb_url'],row['provider'],MODEL_DIR,g.user['id'],jid)
-            with g.con:g.con.execute('UPDATE jobs_3d SET model_path=?,cache_error=? WHERE id=? AND owner_id=?',(filename,'',jid,g.user['id']))
-        except (ValueError,OSError,urllib.error.HTTPError,urllib.error.URLError,TimeoutError) as e:
-            with g.con:g.con.execute('UPDATE jobs_3d SET cache_error=? WHERE id=? AND owner_id=?',(str(e)[:200],jid,g.user['id']))
-        row=g.con.execute('SELECT * FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
+    # A room-state request must never wait for a provider network call.
+    if row['status'] in ('PENDING','IN_PROGRESS','UNKNOWN'):
+        _xr_ensure_task_poll(g.user['id'],jid,provider_key(row['provider']))
+    elif row['status']=='SUCCEEDED' and not row['model_path']:
+        owner=g.user['id'];output,failed,pending=_xr_preview_paths(owner,jid)
+        if not failed.is_file():
+            key=provider_key('tripo') if row['provider']=='tripo' else None
+            _xr_ensure_preview_worker(owner,jid,key)
     return jsonify(job_3d_dict(row))
 
 
@@ -1073,10 +1174,12 @@ def media_3d_preview_retry(jid):
     if not row:abort(404)
     if row['status']!='SUCCEEDED':return jsonify(error='Provider generation is not completed'),409
     owner=g.user['id'];output,error,pending=_xr_preview_paths(owner,jid)
+    cached=_xr_preview_json_path(owner,jid)
     with _xr_preview_guard:
         if (owner,jid) in _xr_preview_active or (pending.exists() and time.time()-pending.stat().st_mtime<330):
             return jsonify(error='Quest conversion is already in progress'),409
-        error.unlink(missing_ok=True);pending.unlink(missing_ok=True)
+        error.unlink(missing_ok=True)
+    cached.unlink(missing_ok=True);pending.unlink(missing_ok=True)
         # A converted GLB was already validated; do not discard it.
     return jsonify(status='READY_TO_RETRY',job_id=jid,paid_generation=False,
                    message='Preview errors cleared; next read-only preview request will retry decoding or Blender preparation.')
@@ -1085,69 +1188,24 @@ def media_3d_preview_retry(jid):
 @app.get('/api/media/3d/<int:jid>/preview')
 @require_user
 def media_3d_preview(jid):
-    """Serve original supported GLB geometry or prepare a private Quest version.
-
-    Draco/dense meshes are decoded by headless Blender in a bounded background
-    worker. A paid generation operation is NEVER triggered by this endpoint.
-    """
-    row=g.con.execute('SELECT status,provider,provider_task,glb_url,model_path FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
+    # No provider API, GLB download, JSON mesh decode or Blender in the request.
+    row=g.con.execute('SELECT status,provider,provider_task,model_path FROM jobs_3d WHERE id=? AND owner_id=?',
+                      (jid,g.user['id'])).fetchone()
     if not row:abort(404)
-    if row['status']!='SUCCEEDED':return jsonify(error='3D model is still generating',stage='generation',code='JOB_NOT_FINISHED',job_id=jid),409
-    owner=g.user['id']
-    converted,failed,pending=_xr_preview_paths(owner,jid)
-    try:
-        if converted.is_file():
-            return jsonify(**glb_xr.decode_visual(converted.read_bytes()))
-        if failed.is_file():
-            return jsonify(error='Quest model conversion failed: '+failed.read_text()[:180],stage='Blender conversion',code='CONVERSION_FAILED',job_id=jid),422
-        if row['model_path']:
-            if row['model_path']!=f'{owner}_{jid}.glb':abort(404)
-            raw=(MODEL_DIR/row['model_path']).read_bytes()
-        else:
-            # Completed Tripo jobs retain a task ID. Requery it for a fresh
-            # signed model URL; this is read-only, not a second paid generation.
-            if row['provider']=='tripo':
-                key=provider_key('tripo')
-                if not key:return jsonify(error='Tripo API key not configured for private model recovery',stage='provider output',code='KEY_MISSING',job_id=jid),503
-                current=tripo3d.status(row['provider_task'],key)
-                if current['glb_url']:
-                    with g.con:g.con.execute('UPDATE jobs_3d SET glb_url=?,thumbnail_url=?,cache_error=? WHERE id=? AND owner_id=?',
-                         (current['glb_url'],current['thumbnail_url'] or '', '',jid,owner))
-                    row=g.con.execute('SELECT status,provider,provider_task,glb_url,model_path FROM jobs_3d WHERE id=? AND owner_id=?',(jid,owner)).fetchone()
-            safe=(meshy3d.safe_file_url(row['glb_url']) if row['provider']=='meshy'
-                  else tripo3d.safe_file_url(row['glb_url'],trusted_task=True) if row['provider']=='tripo'
-                  else aholo3d.safe_preview_url(row['glb_url']))
-            if not safe:return jsonify(error='The completed task has no downloadable model yet. Try reopening the source later.',stage='provider output',code='OUTPUT_URL_MISSING',job_id=jid),422
-            req=urllib.request.Request(safe,headers={'User-Agent':'FREELAB-XR-Model/0.10'})
-            with (tripo3d.open_model_download(safe,timeout=20) if row['provider']=='tripo'
-                  else urllib.request.build_opener(meshy3d.NoRedirect).open(req,timeout=18)) as response:
-                if response.headers.get('Content-Length') and int(response.headers['Content-Length'])>glb_preview.MAX_FILE:
-                    return jsonify(error='3D model exceeds the private 32 MB download limit',stage='private download',code='GLB_TOO_LARGE',job_id=jid),413
-                raw=response.read(glb_preview.MAX_FILE+1)
-            if len(raw)>glb_preview.MAX_FILE:return jsonify(error='3D model exceeds the 32 MB download limit',stage='private download',code='GLB_TOO_LARGE',job_id=jid),413
-            # Cache the successful download once, even if its geometry needs
-            # Blender preparation, so subsequent XR checks avoid expired URLs.
-            if (len(raw)>=20 and raw[:4]==b'glTF' and int.from_bytes(raw[8:12],'little')==len(raw)):
-                name=f'{owner}_{jid}.glb';target=MODEL_DIR/name
-                if not target.is_file():
-                    tmp=MODEL_DIR/(name+'.tmp-'+secrets.token_hex(5))
-                    try:
-                        with tmp.open('xb') as f:os.fchmod(f.fileno(),0o600);f.write(raw)
-                        tmp.replace(target)
-                    finally:tmp.unlink(missing_ok=True)
-                with g.con:g.con.execute('UPDATE jobs_3d SET model_path=?,cache_error=? WHERE id=? AND owner_id=?',(name,'',jid,owner))
-        try:return jsonify(**glb_xr.decode_visual(raw))
-        except ValueError as e:
-            # A syntactically invalid GLB is not worth repeatedly optimizing.
-            glb_xr.chunks(raw)
-            if not avatar_optimizer.blender_command():
-                return jsonify(error='Quest cannot decode this GLB directly; headless Blender is not installed for automatic conversion: '+str(e)[:100],stage='Blender unavailable',code='BLENDER_UNAVAILABLE',job_id=jid),422
-            state,detail=_xr_prepare_preview(owner,jid,raw)
-            if state=='FAILED':return jsonify(error=detail,stage='Blender conversion',code='PREPARATION_FAILED',job_id=jid),422
-            return jsonify(status=state,message=detail,job_id=jid,stage='Blender conversion',paid_generation=False),202
-    except urllib.error.HTTPError as e:return jsonify(error=f'Provider 3D download returned HTTP {e.code}; model may need a refreshed link'),502
-    except (ValueError,OSError,KeyError,IndexError,TypeError,urllib.error.URLError,TimeoutError) as e:
-        return jsonify(error=str(e)[:200]),422
+    if row['status']!='SUCCEEDED':
+        return jsonify(error='3D model still generating',stage='generation',code='JOB_NOT_FINISHED',job_id=jid),409
+    owner=g.user['id'];cached=_xr_preview_json_path(owner,jid)
+    output,failed,pending=_xr_preview_paths(owner,jid)
+    if cached.is_file():
+        response=app.response_class(cached.read_bytes(),mimetype='application/json')
+        response.headers['Cache-Control']='private, no-store'
+        return response
+    if failed.is_file():
+        return jsonify(error=failed.read_text()[:180],stage='XR model preparation',code='PREVIEW_FAILED',job_id=jid),422
+    key=provider_key('tripo') if row['provider']=='tripo' else None
+    state=_xr_ensure_preview_worker(owner,jid,key)
+    return jsonify(status=state,stage='Private model download / Quest conversion',job_id=jid,
+                   message='Preparing existing model without submitting another paid task',paid_generation=False),202
 
 @app.post('/api/media/text-to-image')
 @require_user

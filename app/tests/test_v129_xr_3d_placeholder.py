@@ -1,4 +1,4 @@
-"""v0.10.31: offline XR 3D job cubes and private GLB preview preparation."""
+"""v0.10.32: offline XR 3D job cubes and private GLB preview preparation."""
 import struct, unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -25,8 +25,8 @@ class Cube129(unittest.TestCase):
   self.assertIn("@app.get('/api/media/3d/<int:jid>/preview')",BACK)
   self.assertIn('glb_xr.decode_visual(raw)',BACK)
   self.assertIn('avatar_optimizer.optimize_xr_preview(raw)',BACK)
-  self.assertIn("return jsonify(status=state,message=detail,job_id=jid,stage='Blender conversion',paid_generation=False),202",BACK)
-  self.assertIn('threading.Thread(target=_xr_prepare_worker',BACK)
+  self.assertIn("return jsonify(status=state,stage='Private model download / Quest conversion'",BACK)
+  self.assertIn('threading.Thread(target=_xr_existing_job_worker',BACK)
   self.assertIn('raw=(MODEL_DIR/row[\'model_path\']).read_bytes()',BACK)
   self.assertIn('owner_id=?',BACK)
   self.assertIn("if(['PREPARING','WAITING'].includes(result?.status))",XR)
@@ -57,7 +57,8 @@ class Cube129(unittest.TestCase):
   self.assertIn('glb_xr.chunks(raw)',BACK)
   self.assertIn('avatar_optimizer.blender_command()',BACK)
   self.assertIn('paid_generation=False',BACK)
-  self.assertIn("error.unlink(missing_ok=True);pending.unlink(missing_ok=True)",BACK)
+  self.assertIn('error.unlink(missing_ok=True)',BACK)
+  self.assertIn('pending.unlink(missing_ok=True)',BACK)
   self.assertNotIn("tripo3d.submit(",BACK.split('def media_3d_diagnostics(')[1].split("@app.get('/api/media/3d/<int:jid>/preview')")[0])
  def test_xr_job_badge_is_inspectable_and_failure_recoverable(self):
   self.assertIn('...meshJobBadges.values()',XR)

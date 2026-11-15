@@ -31,8 +31,8 @@ class DesktopRoom113(unittest.TestCase):
   self.assertIn("'description':row['description']",backend)
   self.assertIn("r=_room_access(rid)",backend)
   self.assertIn("roomId",(ROOT/'frontend/assets/room-viewer.mjs').read_text())
-  self.assertIn('lastSent<250',rooms)
-  self.assertIn('350',rooms)
+  self.assertIn('lastSent<1500',rooms)
+  self.assertIn('1200',rooms)
   self.assertNotIn('cameraPixels',rooms)
  def test_node_module_parses_and_exports_viewer(self):
   for name in ('rooms.js','room-viewer.mjs','xr.js'):

@@ -2,22 +2,22 @@
  * state polling does not control the graphics frame rate. No camera pixels are shared. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
-let own=null, selected=0, pollTimer=null, heartbeatTimer=null, inFlight=false, publishing=false, lastSent=0;
+let own=null, selected=0, pollTimer=null, heartbeatTimer=null, inFlight=false, publishing=false, lastSent=0, retryAfter=0, roomFailures=0;
 let viewer=null, viewerLoad=null;
 let lastScene={pose:[0,1.5,0],q:[0,0,0,1],cards:[],shapes:[]};
 async function req(path,opts={}){
  const r=await fetch('/api'+path,{credentials:'same-origin',headers:{'X-Free-Lab':'1',...(opts.body?{'Content-Type':'application/json'}:{})},...opts});
- const d=await r.json();if(!r.ok)throw Error(d.error||'Room HTTP '+r.status);return d;
+ const body=await r.text();let d;try{d=JSON.parse(body);}catch(_){throw Error('Room server unavailable (HTTP '+r.status+'). Retrying shortly.');}if(!r.ok)throw Error(d.error||'Room HTTP '+r.status);return d;
 }
 async function start(visibility='private'){
  const r=await req('/rooms/mine',{method:'PUT',body:JSON.stringify({visibility})});own=r.room;return own;
 }
 function end(){if(!own)return;req('/rooms/mine/state',{method:'PUT',body:JSON.stringify({active:false,...lastScene,shapes:[]})}).catch(()=>{});}
 async function publish(pose,cards,orientation,shapes=[]){
- if(!own||publishing||Date.now()-lastSent<250)return;
+ if(!own||publishing||Date.now()<retryAfter||Date.now()-lastSent<1500)return;
  lastSent=Date.now();lastScene={pose,q:orientation||[0,0,0,1],cards:cards.slice(0,72),shapes:shapes.slice(0,32)};publishing=true;
- try{await req('/rooms/mine/state',{method:'PUT',body:JSON.stringify({active:true,...lastScene})});}
- catch(e){console.warn('Room update:',e.message);}finally{publishing=false;}
+ try{await req('/rooms/mine/state',{method:'PUT',body:JSON.stringify({active:true,...lastScene})});roomFailures=0;retryAfter=0;}
+ catch(e){roomFailures=Math.min(roomFailures+1,5);retryAfter=Date.now()+Math.min(20000,1500*(2**roomFailures));if(roomFailures===1)console.warn('Room sync paused:',e.message);}finally{publishing=false;}
 }
 async function list(){const r=await req('/rooms');const box=$('roomList');if(!box)return;
  box.replaceChildren();for(const room of r.rooms){
@@ -37,7 +37,7 @@ async function invite(){const profiles=(await req('/rooms/users')).users;const b
 }}
 async function ensureViewer(){
  if(viewer)return viewer;
- if(!viewerLoad)viewerLoad=import('/assets/room-viewer.mjs?v=0.10.31').then(m=>m.createRoomViewer({
+ if(!viewerLoad)viewerLoad=import('/assets/room-viewer.mjs?v=0.10.32').then(m=>m.createRoomViewer({
   canvas:$('roomCanvas'),inspector:$('roomInspector'),viewer:$('roomViewer'),
   status:$('roomState'),count:$('roomImageCount'),back:()=>leave(),
  })).catch(e=>{viewerLoad=null;throw e;});
@@ -55,7 +55,7 @@ async function watch(id){
  selected=id;await req('/rooms/'+id+'/presence',{method:'POST'});$('roomViewer').classList.remove('hidden');$('roomLobby').classList.add('hidden');
  $('roomsPanel').classList.add('room-in-session');$('roomState').textContent='Loading 3D room…';
  try{const v=await ensureViewer();if(selected!==id)return;v.start();await refresh(id);
-  if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(()=>{if(document.visibilityState!=='hidden')void refresh(id);},350);
+  if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(()=>{if(document.visibilityState!=='hidden')void refresh(id);},1200);
   if(heartbeatTimer)clearInterval(heartbeatTimer);heartbeatTimer=setInterval(()=>{if(document.visibilityState!=='hidden'&&selected===id)void req('/rooms/'+id+'/presence',{method:'POST'}).catch(()=>{});},8000);
  }catch(e){$('roomState').textContent='3D viewer unavailable: '+e.message;console.error(e);}
 }
