@@ -14,7 +14,14 @@ def store(url,provider,folder:Path,owner:int,jid:int):
     folder.mkdir(parents=True,exist_ok=True)
     name=f'{owner}_{jid}.glb'
     dest=folder/name
-    if dest.is_file() and dest.stat().st_size>=20:return name
+    if dest.is_file():
+        size=dest.stat().st_size
+        with dest.open('rb') as existing:head=existing.read(12)
+        if (20<=size<=MAX_MODEL and len(head)==12 and head[:4]==b'glTF'
+            and int.from_bytes(head[4:8],'little')==2
+            and int.from_bytes(head[8:12],'little')==size):return name
+        # An interrupted/invalid cached file is not a successful download.
+        dest.unlink(missing_ok=True)
     request=urllib.request.Request(good,headers={'User-Agent':'FREELAB-3D-PrivateCache/0.10.19'})
     with (tripo3d.open_model_download(good,timeout=20) if provider=='tripo'
           else urllib.request.build_opener(meshy3d.NoRedirect).open(request,timeout=15)) as response:

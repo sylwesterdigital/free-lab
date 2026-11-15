@@ -1,4 +1,4 @@
-"""v0.10.34 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
+"""v0.10.35 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -119,6 +119,37 @@ class Tripo31(unittest.TestCase):
     self.assertFalse((directory/f'{uid}_{jid}.xr.error').exists())
     ready.unlink()
     (directory/f'{uid}_{jid}.xr.glb').unlink(missing_ok=True)
+
+ def test_server_monitor_caches_on_provider_success_without_paid_resubmit(self):
+  import ast, sqlite3, tempfile, threading, time
+  from contextlib import closing
+  from backend import db
+  from types import SimpleNamespace
+  monitor=next(n for n in ast.parse(APP).body if isinstance(n,ast.FunctionDef) and n.name=='_xr_monitor_job')
+  with tempfile.TemporaryDirectory() as tmp:
+   database=Path(tmp)/'status.sqlite3'
+   with closing(sqlite3.connect(database)) as con:
+    con.execute("""CREATE TABLE jobs_3d (id INTEGER PRIMARY KEY,owner_id INTEGER,provider TEXT,provider_task TEXT,
+      status TEXT,glb_url TEXT,thumbnail_url TEXT,progress INTEGER,credits REAL,error TEXT,updated_at TEXT)""")
+    con.execute("INSERT INTO jobs_3d VALUES(1,3,'tripo','task_12345678','IN_PROGRESS','','',90,0,'','')")
+    con.commit()
+   saved=[];guard=threading.Lock();active={(3,1)}
+   tripo=SimpleNamespace(status=lambda task,key:{'status':'SUCCEEDED','progress':100,'credits':5,
+       'glb_url':'https://cdn.tripo3d.ai/finished.glb','thumbnail_url':'','error':''})
+   env=dict(DB=database,db=db,closing=closing,threading=threading,time=time,
+            tripo3d=tripo,meshy3d=None,aholo3d=None,
+            _xr_ensure_preview_worker=lambda owner,jid,key:saved.append((owner,jid,key)),
+            _xr_monitor_guard=guard,_xr_monitor_active=active)
+   exec(compile(ast.Module(body=[monitor],type_ignores=[]),'<monitor>','exec'),env)
+   env['_xr_monitor_job'](3,1,'my-secret')
+   self.assertEqual(saved,[(3,1,'my-secret')])
+   self.assertNotIn((3,1),active)
+   with closing(sqlite3.connect(database)) as con:
+    row=con.execute('SELECT status,progress,glb_url FROM jobs_3d WHERE id=1').fetchone()
+    self.assertEqual(row,('SUCCEEDED',100,'https://cdn.tripo3d.ai/finished.glb'))
+  self.assertIn('pending3dJobs.unshift(',XR)
+  self.assertIn('meshPollCursor=(meshPollCursor+count)%pending3dJobs.length',XR)
+  self.assertIn("_xr_ensure_job_monitor(g.user['id'],job,key)",APP)
 
  def test_no_auto_debug_pane(self):
   self.assertIn('async function showMeshDiagnostics(jobId){',XR)

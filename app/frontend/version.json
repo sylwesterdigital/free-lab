@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.34",
-  "description": "Quest-ready Tripo presets, editable 3D transforms and asynchronous textured model preview"
+  "version": "0.10.35",
+  "description": "Tripo immediate private model caching and fair XR job polling; Quest GPU geometry upload checks"
 }

@@ -18,7 +18,7 @@ let pointerHover=null,lastFrame=0,lastUi=0,lastAction=0,latestPose=null,nextPaid
 let followMode=true,followBase=null,eyeBase=null,captureEye=null,voiceButton=null,extractButton=null,extractVisualActive=null,eyeResource=null,eyeState='idle',eyeUntil=0,rootYaw=0,menuYaw=0,promptPanel=null,promptContext=null,promptText='',xrDomOverlay=false;
 let cameraHint=null,cameraHintState='',lastHintCheck=0;
 let debugPanel=null,debugShowing=false,debugLast=0,serverPoll=0,serverDiagnostic=[],modelDiagnosticLines=[],modelDiagnosticJob=null,modelDiagnosticViewedAt=0,descriptionPanel=null,meshPreviews=[],meshLoadingJobs=new Set(),meshJobBadges=new Map(),meshPreviewFailures=new Set(),meshPreviewRetries=new Map(),meshNextAttemptAt=new Map(),mascotPointer=null,mascotTex=null,lastAvatar=0,mixBucket=[],xrKeyboard=null,visitorBadges=[],visitorPollAt=0;
-let followOffset=[0,-.85,-1.16],followWorld=null,eyeWorld=null,depthState='unknown',depthChecked=false,depthFeature=false,depthBinding=null,meshyJob=null,meshyPollAt=0,meshConfirm=null;
+let followOffset=[0,-.85,-1.16],followWorld=null,eyeWorld=null,depthState='unknown',depthChecked=false,depthFeature=false,depthBinding=null,meshyJob=null,meshyPollAt=0,meshPollCursor=0,meshConfirm=null;
 let voiceRecord=null,voiceRecordStarted=0,voiceMeterLast=0,cameraHintUntil=0,meshJobOrigin=null;
 let particles=[],handPinch=new WeakMap(),lastNative=new WeakMap(),clickState=new WeakMap(),lastEyeUpdate=0,lastMicUpdate=0,inferenceCard=null,inferenceStarted=0;
 const PW=600,PH=420,MAX_CLOUD=10,TAU=2*Math.PI;
@@ -1854,7 +1854,11 @@ async function collapse(){if(!cloud)return openGallery();if(cloud.collapsed){awa
 async function submit3d(){if(!meshConfirm||busy)return;const target=meshConfirm;
  meshJobOrigin=target.origin;closeImageMenu();busy=true;setStatus('3D SUBMITTING · selected provider · one confirmed billable job',11000);
  try{const job=await window.FreeLab.createXR3D(target.captureId,target.objectId,'',target.quality||'xr');meshyJob=job.id;
-  pending3dJobs.push({id:job.id,provider:job.provider,captureId:target.captureId,objectId:target.objectId});meshyPollAt=0;
+  // Prioritize the newly paid job; older stalled jobs must not monopolize
+  // the two available status polls indefinitely.
+  pending3dJobs=pending3dJobs.filter(item=>item.id!==job.id);
+  pending3dJobs.unshift({id:job.id,provider:job.provider,captureId:target.captureId,objectId:target.objectId});
+  meshPollCursor=0;meshyPollAt=0;
   syncMeshJobBadge({...job,capture_id:target.captureId,object_id:target.objectId,progress:0});
   const anchor=meshAnchor({captureId:target.captureId,objectId:target.objectId});if(anchor)launchParticles(anchor.pos);
   meshConfirm=null;setStatus('3D BRANCH CREATED · '+job.provider.toUpperCase()+' task '+job.id+' · keep exploring while it grows',14000);
@@ -2052,7 +2056,7 @@ async function xrEmbeddedTexture(encoded){
  const image=new Image();image.decoding='async';image.src=encoded;
  await new Promise((resolve,reject)=>{if(image.complete&&image.naturalWidth)return resolve();image.onload=resolve;image.onerror=()=>reject(Error('3D texture decode failed'));});
  if(!session||!gl||gl.isContextLost())throw Error('XR renderer unavailable');
- const tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tex);
+ const tex=gl.createTexture();if(!tex)throw Error('Quest GPU could not allocate the 3D texture');gl.bindTexture(gl.TEXTURE_2D,tex);
  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,typeof WebGL2RenderingContext!=='undefined'&&gl instanceof WebGL2RenderingContext?gl.REPEAT:gl.CLAMP_TO_EDGE);
@@ -2072,7 +2076,9 @@ function createMeshPart(raw){
   for(let k=0;k<3;k++)values.push(...[a,b,c][k],...n,uvs[j+k*2],uvs[j+k*2+1]);
  }
  if(values.some(x=>!Number.isFinite(x)))throw Error('Nonfinite XR model vertex');
- const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(values),gl.STATIC_DRAW);
+ if(!gl||gl.isContextLost())throw Error('Quest WebGL context lost during 3D model upload');
+ const buffer=gl.createBuffer();if(!buffer)throw Error('Quest GPU refused the 3D mesh buffer');gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(values),gl.STATIC_DRAW);
+ if(gl.isContextLost())throw Error('Quest WebGL context was lost while loading 3D geometry');
  const col=Array.isArray(raw.color)&&raw.color.length===4?raw.color:[1,1,1,1];
  return {buffer,count:values.length/8,color:col.map(x=>clamp(x,0,1)),texture:null};
 }
@@ -2186,7 +2192,11 @@ async function poll3d(t){
   void reopenCloudModels(cloud.id).catch(e=>window.FreeLab?.traceEvent?.('3D sync: '+e.message,'warn')).finally(()=>{meshSyncBusy=false;});
  }
  if(!pending3dJobs.length||t-meshyPollAt<14000)return;meshyPollAt=t;
- const jobs=pending3dJobs.slice(0,2);
+ // Round-robin over ALL active jobs, instead of repeatedly polling only
+ // the first two (which previously starved newly created models).
+ const count=Math.min(2,pending3dJobs.length);
+ const jobs=Array.from({length:count},(_,i)=>pending3dJobs[(meshPollCursor+i)%pending3dJobs.length]);
+ meshPollCursor=(meshPollCursor+count)%pending3dJobs.length;
  for(const item of jobs){try{
   const job=await window.FreeLab.checkXR3D(item.id);
   if(cloud?.id===job.capture_id)syncMeshJobBadge(job);

@@ -1,16 +1,29 @@
 {
-  "version": "0.10.34",
-  "title": "FREELAB v0.10.34 — 3D presets, model transforms and textured preview recovery",
+  "version": "0.10.35",
+  "title": "FREELAB v0.10.35 — Tripo completion-to-XR delivery recovery",
   "datetime": "2026-11-15",
   "changes": [
-    "XR-ready, Balanced and High-detail Tripo image-to-3D presets select a real P2 or H3.1 model version and triangle limit before submitting a paid task.",
-    "Tripo texture fidelity (Standard, Detailed, Extreme/8K) is independently selectable, with a separate 512/1024/2048-pixel Quest preview texture cap; generation parameters are preserved per model job.",
-    "Quest 3D meshes have spatial hit targets and can be grabbed with controllers or tracked-hand pinches, moved, rotated with wrist/controller twist and scaled with two hands; a compact minus/rotate/plus toolbar provides alternative controls.",
-    "Model transforms are validated and stored privately relative to their source photograph; reopening the collection restores placement without another paid model generation.",
-    "XR 3D progress badges now distinguish download, optimization, decoding and attachment stages; completed textured geometry replaces the source-linked cube.",
-    "Desktop/mobile 3D viewer now reads the actual textured parts response, waits through asynchronous server preparation and accepts the same source-linked models, without another generation request."
+    "New Tripo generation jobs are now followed by a bounded server-side monitor that saves completed GLBs immediately; headset and collection polling are not required to start private download before signed provider links expire.",
+    "On return to Collection after a Gunicorn restart, outstanding jobs resume provider status monitoring without any new paid generation request.",
+    "Quest XR cycles status checks across all pending 3D jobs, prioritizing the newest job; older stalled jobs cannot starve new jobs of updates.",
+    "A downloaded GLB is accepted from cache only if its file header and declared size are valid; interrupted cache files are replaced on the next authenticated provider fetch.",
+    "Quest model upload explicitly rejects lost WebGL contexts or failed GPU allocations rather than falsely reporting a model as attached.",
+    "Models remain source-linked and the existing compact 3D progress cube is retained; no floating diagnostics panel or extra paid task is introduced."
   ],
   "history": [
+    {
+      "version": "0.10.34",
+      "title": "FREELAB v0.10.34 — 3D presets, model transforms and textured preview recovery",
+      "datetime": "2026-11-15",
+      "changes": [
+        "XR-ready, Balanced and High-detail Tripo image-to-3D presets select a real P2 or H3.1 model version and triangle limit before submitting a paid task.",
+        "Tripo texture fidelity (Standard, Detailed, Extreme/8K) is independently selectable, with a separate 512/1024/2048-pixel Quest preview texture cap; generation parameters are preserved per model job.",
+        "Quest 3D meshes have spatial hit targets and can be grabbed with controllers or tracked-hand pinches, moved, rotated with wrist/controller twist and scaled with two hands; a compact minus/rotate/plus toolbar provides alternative controls.",
+        "Model transforms are validated and stored privately relative to their source photograph; reopening the collection restores placement without another paid model generation.",
+        "XR 3D progress badges now distinguish download, optimization, decoding and attachment stages; completed textured geometry replaces the source-linked cube.",
+        "Desktop/mobile 3D viewer now reads the actual textured parts response, waits through asynchronous server preparation and accepts the same source-linked models, without another generation request."
+      ]
+    },
     {
       "version": "0.10.33",
       "title": "FREELAB v0.10.33 — XR 3D preparation recovery and theater transforms",

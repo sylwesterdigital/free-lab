@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64,hashlib,hmac,io,json,math,os,re,secrets,sqlite3,threading,time,urllib.request,urllib.error
 from pathlib import Path
 from functools import wraps
+from contextlib import closing
 from flask import Flask,abort,g,jsonify,request,send_file,session
 from itsdangerous import URLSafeTimedSerializer,BadSignature,SignatureExpired
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -36,6 +37,13 @@ _XR_PREVIEW_CONCURRENT=1  # Avoid multiple simultaneous headless Blender instanc
 _xr_poll_guard=threading.Lock()
 _xr_poll_active=set()
 _xr_poll_times={}
+
+# A signed Tripo GLB URL can expire before the wearer next opens Collection.
+# Active tasks therefore have a bounded server-side watch which saves the file
+# as soon as the provider finishes, independently of XR frame rendering.
+_xr_monitor_guard=threading.Lock()
+_xr_monitor_active=set()
+_XR_MONITOR_CONCURRENT=3
 
 def _xr_preview_json_path(owner,jid):
     return MODEL_DIR/f'{owner}_{jid}.xr.json'
@@ -169,6 +177,8 @@ def _xr_poll_task_worker(owner,jid,key):
             updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND owner_id=?""",
             (info['status'],info['progress'],info['credits'],info['glb_url'] or row['glb_url'],
              info['thumbnail_url'] or row['thumbnail_url'],info['error'],jid,owner))
+        if info['status']=='SUCCEEDED' and row['provider']=='tripo':
+            _xr_ensure_preview_worker(owner,jid,key)
     except Exception:
         # A transient poll failure does not change a provider task to FAILED.
         pass
@@ -184,6 +194,58 @@ def _xr_ensure_task_poll(owner,jid,key):
         _xr_poll_times[identity]=now;_xr_poll_active.add(identity)
     threading.Thread(target=_xr_poll_task_worker,args=(owner,jid,key),daemon=True,
                      name=f'freelab-3d-status-{jid}').start()
+
+
+def _xr_monitor_job(owner,jid,key):
+    # This is a recovery-capable, read-only task monitor. It never creates a
+    # second paid Tripo task. Each thread owns its SQLite connection.
+    try:
+        deadline=time.monotonic()+8*60
+        failures=0
+        while time.monotonic()<deadline:
+            try:
+                with closing(db.connect(DB)) as con:
+                    row=con.execute('SELECT provider,provider_task,status,glb_url,thumbnail_url FROM jobs_3d WHERE owner_id=? AND id=?',
+                                    (owner,jid)).fetchone()
+                if row is None:return
+                if row['status'] in ('FAILED','CANCELED'):return
+                if row['status']=='SUCCEEDED':
+                    if row['provider']=='tripo':_xr_ensure_preview_worker(owner,jid,key)
+                    return
+                adapter={'aholo':aholo3d,'meshy':meshy3d,'tripo':tripo3d}.get(row['provider'])
+                if not adapter or not key:return
+                info=adapter.status(row['provider_task'],key)
+                with closing(db.connect(DB)) as con:
+                    with con:
+                        con.execute("""UPDATE jobs_3d SET status=?,progress=?,credits=?,glb_url=?,thumbnail_url=?,error=?,
+                          updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND owner_id=?""",
+                          (info['status'],info['progress'],info['credits'],info['glb_url'] or row['glb_url'],
+                           info['thumbnail_url'] or row['thumbnail_url'],info['error'],jid,owner))
+                failures=0
+                if info['status']=='SUCCEEDED':
+                    # Fetch the provider model immediately while its signed URL
+                    # is fresh. Cache/Quest decoding occurs in another worker.
+                    if row['provider']=='tripo':_xr_ensure_preview_worker(owner,jid,key)
+                    return
+                if info['status'] in ('FAILED','CANCELED'):return
+            except Exception:
+                # Temporary DNS/API failures do not turn a paid task into FAILED.
+                failures+=1
+            time.sleep(min(25,9+failures*3))
+    finally:
+        with _xr_monitor_guard:_xr_monitor_active.discard((owner,jid))
+
+
+def _xr_ensure_job_monitor(owner,jid,key):
+    if not key:return False
+    with _xr_monitor_guard:
+        identity=(owner,jid)
+        if identity in _xr_monitor_active:return False
+        if len(_xr_monitor_active)>=_XR_MONITOR_CONCURRENT:return False
+        _xr_monitor_active.add(identity)
+    threading.Thread(target=_xr_monitor_job,args=(owner,jid,key),daemon=True,
+                     name=f'freelab-tripo-monitor-{jid}').start()
+    return True
 
 
 def _xr_preview_paths(owner,jid):
@@ -1035,6 +1097,8 @@ def job_3d_dict(row):
 @require_user
 def jobs_3d():
     rows=g.con.execute('SELECT * FROM jobs_3d WHERE owner_id=? ORDER BY id DESC LIMIT 500',(g.user['id'],)).fetchall()
+    for job in (r for r in rows[:12] if r['status'] in ('PENDING','IN_PROGRESS','UNKNOWN')):
+        _xr_ensure_job_monitor(g.user['id'],job['id'],provider_key(job['provider']))
     return jsonify(jobs=[job_3d_dict(row) for row in rows])
 
 @app.get('/api/media/3d/check')
@@ -1117,6 +1181,7 @@ def media_3d_start():
                setting['preset'] if provider=='tripo' else '',options['face_limit'] if provider=='tripo' else 0,
                setting['texture_quality'] if provider=='tripo' else '',setting['xr_texture_edge'] if provider=='tripo' else 640)).lastrowid
         db.finish_inference(g.con,call,'ok')
+        _xr_ensure_job_monitor(g.user['id'],job,key)
         return jsonify(id=job,status='PENDING',provider=provider,paid_task_submitted=True),202
     except (ValueError,RuntimeError,OSError) as e:
         db.finish_inference(g.con,call,'error');return jsonify(error=str(e)),502
