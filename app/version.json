@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.41",
-  "description": "UV-safe XR model geometry, fresh preview cache and accurate desktop model framing"
+  "version": "0.10.42",
+  "description": "Source-linked media collection, natural XR grabbing, and correct desktop model proportions"
 }

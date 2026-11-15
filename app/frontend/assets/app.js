@@ -1,7 +1,7 @@
 /* FREELAB Spatial Cloud 0.9.1 — camera and model calls explicitly opt-in. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
-const state={user:null,config:null,objects:[],tab:'mine',stream:null,micStream:null,snapshot:null,snapshotOrigin:null,xr:null,sessionKeys:new Map()};
+const state={user:null,config:null,objects:[],models:[],mediaFilter:'all',tab:'mine',stream:null,micStream:null,snapshot:null,snapshotOrigin:null,xr:null,sessionKeys:new Map()};
 const trace=[];const TRACE_MAX=80;
 function traceEvent(message,kind='info'){const entry={at:new Date().toLocaleTimeString(),kind,message:String(message).slice(0,270)};trace.push(entry);if(trace.length>TRACE_MAX)trace.shift();window.dispatchEvent(new CustomEvent('freelab-trace',{detail:entry}));}
 function getTrace(){return trace.slice(-25);}
@@ -82,28 +82,63 @@ async function gallerySavedMetadata(item,marker){
  }catch(e){traceEvent('Gallery metadata: '+e.message,'warn');}
 }
 function browseGallery(step){if(!galleryItems.length)return;galleryIndex=(galleryIndex+step+galleryItems.length)%galleryItems.length;renderGallery();}
-function renderObjects(){const box=$('items');box.replaceChildren();if(state.tab==='mine'){$('objectCount').textContent=String(state.objects.length);$('objectCounter').textContent=String(state.objects.length).padStart(2,'0');}
- const term=($('collectionSearch')?.value||'').trim().toLocaleLowerCase();
- const visible=state.objects.filter(o=>!term||[o.label,o.description,o.created_at,o.folder,o.provider,o.visibility,o.operation].join(' ').toLocaleLowerCase().includes(term));
- const count=$('collectionMatchCount');if(count)count.textContent=visible.length+' of '+state.objects.length;
- if(!visible.length){const e=el('div','empty-state');e.append(el('strong','',term?'No matching images':state.tab==='bin'?'Your bin is empty':state.tab==='mine'?'Nothing collected yet':'No public objects yet'));box.append(e);return;}
- for(const o of visible){const card=el('article','object-card');const open=el('button','object-preview');open.type='button';open.title='Open '+o.label+' in full-size preview';open.setAttribute('aria-label','Open '+o.label);
+function archiveImageCard(o){
+ const card=el('article','object-card'),open=el('button','object-preview');open.type='button';open.title='Open '+o.label+' in full-size preview';open.setAttribute('aria-label','Open '+o.label);
  if(o.has_image){const img=el('img','object-photo');img.loading='lazy';img.alt='';img.src='/api/objects/'+o.id+'/image';open.append(img);}else open.append(el('div','object-placeholder','◈'));
- const footer=el('span','object-overlay');footer.append(el('strong','',o.label),el('small','',String(o.created_at||'').slice(0,10)+' · '+(o.visibility||'PRIVATE').toUpperCase()));open.append(footer);
+ const footer=el('span','object-overlay');footer.append(el('strong','',o.label),el('small','',String(o.created_at||'').slice(0,10)+' · IMAGE · '+(o.visibility||'PRIVATE').toUpperCase()));open.append(footer);
  open.onclick=()=>openGallery(o.id).catch(e=>notify(e.message));card.append(open);
- const menu=el('details','object-menu');const summary=el('summary','', '⋯');summary.title='Object actions';summary.setAttribute('aria-label','Actions for '+o.label);menu.append(summary);
- const tools=el('div','object-menu-popover');
- const add=(name,cb)=>{const button=el('button','',name);button.type='button';button.onclick=async()=>{menu.open=false;try{await cb();}catch(e){notify(e.message);}};tools.append(button);};
+ const related=state.models.filter(m=>m.object_id===o.id);
+ if(related.length){const badge=el('span','media-relationship-badge',related.length+' linked 3D '+(related.length===1?'model':'models'));card.append(badge);}
+ const menu=el('details','object-menu');const summary=el('summary','','⋯');summary.title='Image actions';summary.setAttribute('aria-label','Actions for '+o.label);menu.append(summary);
+ const tools=el('div','object-menu-popover');const add=(name,cb)=>{const button=el('button','',name);button.type='button';button.onclick=async()=>{menu.open=false;try{await cb();}catch(e){notify(e.message);}};tools.append(button);};
  add('Full preview',()=>openGallery(o.id));if(o.has_image)add('Download photo',()=>{downloadImage('/api/objects/'+o.id+'/image',o.label);return Promise.resolve();});
  if(state.tab==='mine'){
   add('Private',()=>changeVisibility(o.id,'private'));add('Public',()=>changeVisibility(o.id,'public'));add('Copy share link',()=>changeVisibility(o.id,'link'));
   add('Folder: '+(o.folder||'Unsorted'),()=>cycleFolder(o));add('Move to bin',()=>changeShelf(o.id,'bin'));
- }else if(state.tab==='bin'){
-  add('Restore',()=>changeShelf(o.id,'collection'));add('Delete permanently',()=>removeObject(o.id));
- }else{add('Owner: '+o.owner,()=>Promise.resolve());}
- menu.append(tools);card.append(menu);box.append(card);
- }
+ }else if(state.tab==='bin'){add('Restore',()=>changeShelf(o.id,'collection'));add('Delete permanently',()=>removeObject(o.id));}
+ else add('Owner: '+o.owner,()=>Promise.resolve());
+ menu.append(tools);card.append(menu);return card;
 }
+function archiveModelCard(job){
+ const card=el('article','object-card model-asset-card'),poster=modelJobPoster(job);
+ card.append(modelJobThumb(job));const body=el('div','model-asset-body');
+ body.append(el('span','media-kind-label','3D MODEL · '+String(job.provider||'').toUpperCase()));
+ body.append(el('strong','',`Model #${job.id} · ${job.status} · ${job.progress}%`));
+ const context=el('button','model-source-link',job.object_id?'From edited/extracted image #'+job.object_id:'From source capture #'+(job.capture_id||'—'));
+ context.type='button';context.title='Open the source image and its branch';context.onclick=()=>openGallery(job.object_id||null,job.object_id?null:job.capture_id).catch(e=>notify(e.message));body.append(context);
+ body.append(el('span','small-muted',job.credits===null?'Credits pending':job.credits+' credits'));
+ if(job.error)body.append(el('span','small-muted',String(job.error).slice(0,115)));
+ const view=el('button','tiny-btn','View in 3D');view.type='button';view.disabled=job.status!=='SUCCEEDED';view.onclick=()=>window.FreeLabModelStage?.open(job.id,false,null,poster||job.source_image_url||'');body.append(view);
+ card.append(body);
+ const menu=el('details','object-menu');const summary=el('summary','','⋯');summary.title='3D model actions';menu.append(summary);const actions=el('div','object-menu-popover');
+ const action=(name,cb)=>{const button=el('button','',name);button.type='button';button.onclick=async()=>{menu.open=false;try{await cb();}catch(e){notify(e.message);}};actions.append(button);};
+ action('Open source',()=>openGallery(job.object_id||null,job.object_id?null:job.capture_id));
+ action('Inspect 3D pipeline',async()=>{const d=await modelXRDiagnostics(job.id);notify('3D #'+job.id+' · '+d.stage+' · '+d.next_action);});
+ if(job.status==='SUCCEEDED')action('Retry XR preview',async()=>{if(await window.FreeLabDialog.confirm('Retry this saved model for Quest? No new paid generation.')){await retryXRPreview(job.id);notify('XR preparation restarted from saved model');}});
+ if(job.glb_url){const link=el('a','','Download original GLB');link.href=job.glb_url;link.target='_blank';link.rel='noopener noreferrer';actions.append(link);action('Renew link',async()=>{await checkXR3D(job.id,true);await refresh3DJobs();});}
+ if(!['SUCCEEDED','FAILED','CANCELED'].includes(job.status))action('Check status',async()=>{await checkXR3D(job.id);await refresh3DJobs();});
+ menu.append(actions);card.append(menu);return card;
+}
+function renderObjects(){
+ const box=$('items');if(!box)return;box.replaceChildren();if(state.tab==='mine'){$('objectCount').textContent=String(state.objects.length);$('objectCounter').textContent=String(state.objects.length).padStart(2,'0');}
+ const mode=state.mediaFilter||'all',term=($('collectionSearch')?.value||'').trim().toLocaleLowerCase(),show3D=state.tab==='mine';
+ const objects=state.objects.filter(o=>!term||[o.label,o.description,o.created_at,o.folder,o.provider,o.visibility,o.operation].join(' ').toLocaleLowerCase().includes(term));
+ const jobs=show3D?state.models.filter(j=>!term||[j.id,j.provider,j.status,j.object_id,j.capture_id,'3D MODEL',state.objects.find(o=>o.id===j.object_id)?.label||''].join(' ').toLocaleLowerCase().includes(term)):[];
+ const result=[];
+ if(mode!=='3d'){
+  const displayed=new Set();
+  for(const o of objects){result.push({type:'image',value:o});if(mode!=='images')for(const m of jobs.filter(j=>j.object_id===o.id)){result.push({type:'3d',value:m});displayed.add(m.id);}}
+  if(mode==='all')for(const m of jobs){if(!displayed.has(m.id)){result.push({type:'3d',value:m});displayed.add(m.id);}}
+ }
+ else for(const m of jobs)result.push({type:'3d',value:m});
+ const total=mode==='images'?state.objects.length:mode==='3d'?(show3D?state.models.length:0):state.objects.length+(show3D?state.models.length:0);
+ $('collectionMatchCount').textContent=result.length+' of '+total;
+ const context=$('archiveMediaContext');if(context)context.textContent=mode==='all'?'Original media and linked 3D generations':mode==='images'?'Image sources, edits and extracted objects':'Generated 3D models with links to their source images';
+ document.querySelectorAll('[data-media]').forEach(b=>{const on=b.dataset.media===mode;b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));});
+ if(!result.length){const empty=el('div','empty-state');empty.append(el('strong','',term?'No matching media':mode==='3d'?'No generated 3D models':state.tab==='bin'?'Your bin is empty':'Nothing collected yet'));box.append(empty);return;}
+ for(const entry of result)box.append(entry.type==='3d'?archiveModelCard(entry.value):archiveImageCard(entry.value));
+}
+
 async function galleryAI(action){const item=galleryItems[galleryIndex];if(!item)return;
  $('galleryToolMenu').open=false;const status=$('galleryAIStatus');status.classList.remove('hidden');
  if(action==='download'){downloadImage(item.url,item.label);status.textContent='Downloading image';return;}
@@ -306,7 +341,7 @@ async function init(){
  const updateEntry=async()=>{const canXR=await supportsAR();if(portalMode)portalMode.textContent=canXR?'XR':'3D';if(portalTitle)portalTitle.textContent=canXR?'ENTER SPATIAL REALITY':'ENTER 3D COLLECTION';if(portalHint)portalHint.textContent=canXR?'QUEST · IMMERSIVE AR':'BROWSER · THREE.JS · ORBIT / EXPLORE';$('depthXR').classList.toggle('hidden',!canXR);};void updateEntry();
  $('enterXR').onclick=async()=>{window.FreeLabSound?.unlock();window.FreeLabSound?.play('enter');if(!state.user)return notify('Sign in before entering 3D');if(await supportsAR())window.FreeLabRooms.chooseXR();else window.FreeLabRooms.previewLocal().catch(e=>notify('3D preview: '+e.message));};
  $('depthXR')?.addEventListener('click',()=>{if(!state.user)return notify('Sign in before entering XR');window.FreeLabRooms.chooseXR(true);notify('Depth is requested on XR entry. If unsupported or denied, use normal XR instead.');});
- $('collectionSearch').addEventListener('input',renderObjects);$('galleryComposer').onsubmit=galleryComposerSubmit;document.querySelectorAll('[data-gallery-action]').forEach(b=>b.onclick=()=>void galleryAI(b.dataset.galleryAction));$('toggleLibrary').onclick=()=>setLibrary($('workspace').classList.contains('hidden'));$('refresh3DJobs').onclick=refresh3DJobs;
+ document.querySelectorAll('[data-media]').forEach(button=>button.onclick=()=>{state.mediaFilter=button.dataset.media;renderObjects();});$('collectionSearch').addEventListener('input',renderObjects);$('galleryComposer').onsubmit=galleryComposerSubmit;document.querySelectorAll('[data-gallery-action]').forEach(b=>b.onclick=()=>void galleryAI(b.dataset.galleryAction));$('toggleLibrary').onclick=()=>setLibrary($('workspace').classList.contains('hidden'));$('refresh3DJobs').onclick=refresh3DJobs;
  $('closeLibrary').onclick=()=>setLibrary(false);$('galleryClose').onclick=()=>$('desktopGallery').classList.add('hidden');$('galleryPrev').onclick=()=>browseGallery(-1);$('galleryNext').onclick=()=>browseGallery(1);let swipeX=null;$('galleryImage').addEventListener('touchstart',e=>{swipeX=e.changedTouches[0].clientX;},{passive:true});$('galleryImage').addEventListener('touchend',e=>{if(swipeX!==null&&Math.abs(e.changedTouches[0].clientX-swipeX)>35)browseGallery(e.changedTouches[0].clientX<swipeX?1:-1);swipeX=null;},{passive:true});document.addEventListener('keydown',e=>{if($('desktopGallery').classList.contains('hidden'))return;if(e.key==='Escape')$('galleryClose').click();else if(e.key==='ArrowLeft')browseGallery(-1);else if(e.key==='ArrowRight')browseGallery(1);});
  document.querySelectorAll('.model-option').forEach(btn=>btn.onclick=()=>{$('modelChoice').value=btn.dataset.model;document.querySelectorAll('.model-option').forEach(b=>b.classList.toggle('selected',b===btn));});
  $('saveUploadCloud')?.addEventListener('click',async()=>{const button=$('saveUploadCloud');button.disabled=true;
@@ -418,45 +453,10 @@ function modelJobThumb(job){
  return button;
 }
 async function refresh3DJobs(){
- const panel=$('modelJobs');if(!panel)return;
- panel.replaceChildren();try{
-  const response=await api('/media/3d');
-  if(!response.jobs.length){panel.append(el('p','small-muted','No 3D jobs yet. Select an image in XR → 3D → Generate.'));return;}
-  for(const job of response.jobs){const row=el('div','model-job');const poster=modelJobPoster(job);
-   row.append(modelJobThumb(job));
-   const body=el('div','model-job-body');
-   body.append(el('strong','',`3D · ${job.provider} · ${job.status} · ${job.progress}%`));
-   body.append(el('span','small-muted',`Source #${job.capture_id||'-'} · ${job.credits===null?'Credits pending':job.credits+' credits'}${job.thumbnail_kind==='blender'?' · Blender thumbnail':job.thumbnail_kind==='provider'?' · Provider thumbnail':job.thumbnail_kind==='rendering'?' · Rendering Blender thumbnail':job.source_image_url?' · Source thumbnail':''}`));
-   if(job.error)body.append(el('p','small-muted',job.error));
-   const actions=el('div','model-job-actions');
-   const audit=el('button','tiny-btn','Inspect 3D pipeline');audit.type='button';
-   audit.onclick=async()=>{audit.disabled=true;audit.textContent='Inspecting…';try{
-    const d=await modelXRDiagnostics(job.id);let info=row.querySelector('.model-diagnostic');
-    if(!info){info=el('pre','model-diagnostic','');row.append(info);}
-    const stages=d.steps.map(s=>s.name+': '+s.state+(s.detail?' · '+s.detail:''));
-    info.textContent=['Job #'+d.job_id+' · '+d.provider.toUpperCase()+' · '+(d.model_id||'model version not recorded'),
-      'Current stage: '+d.stage,'Cached GLB: '+(d.model.cached?(d.model.bytes/1e6).toFixed(2)+' MB':'no'),
-      'Geometry compression: '+(d.model.compression.join(', ')||'none declared'),
-      'Blender available: '+(d.blender_available?'yes':'no'),...stages,
-      'Next action: '+d.next_action].join('\n');
-   }catch(e){notify('3D diagnostics: '+e.message);}finally{audit.disabled=false;audit.textContent='Inspect 3D pipeline';}};
-   actions.append(audit);
-   if(job.status==='SUCCEEDED'){
-    const retry=el('button','tiny-btn','Retry XR preview');retry.type='button';
-    retry.onclick=async()=>{if(!await window.FreeLabDialog.confirm('Retry preparing this existing 3D model for Quest? No new paid 3D task is created.'))return;
-      try{await retryXRPreview(job.id);notify('XR preview error reset. Reopen the source or tap its 3D cube to load again.');}
-      catch(e){notify('XR retry unavailable: '+e.message);}};actions.append(retry);
-   }
-   if(job.status==='SUCCEEDED'){const view=el('button','tiny-btn','View in 3D');view.type='button';view.onclick=()=>window.FreeLabModelStage?.open(job.id,false,null,poster||job.source_image_url||'');actions.append(view);}
-   if(job.glb_url){const a=el('a','tiny-btn','Download GLB');a.href=job.glb_url;a.rel='noopener noreferrer';a.target='_blank';actions.append(a);
-    const renew=el('button','tiny-btn','Renew link');renew.onclick=async()=>{try{await checkXR3D(job.id,true);await refresh3DJobs();}catch(e){notify(e.message)}};actions.append(renew);}
-   if(!['SUCCEEDED','FAILED','CANCELED'].includes(job.status)){
-    const button=el('button','tiny-btn','Check status');button.onclick=async()=>{try{await checkXR3D(job.id);await refresh3DJobs();}catch(e){notify(e.message)}};actions.append(button);}
-   body.append(actions);row.append(body);
-   panel.append(row);
-  }
- }catch(e){panel.append(el('p','small-muted','3D jobs unavailable · '+e.message));}
+ try{state.models=await list3DJobs();renderObjects();}
+ catch(e){traceEvent('3D media unavailable: '+e.message,'warn');renderObjects();}
 }
+
 let background3DTimer=null,background3DBusy=false,reported3DJobs=new Set();
 async function background3DCheck(){if(background3DBusy||document.visibilityState==='hidden'||!state.user)return;
  background3DBusy=true;
@@ -594,7 +594,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.41');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.42');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{

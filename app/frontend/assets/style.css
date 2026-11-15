@@ -486,3 +486,24 @@
 .capture-chat #capture3DQuality{background:#263e34;color:#e7fff0;border:1px solid #8bba9d55;border-radius:11px;padding:7px;font:inherit;font-size:12px;max-width:130px;align-self:center}
 .model-provider-settings #profile3DQuality,.model-provider-settings #profile3DTexture,.model-provider-settings #profile3DXRTexture{width:min(100%,480px)}
 @media(max-width:650px){.capture-chat #capture3DQuality{max-width:100px;padding:6px 4px;font-size:11px}}
+
+/* v0.10.42 — unified media archive: source image and generated 3D branches */
+.archive-media-nav{display:flex;align-items:center;flex-wrap:wrap;gap:9px;padding:17px 0 12px;border-bottom:1px solid #42554b68;position:sticky;top:92px;z-index:2;background:#1c2320f5;backdrop-filter:blur(12px)}
+.archive-media-nav .media-filter{border:1px solid #526b5f;background:transparent;color:#c5dad0;font-size:12px;font-weight:700;letter-spacing:.055em;border-radius:14px;padding:11px 17px;min-height:42px}
+.archive-media-nav .media-filter.active{background:#c6f3d7;color:#153020;border-color:#c6f3d7}
+.archive-media-nav .media-filter:focus-visible{outline:2px solid #dbffdb}
+.archive-media-nav #archiveMediaContext{margin-left:9px;flex:1;min-width:150px;font-size:11px}
+.archive-media-nav #refresh3DJobs{min-height:39px}
+.item-grid .object-card{position:relative;min-height:220px;background:#17231d;border-color:#45635375}
+.item-grid .media-relationship-badge{position:absolute;top:12px;left:12px;background:#153e2edb;border:1px solid #99d4b2;color:#e3ffeb;border-radius:14px;font-size:10px;font-weight:750;padding:7px 9px;pointer-events:none}
+.item-grid .model-asset-card{display:flex;flex-direction:column;gap:0;padding:0;overflow:hidden}
+.item-grid .model-asset-card .model-job-thumb{display:block;width:100%;height:158px;flex:none;border:none;border-radius:0;box-shadow:none;background:#101a17}
+.item-grid .model-asset-card .model-job-thumb img{width:100%;height:100%;object-fit:contain;background:#13241d}
+.item-grid .model-asset-card .model-job-thumb:hover{transform:none;filter:brightness(1.08)}
+.model-asset-body{padding:14px 16px;display:flex;flex-direction:column;gap:7px;min-height:150px}
+.model-asset-body .media-kind-label{font-weight:850;letter-spacing:.10em;font-size:10px;color:#b6f3cb}
+.model-asset-body strong{font-size:14px;letter-spacing:-.01em;color:#effcf3}
+.model-source-link{background:none;border:0;padding:0;text-align:left;cursor:pointer;font-size:12px;color:#b9d3c6;text-decoration:underline;text-decoration-color:#629579;line-height:1.4}
+.model-source-link:hover{color:#e0ffed}
+.model-asset-body .tiny-btn{width:max-content;max-width:100%;border-radius:12px;background:#335642;border:1px solid #5b9371;padding:9px 13px;color:#e3ffe9}
+@media(max-width:740px){.archive-media-nav{top:60px}.archive-media-nav #archiveMediaContext{order:3;flex-basis:100%}.archive-media-nav .media-filter{padding:9px 11px;font-size:10px}.item-grid .model-asset-card .model-job-thumb{height:125px}}

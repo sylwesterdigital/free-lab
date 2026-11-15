@@ -1,4 +1,4 @@
-"""v0.10.41: models remain attached to saved sources; bounded textured GLB previews.
+"""v0.10.42: models remain attached to saved sources; bounded textured GLB previews.
 No AI requests, no provider costs and no remote network.
 """
 import io,json,math,struct,unittest
@@ -104,16 +104,15 @@ class TexturedXR124(unittest.TestCase):
         self.assertAlmostEqual(values[1][1],1.1)
         self.assertIsNone(glb_xr.texture_coordinates({'texCoord':1},{'TEXCOORD_0':2},lambda *_:[],2))
 
-    def test_desktop_flat_models_face_camera_without_nonuniform_stretch(self):
+    def test_desktop_upright_model_is_not_squashed_by_top_down_camera(self):
         source=(ROOT/'frontend/assets/model-stage.mjs').read_text()
-        self.assertIn('root=new THREE.Group();root.add(obj);scene.add(root)',source)
-        self.assertIn('root.scale.setScalar(uniform)',source)
-        self.assertIn('root.position.copy(center).multiplyScalar(-uniform)',source)
-        self.assertIn('if(thin&&size.y===shortest)',source)
-        self.assertIn('pitch=1.18',source)
+        self.assertIn('const display=new THREE.Group();display.add(obj)',source)
+        self.assertIn('display.rotation.x=-Math.PI/2',source)
+        self.assertIn('root.scale.setScalar(1.45/(Math.max(size.x,size.y,size.z)||1))',source)
+        self.assertIn('root.position.copy(center).multiplyScalar(-root.scale.x)',source)
+        self.assertIn('yaw=.37;pitch=.12;dist=2.65',source)
+        self.assertNotIn('pitch=1.18',source)
         self.assertNotIn('root.scale.multiplyScalar(scale)',source)
-        self.assertIn('_XR_TEXTURE_REVISION',B)
-        self.assertIn('Old previews have welded together atlas UV seams',B)
 
     def test_xr_textured_shader_and_source_lifecycle(self):
         self.assertIn('const XMV=',XR)

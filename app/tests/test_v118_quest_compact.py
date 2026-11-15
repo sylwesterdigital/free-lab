@@ -1,4 +1,4 @@
-"""Regression guards for v0.10.41. No network, headset, camera, or paid API calls."""
+"""Regression guards for v0.10.42. No network, headset, camera, or paid API calls."""
 import json
 import re
 import unittest
@@ -73,7 +73,10 @@ class QuestCompact118(unittest.TestCase):
   self.assertIn('id="collectionSearch"',HTML)
   self.assertIn('id="galleryToolMenu"',HTML)
   self.assertIn("$('collectionSearch').addEventListener('input',renderObjects)",JS)
-  self.assertIn("const visible=state.objects.filter",JS)
+  self.assertIn("const objects=state.objects.filter",JS)
+  self.assertIn("id=\"archiveMediaNav\"",HTML)
+  self.assertIn("data-media=\"3d\"",HTML)
+  self.assertIn("function archiveModelCard(job){",JS)
   self.assertIn('object-overlay',JS)
   self.assertIn("el('details','object-menu')",JS)
   self.assertIn('galleryAI(action)',JS)
@@ -84,8 +87,8 @@ class QuestCompact118(unittest.TestCase):
 
  def test_release_versions(self):
   for name in ('version.json','frontend/version.json','changelog.json','frontend/changelog.json'):
-   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.41')
-  self.assertIn('room-viewer.mjs?v=0.10.41',ROOMS)
-  self.assertIn('xr.js?v=0.10.41',HTML)
+   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.42')
+  self.assertIn('room-viewer.mjs?v=0.10.42',ROOMS)
+  self.assertIn('xr.js?v=0.10.42',HTML)
 
 if __name__=='__main__': unittest.main()

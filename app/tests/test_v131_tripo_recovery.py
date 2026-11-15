@@ -1,4 +1,4 @@
-"""v0.10.41 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
+"""v0.10.42 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -188,7 +188,7 @@ class Tripo31(unittest.TestCase):
 if __name__=='__main__':unittest.main()
 
 
-# v0.10.41: private Blender thumbnails and XR GPU lifecycle diagnostics.
+# v0.10.42: private Blender thumbnails and XR GPU lifecycle diagnostics.
 class ModelThumbnailTests(unittest.TestCase):
  def test_backend_exposes_thumbnail_and_source_fallback(self):
   self.assertIn('def _model_thumb_path(owner,jid):',APP)
@@ -235,7 +235,7 @@ class XR3DDiagnosticsTests(unittest.TestCase):
   self.assertIn("'Cache-Control'",source)
 
 class XRMeshOwnershipAndLibraryRegressionTests(unittest.TestCase):
- """v0.10.41 regression: GPU buffers must remain owned by the XR model."""
+ """v0.10.42 regression: GPU buffers must remain owned by the XR model."""
  def test_ownership_transfer_preserves_mesh_parts_during_finally_cleanup(self):
   xr=(ROOT/'frontend/assets/xr.js').read_text()
   self.assertIn("kind:'3dmesh',parts:pieces.slice()",xr)
@@ -265,7 +265,7 @@ class XRMeshOwnershipAndLibraryRegressionTests(unittest.TestCase):
   self.assertIn("c.kind==='gallery')&&c.captionNormal",xr)
   self.assertIn("cards.filter(c=>c.kind!=='galleryheader')",xr)
 
-# v0.10.41: Quest controllers, local axis gizmos and static library animation.
+# v0.10.42: Quest controllers, local axis gizmos and static library animation.
 class XRTransformAndLibraryTests(unittest.TestCase):
  def test_library_header_is_static_and_tween_skips_unanimated_cards(self):
   self.assertIn("kind:'galleryheader',data:{},pos:[0,.67,-.04],from:[0,.67,-.04],to:[0,.67,-.04],start:0,duration:0",XR)
@@ -289,25 +289,23 @@ class XRTransformAndLibraryTests(unittest.TestCase):
           +code+";tween(0);if(cards[0].duration!==0||cards[1].pos[0]!==1||cards[1].pos[2]!==3)throw Error('Static gallery crash or bad tween');")
   r=subprocess.run([node,'-e',script],capture_output=True,text=True,timeout=5)
   self.assertEqual(r.returncode,0,r.stderr)
- def test_xr_gizmos_are_real_ray_draggable_handles(self):
-  for func in ('function closestRayAxis(r,center,axis){','function planeRayPoint(r,center,normal){',
-               'function gizmoHitTest(r){','function drawMeshGizmo(vp){',
-               'function updateGizmoDrag(frame,r,drag){'):
-   self.assertIn(func,XR)
-  self.assertIn('gizmoHitTest(r)',XR)
-  self.assertIn("if(h.kind==='gizmo')",XR)
-  self.assertIn("if(held.gizmoMode){updateGizmoDrag(frame,r,held);",XR)
+ def test_direct_controller_and_pinch_grab_replaces_visual_gizmos(self):
+  self.assertIn("if(src.hand&&manual){const finger=posePosition(frame,src)",XR)
+  self.assertIn('held.gripLocalOffset=held.startHandPos&&held.startQuat?',XR)
+  self.assertIn('vadd(handNow,quatVec(quatNow,held.gripLocalOffset))',XR)
+  self.assertIn('card.rotation=quatNorm(quatMul(quatInv(anchor.q),orientation))',XR)
+  self.assertIn('card.modelScale=clamp(second.startScale*ratio,.2,4)',XR)
+  self.assertIn("if(h.card.kind==='3dtools')return 'meshgizmo-reset';",XR)
+  self.assertNotIn('drawMeshGizmo(vp);syncMeshTools()',XR)
+  self.assertNotIn("gizmoHitTest(r),...(meshTools",XR)
   self.assertIn('MODEL_GIZMO_TRANSFORM_SAVED',XR)
-  self.assertIn("'meshgizmo-move','meshgizmo-rotate','meshgizmo-scale','meshgizmo-reset'",XR)
-  self.assertIn("for(const [i,mode] of ['move','rotate','scale','reset'].entries())",XR)
-  self.assertIn('drawMeshGizmo(vp);syncMeshTools()',XR)
  def test_uniform_scale_and_independent_reset_controls(self):
   self.assertIn('function resetMeshTransform(m){',XR)
   self.assertIn("case 'meshgizmo-reset':return resetMeshTransform(selectedMesh);",XR)
   self.assertIn("card.modelScale=clamp(drag.gizmoStartScale*Math.exp(amount*3),.2,4);card.axisScale=[1,1,1];",XR)
   self.assertIn('scale(size,size,size)',XR)
   self.assertIn("m.offset=[0,0,0];m.rotation=[0,0,0,1];m.modelScale=1;m.axisScale=[1,1,1]",XR)
-  self.assertIn('meshTools.pos=point(poseForwardAnchor(viewer,1.09,-.65),[.24,0,0]);',XR)
+  self.assertIn('meshTools.pos=point(poseForwardAnchor(viewer,1.09,-.61),[.25,0,0]);',XR)
   self.assertIn('meshTools.q=quatY(cameraYaw(viewer))',XR)
   self.assertNotIn('meshTools.pos=vadd(pose.pos',XR)
   self.assertIn('axis_scale:[1,1,1]',XR)
@@ -315,3 +313,41 @@ class XRTransformAndLibraryTests(unittest.TestCase):
   self.assertIn('math.prod(float(x) for x in axis_scale)',APP)
   self.assertIn('mesh.parts',XR)
   self.assertNotIn('THREE.TransformControls',XR)
+
+# v0.10.42 — unified archive, native two-hand model dragging and Z-up presentation.
+class MediaArchiveDirectGrab42(unittest.TestCase):
+ def test_media_tabs_group_3d_with_saved_sources(self):
+  self.assertIn('id="archiveMediaNav"',HTML)
+  for value in ('all','images','3d'):
+   self.assertIn('data-media="'+value+'"',HTML)
+  self.assertIn('function archiveImageCard(o){',FRONT)
+  self.assertIn('function archiveModelCard(job){',FRONT)
+  self.assertIn('state.models.filter(m=>m.object_id===o.id)',FRONT)
+  self.assertIn("context.onclick=()=>openGallery(job.object_id||null",FRONT)
+  self.assertIn('if(mode!==\'images\')for(const m of jobs.filter(j=>j.object_id===o.id))',FRONT)
+  self.assertIn('archive-media-nav',CSS)
+
+ def test_generated_models_have_provider_specific_xr_branches(self):
+  self.assertIn("addCard('3d-branch-'+job.id,'3dbranch'",XR)
+  self.assertIn("const label='3D · '+String(job.provider||'MODEL').toUpperCase()",XR)
+  self.assertIn("subtitle:'MODEL #'+job.id+' · FROM '",XR)
+  self.assertIn("const shownJobs=related.slice(0,8)",XR)
+  self.assertIn("else if(h.card.kind==='3dbranch')",XR)
+
+ def test_cinema_can_navigate_images_not_visible_in_spatial_page(self):
+  self.assertIn("cloud?.objects?.filter(o=>o.has_image&&o.shelf!=='bin')",XR)
+  self.assertIn("cinemaCards=[...(source?[source]:[]),...additional]",XR)
+  self.assertIn('cinemaIndex=(cinemaIndex+direction+cinemaCards.length)%cinemaCards.length',XR)
+
+ def test_direct_hand_and_grip_keeps_local_contact_offset(self):
+  self.assertIn('held.gripLocalOffset=held.startHandPos&&held.startQuat?',XR)
+  self.assertIn('target=handNow&&quatNow&&held.gripLocalOffset?',XR)
+  self.assertIn('card.modelScale=clamp(second.startScale*ratio,.2,4)',XR)
+  self.assertIn('m.modelScale=1;m.axisScale=[1,1,1]',XR)
+  self.assertNotIn('drawMeshGizmo(vp);syncMeshTools()',XR)
+
+ def test_desktop_pivot_preserves_proportions_without_top_down_camera(self):
+  self.assertIn('const zUp=size.z>Math.max(size.x,size.y)*1.45',STAGE)
+  self.assertIn('display.rotation.x=-Math.PI/2',STAGE)
+  self.assertIn('yaw=.37;pitch=.12;dist=2.65',STAGE)
+  self.assertNotIn('pitch=1.18',STAGE)

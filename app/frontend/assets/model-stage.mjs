@@ -24,25 +24,35 @@ function frame(){if(!active)return;raf=requestAnimationFrame(frame);if(!renderer
 function clearRoot(){if(!root)return;scene?.remove(root);root.traverse?.(o=>{o.geometry?.dispose?.();const mats=Array.isArray(o.material)?o.material:[o.material];for(const m of mats){m?.map?.dispose?.();m?.dispose?.();}});root=null;}
 function fit(obj){
  clearRoot();
- // A separate parent pivot preserves all original GLTF node transforms and
- // avoids translating by the *unscaled* world center after scaling the object.
- root=new THREE.Group();root.add(obj);scene.add(root);
- const box=new THREE.Box3().setFromObject(root);
+ // Display-only orientation, not an edit of the original GLB. Some provider
+ // exports are Z-up in their node transforms even though the viewer camera
+ // uses Y-up. The old "thin Y" branch aimed the camera almost vertically
+ // down the object's long axis, turning tall bottles into flat disks.
+ root=new THREE.Group();
+ const display=new THREE.Group();display.add(obj);root.add(display);scene.add(root);
+ let box=new THREE.Box3().setFromObject(root);
  if(box.isEmpty())throw Error('3D model has no visible geometry');
- const size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());
+ let size=box.getSize(new THREE.Vector3());
  const longest=Math.max(size.x,size.y,size.z)||1;
- const uniform=1.45/longest;
- root.scale.setScalar(uniform);
- root.position.copy(center).multiplyScalar(-uniform);
- // Flat packs, cards and thin products should be seen from their broad face,
- // not nearly edge-on. Never stretch one axis to compensate for perspective.
- const shortest=Math.min(size.x,size.y,size.z),thin=shortest/longest<.48;
- yaw=.48;pitch=.20;
- if(thin&&size.y===shortest){yaw=.18;pitch=1.18;}
- else if(thin&&size.x===shortest){yaw=1.22;pitch=.20;}
- else if(thin&&size.z===shortest){yaw=.18;pitch=.20;}
- dist=2.65;
+ // Only reorient when strongly indicated by the actual bounds: Z-long objects
+ // (bottles) or nearly planar XZ surfaces (packaging). Never alter ratios.
+ const zUp=size.z>Math.max(size.x,size.y)*1.45;
+ const flatXZ=size.y/longest<.065&&size.z/longest>.14;
+ if(zUp||flatXZ){display.rotation.x=-Math.PI/2;}
+ else if(size.x>Math.max(size.y,size.z)*1.75){
+  // Long horizontal subjects (cars, wrappers) are already useful lying flat;
+  // do not stand them on end solely because X is the longest dimension.
+ }
+ box=new THREE.Box3().setFromObject(root);
+ size=box.getSize(new THREE.Vector3());
+ const center=box.getCenter(new THREE.Vector3());
+ root.scale.setScalar(1.45/(Math.max(size.x,size.y,size.z)||1));
+ root.position.copy(center).multiplyScalar(-root.scale.x);
+ // Camera orbit never switches to top-down based on "shortest axis".
+ // That test incorrectly classified standing Z-up bottles as horizontal.
+ yaw=.37;pitch=.12;dist=2.65;
 }
+
 async function geometryFallback(url){const res=await fetch(url,{credentials:'same-origin'});let data={};try{data=await res.json();}catch{}
  if(res.status===202||res.status===409&&data.code==='JOB_NOT_FINISHED'){const e=Error(String(data.stage||data.error||'Waiting for the provider model'));e.retryable=true;throw e;}
  if(!res.ok)throw Error(String(data.error||'Preview HTTP '+res.status));

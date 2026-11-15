@@ -1,15 +1,28 @@
 {
-  "version": "0.10.41",
-  "title": "FREELAB v0.10.41 — texture seam and desktop model framing fixes",
+  "version": "0.10.42",
+  "title": "FREELAB v0.10.42 — direct XR grabbing and linked media archive",
   "datetime": "2026-11-15",
   "changes": [
-    "Protect per-triangle GLB UV coordinates when simplifying dense Quest geometry: welding positions no longer overwrites UV seams and texture-atlas mappings.",
-    "Respect glTF base-colour texture coordinate set and KHR_texture_transform, with safe solid-material fallback when the selected UV channel is unavailable.",
-    "Previously cached XR geometry made with the old texture-mapping logic is rebuilt once from the saved private GLB; this is not another paid Tripo generation.",
-    "Desktop 3D viewer now centres GLB scenes with a separate uniform-scale pivot and uses the broad face for thin/flat objects, avoiding apparently squashed edge-on previews.",
-    "Preserve existing source-linked XR model placement, transform controls and original GLB assets."
+    "Desktop 3D viewer corrects tall GLB presentation by orienting Z-up geometry in a separate display-only pivot, preserving native axis proportions and removing the near top-down camera fit.",
+    "Private Collection now offers All Media, Images and 3D Models filters; generated models appear beside related images with provider identification, preview thumbnails and clickable source links.",
+    "Quest replaces intrusive model axis gizmos with direct controller/hand drag-and-turn; a second hand scales proportionally, and one small reset button remains headset-relative.",
+    "3D jobs from Tripo and AHOLO are presented as distinct source-related spatial branches, including jobs created from edited images, without submitting new paid generation.",
+    "Quest cinematic preview includes source and saved descendants not presently visible on the active tree page, so previous/next navigate the full local image chain.",
+    "Preserves saved models, textures, transforms and private library records; no database migration or new paid generation is performed."
   ],
   "history": [
+    {
+      "version": "0.10.41",
+      "title": "FREELAB v0.10.41 — 3D texture and proportion fixes",
+      "datetime": "2026-11-15",
+      "changes": [
+        "Protect per-triangle GLB UV coordinates when simplifying dense Quest geometry: welding positions no longer overwrites UV seams and texture-atlas mappings.",
+        "Respect glTF base-colour texture coordinate set and KHR_texture_transform, with safe solid-material fallback when the selected UV channel is unavailable.",
+        "Previously cached XR geometry made with the old texture-mapping logic is rebuilt once from the saved private GLB; this is not another paid Tripo generation.",
+        "Desktop 3D viewer now centres GLB scenes with a separate uniform-scale pivot and uses the broad face for thin/flat objects, avoiding apparently squashed edge-on previews.",
+        "Preserve existing source-linked XR model placement, transform controls and original GLB assets."
+      ]
+    },
     {
       "version": "0.10.39",
       "title": "FREELAB v0.10.39 — spatial XR model gizmos and library crash fix",

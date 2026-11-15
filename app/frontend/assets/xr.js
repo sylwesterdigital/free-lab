@@ -1146,7 +1146,7 @@ function ray(frame,src){try{const sp=src.targetRaySpace?frame.getPose(src.target
  if(src.hand){const a=frame.getJointPose(src.hand.get('index-finger-tip'),refSpace),b=frame.getJointPose(src.hand.get('wrist'),refSpace);if(a&&b){const o=[a.transform.position.x,a.transform.position.y,a.transform.position.z];const w=[b.transform.position.x,b.transform.position.y,b.transform.position.z];return {o,d:norm(vsub(o,w))};}}
  }catch{}return null;}
 function hitTest(r,c){if(!r||!c.visible||!c.front||c.animScale===0)return null;const m=cardModel(c),inv=inverse(m);if(!inv)return null;const o=point(inv,r.o),d=point(inv,r.d,0);if(Math.abs(d[2])<1e-6)return null;const k=-o[2]/d[2];if(k<=0||k>6)return null;const x=o[0]+d[0]*k,y=o[1]+d[1]*k;if(Math.abs(x)>.5||Math.abs(y)>.5)return null;const hitWorld=point(m,[x,y,0]);const dist=length(vsub(hitWorld,r.o));return {card:c,x,y,dist};}
-function pick(r){if(darkroom){const hits=[darkClose,darkPrevious,darkNext].filter(Boolean).map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return hits[0]||null;}const opts=[...cards.filter(c=>c.kind!=='galleryheader'),...meshJobBadges.values(),toolbar,...(voicePhase==='listening'||voicePhase==='processing'?[]:[captureEye]),...(voicePhase==='listening'||voicePhase==='processing'?[]:[extractButton]),...(uiSettings.voice===false?[]:[voiceButton]),voiceOk,voiceCancel,promptPanel,editbar,...(debugShowing?[debugPanel]:[]),descriptionPanel,...(configShowing?[configPanel]:[])].filter(Boolean),all=[...opts.map(c=>hitTest(r,c)).filter(Boolean),...meshPreviews.map(m=>meshHitTest(r,m)).filter(Boolean),gizmoHitTest(r),...(meshTools?[hitTest(r,meshTools)].filter(Boolean):[])].filter(Boolean).sort((a,b)=>a.dist-b.dist);return all[0]||null;}
+function pick(r){if(darkroom){const hits=[darkClose,darkPrevious,darkNext].filter(Boolean).map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return hits[0]||null;}const opts=[...cards.filter(c=>c.kind!=='galleryheader'),...meshJobBadges.values(),toolbar,...(voicePhase==='listening'||voicePhase==='processing'?[]:[captureEye]),...(voicePhase==='listening'||voicePhase==='processing'?[]:[extractButton]),...(uiSettings.voice===false?[]:[voiceButton]),voiceOk,voiceCancel,promptPanel,editbar,...(debugShowing?[debugPanel]:[]),descriptionPanel,...(configShowing?[configPanel]:[])].filter(Boolean),all=[...opts.map(c=>hitTest(r,c)).filter(Boolean),...meshPreviews.map(m=>meshHitTest(r,m)).filter(Boolean),...(meshTools?[hitTest(r,meshTools)].filter(Boolean):[])].filter(Boolean).sort((a,b)=>a.dist-b.dist);return all[0]||null;}
 function imageButtonAt(card,x,y){
  // Hit regions are in the SAME 600-pixel canvas coordinates as cardTexture.
  // Image aspect ratios change canvas height; fixed normalized-Y thresholds do not work.
@@ -1161,7 +1161,7 @@ function imageButtonAt(card,x,y){
 }
 function buttonFromHit(h){if(!h)return null;
  if(h.card.kind==='3djob')return '3djobdiagnostics';
- if(h.card.kind==='3dtools')return ['meshgizmo-move','meshgizmo-rotate','meshgizmo-scale','meshgizmo-reset'][clamp(Math.floor((h.x+.5)*4),0,3)];
+ if(h.card.kind==='3dtools')return 'meshgizmo-reset';
  if(h.card.kind==='3dmesh')return null;
  if(h.card.kind==='description'){
   if(h.x>.33&&h.y>.27)return 'descriptionclose';
@@ -1185,13 +1185,16 @@ function buttonFromHit(h){if(!h)return null;
 }
 
 function grabStart(frame,src,manual=false){const r=ray(frame,src);let h=pick(r);
- if(!h&&src.hand&&manual){const finger=posePosition(frame,src);if(finger){
+ if(src.hand&&manual){const finger=posePosition(frame,src);if(finger){
   const near=meshPreviews.filter(m=>m.kind==='3dmesh').map(m=>({m,p:meshWorldPose(m)})).filter(x=>x.p).sort((a,b)=>length(vsub(finger,a.p.pos))-length(vsub(finger,b.p.pos)))[0];
   if(near&&length(vsub(finger,near.p.pos))<.23*near.p.scale)h={card:near.m,x:0,y:0,dist:r?length(vsub(near.p.pos,r.o)):1};
  }}if(!h||!r)return;
  if(held){if(!held.second&&held.card===h.card&&['object','3dmesh'].includes(held.card.kind)&&held.src!==src){
   const a=posePosition(frame,held.src),b=posePosition(frame,src);
-  if(a&&b)held.second={src,firstDist:length(vsub(a,b)),startScale:held.card.kind==='3dmesh'?(held.card.modelScale||1):held.card.scale};}
+  if(a&&b){const current=held.card.kind==='3dmesh'?meshWorldPose(held.card):null;
+   held.second={src,firstDist:length(vsub(a,b)),startScale:held.card.kind==='3dmesh'?(held.card.modelScale||1):held.card.scale,
+    startVector:norm(vsub(b,a)),startMid:vmul(vadd(a,b),.5),startWorld:current?.pos,
+    startWorldOrientation:current?.q};}}
   return;
  }
  const id=buttonFromHit(h);held={src,hit:h,rayDist:h.dist,start:performance.now(),last:r?.o,card:h.card,
@@ -1204,6 +1207,9 @@ function grabStart(frame,src,manual=false){const r=ray(frame,src);let h=pick(r);
   selectedMesh=h.card;selected=null;imageMenuOpen=false;updateEditbar();syncMeshTools();
   held.initialWorld=[...pose.pos];held.initialRot=[...(h.card.rotation||[0,0,0,1])];held.initialOffset=[...(h.card.offset||[0,0,0])];
   held.startWorldOrientation=[...pose.q];held.startRayHit=vadd(r.o,vmul(r.d,h.dist));
+  held.startHandPos=posePosition(frame,src);
+  held.gripLocalOffset=held.startHandPos&&held.startQuat?
+   quatVec(quatInv(held.startQuat),vsub(pose.pos,held.startHandPos)):null;
   if(h.kind==='gizmo'){
    held.gizmoMode=h.mode;held.gizmoAxisIndex=h.axis;held.gizmoAxis=gizmoAxes(pose)[h.axis];held.gizmoStartScale=h.card.modelScale||1;
    if(h.mode==='rotate'){
@@ -1214,7 +1220,7 @@ function grabStart(frame,src,manual=false){const r=ray(frame,src);let h=pick(r);
    }
    xr3D('MODEL_GIZMO_GRAB',{jobId:h.card.jobId,mode:h.mode,axis:['X','Y','Z'][h.axis]});
   }
-  else setStatus('3D MODEL · grab to move · twist to rotate · two hands to scale · choose gizmo mode',8000);
+  else setStatus('3D MODEL · hold trigger or pinch to move and rotate · two hands scale · RESET to restore',7000);
  }
  if(['object','source'].includes(h.card.kind)){selected=h.card;updateEditbar();}cue('grab',src);}
 async function grabEnd(src,frame){if(held?.second?.src===src){held.second=null;return;}if(!held||held.src!==src)return;const h=held;held=null;cue('release',src);
@@ -1223,7 +1229,7 @@ async function grabEnd(src,frame){if(held?.second?.src===src){held.second=null;r
  if(h.id){window.FreeLab?.traceEvent?.('XR image action: '+h.id,'info');if(h.id==='3djobdiagnostics')return showMeshDiagnostics(h.card.jobId);return action(h.id);}
  if(h.card.kind==='3dmesh'){
   selectedMesh=h.card;syncMeshTools();if(h.moved){await saveMeshTransform(h.card);xr3D('MODEL_GIZMO_TRANSFORM_SAVED',{jobId:h.card.jobId,mode:h.gizmoMode||'direct',offset:h.card.offset,rotation:h.card.rotation,scale:h.card.modelScale,axisScale:h.card.axisScale});setStatus('3D MODEL · transform saved',6000);}
-  else setStatus('3D MODEL SELECTED · MOVE / ROTATE / SCALE / RESET · controls stay in view',9500);
+  else setStatus('3D MODEL · grab and turn naturally · two hands resize proportionally · RESET available',8500);
   return;
  }
  if(h.moved){
@@ -1239,6 +1245,7 @@ async function grabEnd(src,frame){if(held?.second?.src===src){held.second=null;r
  else if(h.card.kind==='config'){/* the panel remains at the released world position */}
  else if(h.card.kind==='gallery'){await showCloud(h.card.data.id);}
  else if(h.card.kind==='gallerynav'){await openGallery(galleryPage+h.card.data.direction);}
+ else if(h.card.kind==='3dbranch'){selectedMesh=meshPreviews.find(m=>m.jobId===h.card.data?.jobId)||null;setStatus('3D BRANCH · '+h.card.data.label+' · model #'+h.card.data.jobId+' · open linked model or check its status',8500);}
  else if(h.card.kind==='ancestor'){await showCloud(cloud.id,h.card.data.id??null,0);}
  else if(h.card.kind==='branchpage'){await flipBranchPage(h.card.data.direction);}
  else if(h.card.kind==='branchback'){await upBranch();}
@@ -1261,22 +1268,30 @@ function advanceGrab(frame){
  if(!held||held.id)return;const r=ray(frame,held.src);if(!r)return;
  const card=held.card;
  if(card.kind==='3dmesh'){
-  if(held.gizmoMode){updateGizmoDrag(frame,r,held);syncMeshTools();return;}
   const anchor=meshAnchor(card);if(!anchor)return;
-  const hit=vadd(r.o,vmul(r.d,held.rayDist)),delta=vsub(hit,held.startRayHit);
-  const target=vadd(held.initialWorld,delta);
-  const off=quatVec(quatInv(anchor.q),vsub(target,anchor.pos));
-  card.offset=off.map(x=>clamp(x,-3,3));
-  const nowQuat=poseQuat(frame,held.src);
-  if(nowQuat&&held.startQuat){
-   const d=quatMul(nowQuat,quatInv(held.startQuat));
-   const newWorld=quatMul(d,held.startWorldOrientation);
-   card.rotation=quatNorm(quatMul(quatInv(anchor.q),newWorld));
+  const handNow=posePosition(frame,held.src),quatNow=poseQuat(frame,held.src);
+  const deltaQ=quatNow&&held.startQuat?quatMul(quatNow,quatInv(held.startQuat)):null;
+  // Like THREE.Object3D.attach(controller): retain the original world-space
+  // grab offset, then move/rotate WITH the physical hand or controller.
+  let target=handNow&&quatNow&&held.gripLocalOffset?
+    vadd(handNow,quatVec(quatNow,held.gripLocalOffset)):
+    vadd(held.initialWorld,vsub(vadd(r.o,vmul(r.d,held.rayDist)),held.startRayHit));
+  let orientation=deltaQ?quatMul(deltaQ,held.startWorldOrientation):null;
+  if(held.second){
+   const a=handNow,b=posePosition(frame,held.second.src),second=held.second;
+   if(a&&b&&second.firstDist>.04&&second.startWorld&&second.startWorldOrientation){
+    const span=vsub(b,a),ratio=clamp(length(span)/second.firstDist,.2,4),mid=vmul(vadd(a,b),.5);
+    const axisStart=second.startVector,axisNow=norm(span),perpendicular=cross3(axisStart,axisNow);
+    const dq=quatNorm([...perpendicular,1+clamp(axisStart.reduce((n,x,i)=>n+x*axisNow[i],0),-1,1)]);
+    target=vadd(mid,quatVec(dq,vmul(vsub(second.startWorld,second.startMid),ratio)));
+    orientation=quatMul(dq,second.startWorldOrientation);
+    card.modelScale=clamp(second.startScale*ratio,.2,4);
+   }
   }
-  if(held.second){const a=posePosition(frame,held.src),b=posePosition(frame,held.second.src);
-   if(a&&b&&held.second.firstDist>.04)card.modelScale=clamp(held.second.startScale*length(vsub(a,b))/held.second.firstDist,.2,4);
-  }
-  if(length(delta)>.008||held.second||nowQuat&&held.startQuat&&Math.abs(nowQuat.reduce((sum,x,i)=>sum+x*held.startQuat[i],0))<.999)held.moved=true;
+  card.offset=quatVec(quatInv(anchor.q),vsub(target,anchor.pos)).map(x=>clamp(x,-3,3));
+  if(orientation)card.rotation=quatNorm(quatMul(quatInv(anchor.q),orientation));
+  if(length(vsub(target,held.initialWorld))>.006||held.second||
+    (quatNow&&held.startQuat&&Math.abs(quatNow.reduce((sum,x,i)=>sum+x*held.startQuat[i],0))<.999))held.moved=true;
   syncMeshTools();return;
  }
  if(['source','object'].includes(card.kind)&&held.attach){
@@ -1514,7 +1529,7 @@ function renderView(t,frame){if(!session||gl.isContextLost()){return;}const pose
   xr3D('XR_FRAMEBUFFER_STATUS',{status:'0x'+status.toString(16),complete:status===gl.FRAMEBUFFER_COMPLETE,framebufferWidth:session.renderState.baseLayer.framebufferWidth,framebufferHeight:session.renderState.baseLayer.framebufferHeight,gpu},!gpu.errors?.length&&status===gl.FRAMEBUFFER_COMPLETE?'info':'error');}
  gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
  for(const view of pose.views){const vp0=session.renderState.baseLayer.getViewport(view);gl.viewport(vp0.x,vp0.y,vp0.width,vp0.height);const vp=matmul(view.projectionMatrix,view.transform.inverse.matrix);
- decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(statusCard?.visible)drawCard(statusCard,vp);if(editbar)drawCard(editbar,vp);if(captureEye&&voicePhase!=='listening'&&voicePhase!=='processing')drawCard(captureEye,vp);if(cameraHint)drawCard(cameraHint,vp);if(voiceButton&&uiSettings.voice!==false)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(configShowing&&configPanel)drawCard(configPanel,vp);/* description is composited after mascot for legibility */for(const m of meshPreviews)drawMeshPreview(m,vp,t);if(selectedMesh&&meshPreviews.includes(selectedMesh)){drawMeshGizmo(vp);syncMeshTools();if(meshTools)drawCard(meshTools,vp);}draw3DJobBadges(vp,t);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);drawStringLab(vp,t,pose);drawFingerLab(vp,t,pose);drawFramePhotos(vp);drawSpatialFrames(vp,t,pose);drawShapeTargets(vp,t,pose);drawFrameCubes(vp);if(labMenu?.visible)drawCard(labMenu,vp);for(const visitor of visitorBadges)drawCard(visitor,vp);depthCapability(frame,view);
+ decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(statusCard?.visible)drawCard(statusCard,vp);if(editbar)drawCard(editbar,vp);if(captureEye&&voicePhase!=='listening'&&voicePhase!=='processing')drawCard(captureEye,vp);if(cameraHint)drawCard(cameraHint,vp);if(voiceButton&&uiSettings.voice!==false)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(configShowing&&configPanel)drawCard(configPanel,vp);/* description is composited after mascot for legibility */for(const m of meshPreviews)drawMeshPreview(m,vp,t);if(selectedMesh&&meshPreviews.includes(selectedMesh)){syncMeshTools();if(meshTools)drawCard(meshTools,vp);}draw3DJobBadges(vp,t);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);drawStringLab(vp,t,pose);drawFingerLab(vp,t,pose);drawFramePhotos(vp);drawSpatialFrames(vp,t,pose);drawShapeTargets(vp,t,pose);drawFrameCubes(vp);if(labMenu?.visible)drawCard(labMenu,vp);for(const visitor of visitorBadges)drawCard(visitor,vp);depthCapability(frame,view);
  for(const src of session.inputSources){const r=ray(frame,src);if(!r)continue;const h=pick(r),end=vadd(r.o,vmul(r.d,h?.dist||1.2));const colour=src.hand?[.72,1,.75,.7]:[.77,.88,1,.72];line(vp,[r.o,end],colour);line(vp,[end],colour,true,h?16:9);}
  if(mascotPointer?.visible){if(mascotMode()==='2d'){
    if(!mascotPointer.front){mascotTex=mascotTexture();mascotPointer.front=mascotTex;mascotPointer.back=mascotTex;}
@@ -1960,7 +1975,7 @@ function meshWorldPose(m){
 function meshHitTest(r,m){
  if(!r||!m.parts?.length||m.captureId!==cloud?.id||!meshOwnerCard(m))return null;
  const pose=meshWorldPose(m);if(!pose)return null;
- const radius=.19*pose.scale,oc=vsub(r.o,pose.pos),b=oc.reduce((sum,x,i)=>sum+x*r.d[i],0);
+ const radius=.30*pose.scale,oc=vsub(r.o,pose.pos),b=oc.reduce((sum,x,i)=>sum+x*r.d[i],0);
  const c=oc.reduce((sum,x)=>sum+x*x,0)-radius*radius;
  const disc=b*b-c;if(disc<0)return null;
  const d=-b-Math.sqrt(disc),dist=d>0?d:-b+Math.sqrt(disc);
@@ -2062,22 +2077,22 @@ function updateGizmoDrag(frame,r,drag){const card=drag.card,anchor=meshAnchor(ca
  if(Math.abs(amount)>.008)drag.moved=true;
 }
 function meshToolTexture(){
- const [c,ctx]=canvas2d(800,134);rrect(ctx,0,0,800,134,54,'rgba(18,31,31,.96)');
- for(const [i,mode] of ['move','rotate','scale','reset'].entries()){
-  const x=i*200+8,active=meshGizmoMode===mode;
-  if(active)rrect(ctx,x,13,184,108,43,'rgba(155,247,201,.23)');
-  text(ctx,['↔','↻','⤢','⟲'][i],x+92,64,45,active?'#caffdf':'#d6eee7',700,'center');
-  text(ctx,mode.toUpperCase(),x+92,99,20,mode==='reset'?'#ffcfbf':active?'#caffdf':'#e1f5ea',700,'center');
- }
+ // No move/rotate/scale pill or coloured wireframe gizmos obscuring the model.
+ // Direct grab is the default; this small fixed-view control only resets pose.
+ const [c,ctx]=canvas2d(420,116);
+ rrect(ctx,0,0,420,116,46,'rgba(19,30,28,.90)');
+ text(ctx,'↺',75,79,70,'#d6efe4',700,'center');
+ text(ctx,'RESET MODEL',242,71,36,'#f0fff5',700,'center');
  return texture(c);
 }
+
 function syncMeshTools(){
  if(!selectedMesh||!meshPreviews.includes(selectedMesh)||!meshOwnerCard(selectedMesh))return;
  const viewer=latestPose;if(!viewer)return;
  // Independent headset-relative control strip: NEVER derive its transform
  // from the selected model. Dragging or scaling a model cannot move the strip.
- if(!meshTools){const tex=meshToolTexture();meshTools={id:'mesh-transform-tools',kind:'3dtools',front:tex,back:tex,visible:true,pos:[0,0,0],q:[0,0,0,1],scale:1,size:[.56,.094],resources:[tex]};}
- meshTools.pos=point(poseForwardAnchor(viewer,1.09,-.65),[.24,0,0]);
+ if(!meshTools){const tex=meshToolTexture();meshTools={id:'mesh-transform-tools',kind:'3dtools',front:tex,back:tex,visible:true,pos:[0,0,0],q:[0,0,0,1],scale:1,size:[.28,.078],resources:[tex]};}
+ meshTools.pos=point(poseForwardAnchor(viewer,1.09,-.61),[.25,0,0]);
  meshTools.q=quatY(cameraYaw(viewer));
 }
 function resetMeshTransform(m){if(!m||!meshPreviews.includes(m))return;
@@ -2348,6 +2363,22 @@ async function reopenCloudModels(captureId){
   // Do not silently ignore every model after the first two. Keep a bounded set
   // of visible XR previews for performance, but surface every recent job state.
   const related=all.filter(j=>j.capture_id===captureId).slice(0,12);
+  // Tripo and AHOLO outputs are separate saved branches of the SAME selected
+  // source. These are navigation previews, not another paid generation.
+  const shownJobs=related.slice(0,8); // Include generations of deeper descendants; their origin is labeled
+  const perOwner=new Map();
+  for(const job of shownJobs){
+   if(cards.some(c=>c.id==='3d-branch-'+job.id))continue;
+   const owner=cards.find(c=>c.kind==='object'&&c.data?.id===job.object_id);
+   const ownerKey=job.object_id||'source',number=perOwner.get(ownerKey)||0;perOwner.set(ownerKey,number+1);
+   const base=owner?(owner.original||owner.pos):[0,.07,0];
+   const label='3D · '+String(job.provider||'MODEL').toUpperCase();
+   const branch=addCard('3d-branch-'+job.id,'3dbranch',{
+    id:job.id,jobId:job.id,label,subtitle:'MODEL #'+job.id+' · FROM '+(job.object_id?'OBJECT #'+job.object_id:'CAPTURE #'+captureId),
+    image:job.thumbnail_url||job.source_image_url||null},
+    [base[0]+.3+(number%3)*.27,base[1]-.40-Math.floor(number/3)*.30,.19],[.23,.20]);
+   branch.q=[0,0,0,1];
+  }
   xr3DThrottled('scan-'+meshGeneration+'-'+captureId,'SOURCE_3D_JOBS',{captureId,totalJobs:all.length,matchedJobs:related.map(j=>({jobId:j.id,status:j.status,cached:j.cached,objectId:j.object_id})),sourceCards:cards.filter(c=>c.kind==='source'||c.kind==='ancestor'||c.kind==='object').map(c=>({kind:c.kind,id:c.data?.id,visible:c.visible}))},'info');
   for(const job of related){
    if(scope!==meshGeneration||cloud?.id!==captureId)return;
@@ -2435,7 +2466,17 @@ function cinemaFloorTexture(image){const [c,ctx]=canvas2d(600,480);
 }
 // Cinema is its own opaque XR pass; it does not open a second browser page or end WebXR.
 function enterDarkroom(targetCard=null){
- if(!targetCard){cinemaCards=cards.filter(c=>['source','object'].includes(c.kind)&&c.data?.image&&c.visible!==false);cinemaIndex=Math.max(0,cinemaCards.indexOf(selected));}
+ if(!targetCard){
+  const visible=cards.filter(c=>['source','object'].includes(c.kind)&&c.data?.image&&c.visible!==false);
+  const additional=cloud?.objects?.filter(o=>o.has_image&&o.shelf!=='bin').map(o=>
+    visible.find(c=>c.kind==='object'&&c.data?.id===o.id)||
+    {kind:'object',data:{...o,image:'/api/objects/'+o.id+'/image'},size:[.39,.43],visible:true})||[];
+  const source=cards.find(c=>c.kind==='source'&&c.data?.image)||
+    (cloud?.image_url?{kind:'source',data:{image:cloud.image_url},size:[.88,.63],visible:true}:null);
+  cinemaCards=[...(source?[source]:[]),...additional];
+  if(!cinemaCards.length)cinemaCards=visible;
+  cinemaIndex=Math.max(0,cinemaCards.findIndex(c=>c.data?.id===selected?.data?.id&&c.kind===selected?.kind));
+ }
  const target=targetCard||selected;if(!target||!['source','object'].includes(target.kind)||!latestPose)return;
  if(darkroom)closeDarkroom(true);
  const headM=latestPose.transform.matrix,head=[headM[12],headM[13],headM[14]],yaw=cameraYaw(latestPose);
