@@ -130,6 +130,8 @@ def init(path):
         fields={row['name'] for row in con.execute('PRAGMA table_info(jobs_3d)')}
         if 'model_path' not in fields:con.execute("ALTER TABLE jobs_3d ADD COLUMN model_path TEXT NOT NULL DEFAULT ''")
         if 'cache_error' not in fields:con.execute("ALTER TABLE jobs_3d ADD COLUMN cache_error TEXT NOT NULL DEFAULT ''")
+        # v0.10.30: exact generation model pinned per job; historical jobs remain unknown.
+        if 'model_id' not in fields:con.execute("ALTER TABLE jobs_3d ADD COLUMN model_id TEXT NOT NULL DEFAULT ''")
         con.execute('''CREATE TABLE IF NOT EXISTS user_avatar_models (
            user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
            glb BLOB NOT NULL, updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))

@@ -482,3 +482,5 @@
 .model-provider-settings select,.capture-chat #capture3DProvider{background:#263e34;color:#e7fff0;border:1px solid #8bba9d55;border-radius:12px;padding:10px;font:inherit;max-width:100%}
 .capture-chat #capture3DProvider{font-size:12px;align-self:center;padding:7px;max-width:116px}
 @media(max-width:650px){.capture-chat #capture3DProvider{max-width:95px;padding:6px 4px}}
+
+.model-diagnostic{font:12px/1.6 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;border:1px solid #6aa89655;border-radius:12px;background:#10221e;color:#d7f5e9;margin:9px 0;max-height:300px;overflow:auto}

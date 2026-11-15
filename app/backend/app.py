@@ -845,7 +845,7 @@ def media_capabilities():
 
 def job_3d_dict(row):
     return {'id':row['id'],'capture_id':row['capture_id'],'object_id':row['object_id'],
-            'provider':row['provider'],'status':row['status'],'progress':row['progress'],
+            'provider':row['provider'],'model_id':row['model_id'] or None,'status':row['status'],'progress':row['progress'],
             'credits':row['credits'],'thumbnail_url':row['thumbnail_url'],
             'error':row['error'],'created_at':row['created_at'],
             'cached':bool(row['model_path']),'cache_error':row['cache_error'],
@@ -927,7 +927,7 @@ def media_3d_start():
         elif provider=='tripo':task=tripo3d.submit(raw,key,prompt.strip())
         else:raise ValueError('Unsupported 3D provider')
         with g.con:
-            job=g.con.execute("INSERT INTO jobs_3d(owner_id,capture_id,object_id,provider,provider_task) VALUES(?,?,?,?,?)",(g.user['id'],cid,oid,provider,task)).lastrowid
+            job=g.con.execute("INSERT INTO jobs_3d(owner_id,capture_id,object_id,provider,provider_task,model_id) VALUES(?,?,?,?,?,?)",(g.user['id'],cid,oid,provider,task,tripo3d.MODEL if provider=='tripo' else '')).lastrowid
         db.finish_inference(g.con,call,'ok')
         return jsonify(id=job,status='PENDING',provider=provider,paid_task_submitted=True),202
     except (ValueError,RuntimeError,OSError) as e:
@@ -975,6 +975,111 @@ def private_3d_asset(jid):
     resp.headers['Cache-Control']='private, no-store'
     return resp
 
+def _model_pipeline_diagnostics(row, jid, owner):
+    """Owner-only, read-only inspection: no provider calls, no credentials or URLs."""
+    converted,failed,pending=_xr_preview_paths(owner,jid)
+    provider=row['provider'];known=('aholo','meshy','tripo')
+    valid_url=(tripo3d.safe_file_url(row['glb_url']) if provider=='tripo'
+               else meshy3d.safe_file_url(row['glb_url']) if provider=='meshy'
+               else aholo3d.safe_preview_url(row['glb_url']) if provider=='aholo' else None)
+    result={'job_id':jid,'provider':provider,'model_id':row['model_id'] or None,
+            'model_note':('Model version was not recorded when this older task was submitted' if not row['model_id'] else ''),
+            'provider_status':row['status'],'progress':row['progress'],
+            'provider_task':row['provider_task'][:96],
+            'source_capture_id':row['capture_id'],'source_object_id':row['object_id'],
+            'blender_available':bool(avatar_optimizer.blender_command()),
+            'cache_error':row['cache_error'] or '',
+            'preview_error':failed.read_text()[:180] if failed.is_file() else '',
+            'model':{'cached':False,'bytes':0,'compression':[], 'meshes':None,'triangles':None},
+            'steps':[],'stage':'generation','next_action':''}
+    steps=result['steps']
+    steps.append({'name':'generation','state':row['status'],'detail':str(row['error'] or '')[:160]})
+    if row['status']!='SUCCEEDED':
+        result['stage']='generation';result['next_action']='Wait for the provider task to finish, or inspect its failure status.'
+        return result
+    steps.append({'name':'provider output','state':'READY' if valid_url or row['model_path'] else 'MISSING',
+                  'detail':'Tripo/Meshy/AHOLO output URL verified by allowlist' if valid_url else 'No approved provider download URL'})
+    if not valid_url and not row['model_path']:
+        result['stage']='provider output';result['next_action']='Refresh the existing provider task to obtain a valid model URL; do not regenerate.'
+        return result
+    raw=None;name=row['model_path']
+    if name==f'{owner}_{jid}.glb':
+        file=MODEL_DIR/name
+        if file.is_file():
+            result['model']['cached']=True;result['model']['bytes']=file.stat().st_size
+            if file.stat().st_size<=model_cache.MAX_MODEL:
+                raw=file.read_bytes()
+    steps.append({'name':'private GLB download','state':'SAVED' if raw else 'NOT_CACHED',
+                  'detail':(str(result['model']['bytes'])+' bytes stored' if raw else (row['cache_error'] or 'Not cached yet; model URL still required'))[:180]})
+    if not raw:
+        result['stage']='private download';result['next_action']='Refresh this job read-only to retry the private GLB download; review cache error.'
+        return result
+    try:
+        doc,_=glb_xr.chunks(raw)
+        exts=doc.get('extensionsUsed') or []
+        meshes=doc.get('meshes') or []
+        compressions=sorted({str(ext)[:65] for ext in exts if ext in ('KHR_draco_mesh_compression','EXT_meshopt_compression','KHR_mesh_quantization')})
+        result['model'].update(compression=compressions,meshes=len(meshes),
+                               triangles=sum(len(m.get('primitives',[])) for m in meshes))
+        steps.append({'name':'GLB structure','state':'VALID','detail':str(len(meshes))+' meshes; '+(', '.join(compressions) if compressions else 'no declared geometry compression')})
+    except (ValueError,TypeError,KeyError) as e:
+        steps.append({'name':'GLB structure','state':'INVALID','detail':str(e)[:160]})
+        result['stage']='GLB structure';result['next_action']='The cached provider file is not a valid supported GLB.'
+        return result
+    if converted.is_file():
+        steps.append({'name':'Quest conversion','state':'READY','detail':str(converted.stat().st_size)+' bytes prepared'})
+        try:
+            glb_xr.decode_visual(converted.read_bytes())
+            steps.append({'name':'Quest geometry','state':'READY','detail':'Prepared mesh can be decoded; if invisible check XR GPU and source attachment'})
+            result['stage']='XR placement';result['next_action']='Model bytes are Quest-ready. Inspect XR renderer and source visibility if still absent.'
+        except (ValueError,TypeError) as e:
+            steps.append({'name':'Quest geometry','state':'FAILED','detail':str(e)[:160]})
+            result['stage']='Quest decoder';result['next_action']='Retry XR preparation of the existing model; no generation task will be submitted.'
+        return result
+    if failed.is_file():
+        steps.append({'name':'Quest conversion','state':'FAILED','detail':result['preview_error']})
+        result['stage']='Blender conversion';result['next_action']='Inspect converter error; tap the XR status cube again or use Retry XR preview in Collection.'
+        return result
+    if pending.is_file() and time.time()-pending.stat().st_mtime<330:
+        steps.append({'name':'Quest conversion','state':'RUNNING','detail':'Blender preview preparation is running'})
+        result['stage']='Blender conversion';result['next_action']='Wait for the preparation worker; it does not submit another paid 3D job.'
+        return result
+    try:
+        glb_xr.decode_visual(raw)
+        steps.append({'name':'Quest geometry','state':'READY','detail':'Original cached GLB is directly decodable'})
+        result['stage']='XR placement';result['next_action']='Check Quest GPU loading and source visibility; server geometry is valid.'
+    except (ValueError,TypeError) as e:
+        steps.append({'name':'Quest geometry','state':'NEEDS_CONVERSION','detail':str(e)[:160]})
+        result['stage']='Blender conversion' if result['blender_available'] else 'Blender unavailable'
+        result['next_action']=('Retry XR preview preparation; no paid generation.' if result['blender_available']
+                              else 'Install or configure headless Blender on the server; use the desktop 3D viewer meanwhile.')
+    return result
+
+
+@app.get('/api/media/3d/<int:jid>/diagnostics')
+@require_user
+def media_3d_diagnostics(jid):
+    row=g.con.execute('SELECT * FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
+    if not row:abort(404)
+    return jsonify(_model_pipeline_diagnostics(row,jid,g.user['id']))
+
+
+@app.post('/api/media/3d/<int:jid>/preview/retry')
+@require_user
+def media_3d_preview_retry(jid):
+    row=g.con.execute('SELECT status FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
+    if not row:abort(404)
+    if row['status']!='SUCCEEDED':return jsonify(error='Provider generation is not completed'),409
+    owner=g.user['id'];output,error,pending=_xr_preview_paths(owner,jid)
+    with _xr_preview_guard:
+        if (owner,jid) in _xr_preview_active or (pending.exists() and time.time()-pending.stat().st_mtime<330):
+            return jsonify(error='Quest conversion is already in progress'),409
+        error.unlink(missing_ok=True);pending.unlink(missing_ok=True)
+        # A converted GLB was already validated; do not discard it.
+    return jsonify(status='READY_TO_RETRY',job_id=jid,paid_generation=False,
+                   message='Preview errors cleared; next read-only preview request will retry decoding or Blender preparation.')
+
+
 @app.get('/api/media/3d/<int:jid>/preview')
 @require_user
 def media_3d_preview(jid):
@@ -985,14 +1090,14 @@ def media_3d_preview(jid):
     """
     row=g.con.execute('SELECT status,provider,glb_url,model_path FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
     if not row:abort(404)
-    if row['status']!='SUCCEEDED':return jsonify(error='3D model is still generating'),409
+    if row['status']!='SUCCEEDED':return jsonify(error='3D model is still generating',stage='generation',code='JOB_NOT_FINISHED',job_id=jid),409
     owner=g.user['id']
     converted,failed,pending=_xr_preview_paths(owner,jid)
     try:
         if converted.is_file():
             return jsonify(**glb_xr.decode_visual(converted.read_bytes()))
         if failed.is_file():
-            return jsonify(error='Quest model conversion failed: '+failed.read_text()[:180]),422
+            return jsonify(error='Quest model conversion failed: '+failed.read_text()[:180],stage='Blender conversion',code='CONVERSION_FAILED',job_id=jid),422
         if row['model_path']:
             if row['model_path']!=f'{owner}_{jid}.glb':abort(404)
             raw=(MODEL_DIR/row['model_path']).read_bytes()
@@ -1001,13 +1106,13 @@ def media_3d_preview(jid):
             safe=(meshy3d.safe_file_url(row['glb_url']) if row['provider']=='meshy'
                   else tripo3d.safe_file_url(row['glb_url']) if row['provider']=='tripo'
                   else aholo3d.safe_preview_url(row['glb_url']))
-            if not safe:return jsonify(error='3D output is not available from the provider'),422
+            if not safe:return jsonify(error='3D output is not available from the provider',stage='provider output',code='OUTPUT_URL_MISSING',job_id=jid),422
             req=urllib.request.Request(safe,headers={'User-Agent':'FREELAB-XR-Model/0.10'})
             with urllib.request.build_opener(meshy3d.NoRedirect).open(req,timeout=18) as response:
                 if response.headers.get('Content-Length') and int(response.headers['Content-Length'])>glb_preview.MAX_FILE:
-                    return jsonify(error='3D model exceeds the private 32 MB download limit'),413
+                    return jsonify(error='3D model exceeds the private 32 MB download limit',stage='private download',code='GLB_TOO_LARGE',job_id=jid),413
                 raw=response.read(glb_preview.MAX_FILE+1)
-            if len(raw)>glb_preview.MAX_FILE:return jsonify(error='3D model exceeds the 32 MB download limit'),413
+            if len(raw)>glb_preview.MAX_FILE:return jsonify(error='3D model exceeds the 32 MB download limit',stage='private download',code='GLB_TOO_LARGE',job_id=jid),413
             # Cache the successful download once, even if its geometry needs
             # Blender preparation, so subsequent XR checks avoid expired URLs.
             if (len(raw)>=20 and raw[:4]==b'glTF' and int.from_bytes(raw[8:12],'little')==len(raw)):
@@ -1024,10 +1129,10 @@ def media_3d_preview(jid):
             # A syntactically invalid GLB is not worth repeatedly optimizing.
             glb_xr.chunks(raw)
             if not avatar_optimizer.blender_command():
-                return jsonify(error='Quest cannot decode this GLB directly; headless Blender is not installed for automatic conversion: '+str(e)[:100]),422
+                return jsonify(error='Quest cannot decode this GLB directly; headless Blender is not installed for automatic conversion: '+str(e)[:100],stage='Blender unavailable',code='BLENDER_UNAVAILABLE',job_id=jid),422
             state,detail=_xr_prepare_preview(owner,jid,raw)
-            if state=='FAILED':return jsonify(error=detail),422
-            return jsonify(status=state,message=detail,job_id=jid),202
+            if state=='FAILED':return jsonify(error=detail,stage='Blender conversion',code='PREPARATION_FAILED',job_id=jid),422
+            return jsonify(status=state,message=detail,job_id=jid,stage='Blender conversion',paid_generation=False),202
     except urllib.error.HTTPError as e:return jsonify(error=f'Provider 3D download returned HTTP {e.code}; model may need a refreshed link'),502
     except (ValueError,OSError,KeyError,IndexError,TypeError,urllib.error.URLError,TimeoutError) as e:
         return jsonify(error=str(e)[:200]),422

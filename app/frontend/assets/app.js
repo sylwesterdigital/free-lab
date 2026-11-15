@@ -402,6 +402,24 @@ async function refresh3DJobs(){
    row.append(el('strong','',`3D · ${job.provider} · ${job.status} · ${job.progress}%`));
    row.append(el('span','small-muted',`Source #${job.capture_id||'-'} · ${job.credits===null?'Credits pending':job.credits+' credits'}`));
    if(job.error)row.append(el('p','small-muted',job.error));
+   const audit=el('button','tiny-btn','Inspect 3D pipeline');audit.type='button';
+   audit.onclick=async()=>{audit.disabled=true;audit.textContent='Inspecting…';try{
+    const d=await modelXRDiagnostics(job.id);let panel=row.querySelector('.model-diagnostic');
+    if(!panel){panel=el('pre','model-diagnostic','');row.append(panel);}
+    const stages=d.steps.map(s=>s.name+': '+s.state+(s.detail?' · '+s.detail:''));
+    panel.textContent=['Job #'+d.job_id+' · '+d.provider.toUpperCase()+' · '+(d.model_id||'model version not recorded'),
+      'Current stage: '+d.stage,'Cached GLB: '+(d.model.cached?(d.model.bytes/1e6).toFixed(2)+' MB':'no'),
+      'Geometry compression: '+(d.model.compression.join(', ')||'none declared'),
+      'Blender available: '+(d.blender_available?'yes':'no'),...stages,
+      'Next action: '+d.next_action].join('\n');
+   }catch(e){notify('3D diagnostics: '+e.message);}finally{audit.disabled=false;audit.textContent='Inspect 3D pipeline';}};
+   row.append(audit);
+   if(job.status==='SUCCEEDED'){
+    const retry=el('button','tiny-btn','Retry XR preview');retry.type='button';
+    retry.onclick=async()=>{if(!await window.FreeLabDialog.confirm('Retry preparing this existing 3D model for Quest? No new paid 3D task is created.'))return;
+      try{await retryXRPreview(job.id);notify('XR preview error reset. Reopen the source or tap its 3D cube to load again.');}
+      catch(e){notify('XR retry unavailable: '+e.message);}};row.append(retry);
+   }
    if(job.status==='SUCCEEDED'){const view=el('button','tiny-btn','View in 3D');view.type='button';view.onclick=()=>window.FreeLabModelStage?.open(job.id);row.append(view);}
    if(job.glb_url){const a=el('a','tiny-btn','Download GLB');a.href=job.glb_url;a.rel='noopener noreferrer';a.target='_blank';row.append(a);
     const renew=el('button','tiny-btn','Renew link');renew.onclick=async()=>{try{await checkXR3D(job.id,true);await refresh3DJobs();}catch(e){notify(e.message)}};row.append(renew);}
@@ -548,7 +566,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.29');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.30');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{
@@ -565,6 +583,8 @@ async function recordWavPrompt(durationMs=12000){const rec=startWavPrompt();awai
 function currentRecording(){return recorder;}
 async function describeXR(cid,oid=null,question='',refresh=false){const payload={capture_id:cid,object_id:oid,question,refresh};if(sessionMeta())payload.session_api_key=sessionMeta();return api('/media/describe',{method:'POST',body:JSON.stringify(payload)});}
 async function modelXRPreview(id){return api('/media/3d/'+id+'/preview');}
+async function modelXRDiagnostics(id){return api('/media/3d/'+id+'/diagnostics');}
+async function retryXRPreview(id){return api('/media/3d/'+id+'/preview/retry',{method:'POST',body:'{}'});}
 async function get3DPreference(){return api('/preferences/3d');}
 async function save3DPreference(provider){return api('/preferences/3d',{method:'PUT',body:JSON.stringify({provider})});}
 
@@ -604,6 +624,6 @@ function wirePromptEditor(){
  };
 }
 
-window.FreeLab={generateXRImage,cameraFrameReady,downloadImage,openGallery,silenceXRVoice,api,startWavPrompt,currentRecording,describeXR,modelXRPreview,get3DPreference,save3DPreference,list3DJobs,loadElevenVoices,createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,resumeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
+window.FreeLab={generateXRImage,cameraFrameReady,downloadImage,openGallery,silenceXRVoice,api,startWavPrompt,currentRecording,describeXR,modelXRPreview,get3DPreference,save3DPreference,list3DJobs,modelXRDiagnostics,retryXRPreview,loadElevenVoices,createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,resumeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
 document.addEventListener('DOMContentLoaded',()=>{window.FreeLabRooms?.init?.();init().catch(e=>notify('Initialization failed: '+e.message));const bloom=$('featureBloom');if(bloom){setTimeout(()=>window.FreeLabSound?.play('arrival'),3000);bloom.querySelectorAll('.feature-seed').forEach(button=>{button.addEventListener('mouseenter',()=>window.FreeLabSound?.hover());button.addEventListener('focus',()=>window.FreeLabSound?.hover());});}});
 })();

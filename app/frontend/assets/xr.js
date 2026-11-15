@@ -17,7 +17,7 @@ let mascotSpeech=null,mascotSpeechUntil=0,gestureSpeechTimes=new Map(),mascotRea
 let pointerHover=null,lastFrame=0,lastUi=0,lastAction=0,latestPose=null,nextPaidAt=0,busy=false,mode='capture',statusText='Capture your space',statusUntil=0;
 let followMode=true,followBase=null,eyeBase=null,captureEye=null,voiceButton=null,extractButton=null,extractVisualActive=null,eyeResource=null,eyeState='idle',eyeUntil=0,rootYaw=0,menuYaw=0,promptPanel=null,promptContext=null,promptText='',xrDomOverlay=false;
 let cameraHint=null,cameraHintState='',lastHintCheck=0;
-let debugPanel=null,debugShowing=false,debugLast=0,serverPoll=0,serverDiagnostic=[],descriptionPanel=null,meshPreviews=[],meshLoadingJobs=new Set(),meshJobBadges=new Map(),meshPreviewFailures=new Set(),meshPreviewRetries=new Map(),mascotPointer=null,mascotTex=null,lastAvatar=0,mixBucket=[],xrKeyboard=null,visitorBadges=[],visitorPollAt=0;
+let debugPanel=null,debugShowing=false,debugLast=0,serverPoll=0,serverDiagnostic=[],modelDiagnosticLines=[],modelDiagnosticJob=null,modelDiagnosticViewedAt=0,descriptionPanel=null,meshPreviews=[],meshLoadingJobs=new Set(),meshJobBadges=new Map(),meshPreviewFailures=new Set(),meshPreviewRetries=new Map(),mascotPointer=null,mascotTex=null,lastAvatar=0,mixBucket=[],xrKeyboard=null,visitorBadges=[],visitorPollAt=0;
 let followOffset=[0,-.85,-1.16],followWorld=null,eyeWorld=null,depthState='unknown',depthChecked=false,depthFeature=false,depthBinding=null,meshyJob=null,meshyPollAt=0,meshConfirm=null;
 let voiceRecord=null,voiceRecordStarted=0,voiceMeterLast=0,cameraHintUntil=0,meshJobOrigin=null;
 let particles=[],handPinch=new WeakMap(),lastNative=new WeakMap(),clickState=new WeakMap(),lastEyeUpdate=0,lastMicUpdate=0,inferenceCard=null,inferenceStarted=0;
@@ -423,11 +423,12 @@ function mascotTexture(){const [c,ctx]=canvas2d(200,240);ctx.clearRect(0,0,200,2
  ctx.fillStyle='#ffffff';for(const x of [68,123]){ctx.beginPath();ctx.arc(x,84,4,0,TAU);ctx.fill();}
  ctx.fillStyle='#42674b';ctx.beginPath();ctx.ellipse(100,117,7,5,0,0,TAU);ctx.fill();return texture(c);}
 function debugTexture(){const [c,ctx]=canvas2d(980,520);panelSkin(ctx,c.width,c.height,28);text(ctx,'XR / SERVER DIAGNOSTICS   ·   GRAB TO MOVE',24,43,23,uiPalette().accent,690);text(ctx,'−',790,45,33,'#fff',700);text(ctx,'+',858,45,33,'#fff',700);text(ctx,'×',936,46,37,'#fff',670);
- const messages=['DEPTH: '+depthState,...(window.FreeLab?.getTrace?.()||[]).filter(x=>['error','api','warn'].includes(x.kind)).slice(-6).map(x=>x.at+' '+x.message),...serverDiagnostic.slice(-5).map(x=>x.time.slice(11,19)+' '+x.method+' '+x.path+' · HTTP '+x.status+' · '+x.duration_ms+'ms')];
+ const messages=modelDiagnosticLines.length?modelDiagnosticLines:['DEPTH: '+depthState,...(window.FreeLab?.getTrace?.()||[]).filter(x=>['error','api','warn'].includes(x.kind)).slice(-6).map(x=>x.at+' '+x.message),...serverDiagnostic.slice(-5).map(x=>x.time.slice(11,19)+' '+x.method+' '+x.path+' · HTTP '+x.status+' · '+x.duration_ms+'ms')];
  if(!messages.length)messages.push('No recorded errors. Extract and API requests appear here when available.');
- messages.slice(-11).forEach((msg,i)=>text(ctx,String(msg).slice(0,110),24,94+i*36,19,uiPalette().text,490));return texture(c);}
+ messages.slice(0,11).forEach((msg,i)=>text(ctx,String(msg).slice(0,100),24,94+i*36,modelDiagnosticLines.length?24:19,uiPalette().text,490));return texture(c);}
 async function loadServerDiagnostic(){if(!session||!debugShowing)return;try{const data=await window.FreeLab.serverDiagnostics();serverDiagnostic=data.entries||[];}catch(e){serverDiagnostic=[{time:new Date().toISOString(),method:'INFO',path:'Server diagnostics: '+e.message,status:'-',duration_ms:0}];}}
-function updateDebugCard(t){if(!debugShowing||!toolbar||!gl)return;if(!debugPanel){const tex=debugTexture(),anchor=latestPose?point(poseForwardAnchor(latestPose,1.35,-.12),[0,0,0]):[0,1.35,-1.35];debugPanel={id:'diagnostics',kind:'diagnostics',pos:anchor,q:latestPose?quatY(cameraYaw(latestPose)):[0,0,0,1],size:[1.1,.58],scale:1,visible:true,front:tex,back:tex};}
+function updateDebugCard(t){if(!debugShowing||!toolbar||!gl)return;if(!debugPanel){const tex=debugTexture(),anchor=latestPose?point(poseForwardAnchor(latestPose,1.35,-.12),[0,0,0]):[0,1.35,-1.35];debugPanel={id:'diagnostics',kind:'diagnostics',pos:anchor,q:latestPose?quatY(cameraYaw(latestPose)):[0,0,0,1],size:modelDiagnosticLines.length?[1.45,.78]:[1.1,.58],scale:1,visible:true,front:tex,back:tex};}
+ debugPanel.size=modelDiagnosticLines.length?[1.45,.78]:[1.1,.58];
  if(latestPose&&!held?.card?.kind?.includes('diagnostics')){const m=latestPose.transform.matrix;debugPanel.q=quatSlerp(debugPanel.q,lookingQuat(debugPanel.pos,[m[12],m[13],m[14]]),.18);}
  if(t-debugLast>1200){debugLast=t;const tex=debugTexture();gl.deleteTexture(debugPanel.front);debugPanel.front=tex;debugPanel.back=tex;}
  if(t-serverPoll>6000){serverPoll=t;loadServerDiagnostic();}}
@@ -1114,7 +1115,7 @@ function ray(frame,src){try{const sp=src.targetRaySpace?frame.getPose(src.target
  if(src.hand){const a=frame.getJointPose(src.hand.get('index-finger-tip'),refSpace),b=frame.getJointPose(src.hand.get('wrist'),refSpace);if(a&&b){const o=[a.transform.position.x,a.transform.position.y,a.transform.position.z];const w=[b.transform.position.x,b.transform.position.y,b.transform.position.z];return {o,d:norm(vsub(o,w))};}}
  }catch{}return null;}
 function hitTest(r,c){if(!r||!c.visible||!c.front||c.animScale===0)return null;const m=cardModel(c),inv=inverse(m);if(!inv)return null;const o=point(inv,r.o),d=point(inv,r.d,0);if(Math.abs(d[2])<1e-6)return null;const k=-o[2]/d[2];if(k<=0||k>6)return null;const x=o[0]+d[0]*k,y=o[1]+d[1]*k;if(Math.abs(x)>.5||Math.abs(y)>.5)return null;const hitWorld=point(m,[x,y,0]);const dist=length(vsub(hitWorld,r.o));return {card:c,x,y,dist};}
-function pick(r){if(darkroom){const hits=[darkClose,darkPrevious,darkNext].filter(Boolean).map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return hits[0]||null;}const opts=[...cards,toolbar,...(voicePhase==='listening'||voicePhase==='processing'?[]:[captureEye]),...(voicePhase==='listening'||voicePhase==='processing'?[]:[extractButton]),...(uiSettings.voice===false?[]:[voiceButton]),voiceOk,voiceCancel,promptPanel,editbar,...(debugShowing?[debugPanel]:[]),descriptionPanel,...(configShowing?[configPanel]:[])].filter(Boolean),all=opts.map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return all[0]||null;}
+function pick(r){if(darkroom){const hits=[darkClose,darkPrevious,darkNext].filter(Boolean).map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return hits[0]||null;}const opts=[...cards,...meshJobBadges.values(),toolbar,...(voicePhase==='listening'||voicePhase==='processing'?[]:[captureEye]),...(voicePhase==='listening'||voicePhase==='processing'?[]:[extractButton]),...(uiSettings.voice===false?[]:[voiceButton]),voiceOk,voiceCancel,promptPanel,editbar,...(debugShowing?[debugPanel]:[]),descriptionPanel,...(configShowing?[configPanel]:[])].filter(Boolean),all=opts.map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return all[0]||null;}
 function imageButtonAt(card,x,y){
  // Hit regions are in the SAME 600-pixel canvas coordinates as cardTexture.
  // Image aspect ratios change canvas height; fixed normalized-Y thresholds do not work.
@@ -1128,6 +1129,7 @@ function imageButtonAt(card,x,y){
  return null;
 }
 function buttonFromHit(h){if(!h)return null;
+ if(h.card.kind==='3djob')return '3djobdiagnostics';
  if(h.card.kind==='description'){
   if(h.x>.33&&h.y>.27)return 'descriptionclose';
   if(h.y<-.26&&h.x<-.19)return h.card.retryable?'descriptionretry':'descriptionask';
@@ -1164,7 +1166,7 @@ function grabStart(frame,src,manual=false){const r=ray(frame,src),h=pick(r);if(!
 async function grabEnd(src,frame){if(held?.second?.src===src){held.second=null;return;}if(!held||held.src!==src)return;const h=held;held=null;cue('release',src);
  // XR controllers rotate slightly between trigger-down and trigger-up. Once a
  // button was hit, release must ACTIVATE it and never be interpreted as a drag.
- if(h.id){window.FreeLab?.traceEvent?.('XR image action: '+h.id,'info');return action(h.id);}
+ if(h.id){window.FreeLab?.traceEvent?.('XR image action: '+h.id,'info');if(h.id==='3djobdiagnostics')return showMeshDiagnostics(h.card.jobId);return action(h.id);}
  if(h.moved){
  if(h.card.kind==='source'&&cloud?.id){
      try{const [x,y,z]=(cloud.offset||[0,0,0]);const [qx,qy,qz,qw]=h.card.q||[0,0,0,1];await window.FreeLab.updateXRCloud(cloud.id,{spatial:{x,y,z,qx,qy,qz,qw}});}catch(e){setStatus('Source position not saved: '+e.message);}
@@ -1848,6 +1850,39 @@ function meshAnchor(model){
 // 3D jobs are asynchronous branches. Their badges persist while the parent
 // image is visible, follow that image's spatial transform, and make failures
 // explicit instead of silently leaving an empty XR scene.
+async function showMeshDiagnostics(jobId){
+ if(!session||!Number.isInteger(jobId))return;
+ // A second deliberate tap on the same failed model retries ONLY Quest preview.
+ // No provider generation POST and no additional paid task are made.
+ if(modelDiagnosticJob===jobId&&meshPreviewFailures.has(jobId)&&performance.now()-modelDiagnosticViewedAt<45000){
+  modelDiagnosticViewedAt=0;modelDiagnosticLines=['XR PREVIEW RETRY · job #'+jobId,'No new provider generation requested.'];
+  try{
+   await window.FreeLab.retryXRPreview(jobId);
+   meshPreviewFailures.delete(jobId);meshPreviewRetries.delete(jobId);
+   const job=await window.FreeLab.checkXR3D(jobId,true);
+   if(job.status==='SUCCEEDED'&&session&&cloud?.id===job.capture_id){
+    const badge=meshJobBadges.get(jobId);if(badge){badge.error='';badge.status='LOADING';}
+    void spawnMeshPreview(job);
+   }
+   setStatus('XR PREVIEW RETRY · reusing already generated model',10000);
+  }catch(e){modelDiagnosticLines=['XR RETRY FAILED · '+String(e.message).slice(0,105)];}
+  debugShowing=true;debugLast=0;return;
+ }
+ modelDiagnosticJob=jobId;modelDiagnosticViewedAt=performance.now();modelDiagnosticLines=['3D JOB #'+jobId+' · loading private diagnostics…'];debugShowing=true;debugLast=0;
+ try{
+  const d=await window.FreeLab.modelXRDiagnostics(jobId);
+  if(!session||modelDiagnosticJob!==jobId)return;
+  modelDiagnosticLines=['3D JOB #'+jobId+' · '+String(d.provider||'').toUpperCase()+' · '+(d.model_id||'model version not recorded'),
+    'PROVIDER: '+d.provider_status+' · '+d.progress+'%','CURRENT STAGE: '+d.stage,
+    'GLB CACHE: '+(d.model?.cached?(d.model.bytes/1000000).toFixed(2)+' MB':'NOT DOWNLOADED'),
+    'COMPRESSION: '+(d.model?.compression?.join(', ')||'none reported'),
+    'BLENDER: '+(d.blender_available?'AVAILABLE':'NOT AVAILABLE'),
+    ...d.steps.slice(-3).map(x=>x.name+': '+x.state+' · '+String(x.detail||'')),
+    'NEXT: '+d.next_action, ...(meshPreviewFailures.has(jobId)?['TAP THE RED CUBE AGAIN TO RETRY · NO GENERATION FEE']:[])].slice(0,11);
+  setStatus('3D DIAGNOSTICS · '+d.stage+' · see readable LOG panel',10000);
+ }catch(e){modelDiagnosticLines=['3D JOB #'+jobId+' · diagnostics unavailable',String(e.message).slice(0,130)];}
+ debugLast=0;
+}
 function meshJobCaption(job){
  const status=String(job.status||'PENDING').toUpperCase();
  if(['FAILED','CANCELED'].includes(status))return '3D FAILED';
@@ -1858,14 +1893,15 @@ function meshJobCaption(job){
  return 'GENERATING 3D';
 }
 function meshJobTexture(job){
- const [c,ctx]=canvas2d(640,180),bad=['FAILED','CANCELED','PREVIEW_ERROR'].includes(job.status);
+ const [c,ctx]=canvas2d(900,230),bad=['FAILED','CANCELED','PREVIEW_ERROR'].includes(job.status);
  ctx.clearRect(0,0,640,180);
- rrect(ctx,0,0,640,180,25,bad?'rgba(48,14,25,.94)':'rgba(13,28,29,.91)');
+ rrect(ctx,0,0,900,230,25,bad?'rgba(48,14,25,.94)':'rgba(13,28,29,.91)');
  const accent=bad?'#ff9caa':'#bdfff1';
- text(ctx,meshJobCaption(job),20,66,44,accent,800);
+ text(ctx,meshJobCaption(job),22,65,43,accent,800);
  const detail=bad?(String(job.error||'3D model could not load').slice(0,46)):
   `${String(job.provider||'3D').toUpperCase()}  ·  ${['PREPARING','WAITING','LOADING'].includes(job.status)?'PREPARING MODEL':Math.round(Number(job.progress)||0)+'%'} `;
- text(ctx,detail,20,130,27,bad?'#ffc9cf':'#e5fff6',600);
+ text(ctx,detail,22,130,30,bad?'#ffc9cf':'#e5fff6',600);
+ text(ctx,'TAP FOR 3D DIAGNOSTICS  ·  JOB #'+job.jobId,22,194,25,'#e9f6ef',650);
  return texture(c);
 }
 function drawMeshJobCube(badge,anchor,vp,t,owner){
@@ -1895,14 +1931,14 @@ function syncMeshJobBadge(job){
  if(!cloud||job.capture_id!==cloud.id||!Number.isInteger(job.id))return;
  let status=String(job.status||'PENDING').toUpperCase();
  let badge=meshJobBadges.get(job.id);
- if(status==='SUCCEEDED'&&badge&&['PREPARING','WAITING','LOADING','PREVIEW_ERROR'].includes(badge.status)&&!meshPreviews.some(m=>m.jobId===job.id))status=badge.status;
+ if(status==='SUCCEEDED'&&badge&&['PREPARING','WAITING','LOADING','PREVIEW_ERROR'].includes(badge.status)&&!meshPreviews.some(m=>m.jobId===job.id)){status=badge.status;if(badge.error)job={...job,error:badge.error};}
  // A completed preview only needs its chip during the pop-out animation.
  if(!badge&&status==='SUCCEEDED'&&meshPreviews.some(m=>m.jobId===job.id))return;
  const progress=Number(job.progress)||0;
  if(!badge){
   badge={id:job.id,jobId:job.id,captureId:job.capture_id,objectId:job.object_id||null,
     provider:job.provider||'3D',status,progress,error:job.error||'',born:performance.now(),front:null,
-    kind:'3djob',size:[.39,.11],scale:1,animScale:0,alpha:1,visible:true,
+    kind:'3djob',size:[.55,.14],scale:1,animScale:0,alpha:1,visible:true,
     pos:[0,0,-1],q:[0,0,0,1],lastChange:0,completeAt:0};
   meshJobBadges.set(job.id,badge);
  }
@@ -1931,7 +1967,7 @@ function draw3DJobBadges(vp,t){
   const origin=blend(source,anchor.pos,ease);
   const shown={...anchor,pos:origin};
   drawMeshJobCube(badge,shown,vp,t,owner);
-  badge.pos=vadd(origin,quatVec(anchor.q,[0,-.18,0]));badge.q=anchor.q;
+  badge.pos=vadd(origin,quatVec(anchor.q,[0,-.21,0]));badge.q=anchor.q;
   badge.alpha=1;drawCard(badge,vp);
   line(vp,[source,origin],[.50,.96,.78,.5]);
  }
@@ -2004,7 +2040,7 @@ async function spawnMeshPreview(job,origin=null){
   const a=meshAnchor(model);if(a)launchParticles(a.pos);
   setStatus('3D POPPED INTO XR · '+(result.texture_omitted?'solid mesh':'textured mesh')+' · attached to source',10500);
   cue('bloom');
- }catch(e){if(scope===meshGeneration){meshPreviewFailures.add(jobId);markMeshPreviewError(jobId,e.message);setStatus('3D MODEL ERROR · '+e.message,15000);}}
+ }catch(e){if(scope===meshGeneration){meshPreviewFailures.add(jobId);markMeshPreviewError(jobId,e.message);setStatus('3D MODEL ERROR · tap red 3D cube for the precise failure stage',15000);void showMeshDiagnostics(jobId);}}
  finally{for(const part of pieces){if(part.buffer)gl.deleteBuffer(part.buffer);if(part.texture)gl.deleteTexture(part.texture);}meshLoadingJobs.delete(jobId);}
 }
 function drawMeshPreview(mesh,vp,t){
@@ -2215,7 +2251,7 @@ async function action(id){const t=performance.now();if(t-lastAction<200)return;l
  case 'voice':return uiSettings.voice!==false?voicePrompt():null;case 'confirmvoice':return confirmVoice();case 'cancelvoice':dismissVoice();descriptionQuestionMode=false;return setStatus('Voice cancelled · tap microphone to record again',7000);case 'closemenu':return closeImageMenu();
  case 'darkroom':return enterDarkroom();case 'darkroomexit':return closeDarkroom();case 'cinemaprev':return navigateCinema(-1);case 'cinemanext':return navigateCinema(1);
  case 'imagemenu':return toggleImageMenu(selected);case 'imageclose':return selected?.kind==='source'?collapse():closeSelectedCard();
- case 'debug':debugShowing=!debugShowing;if(debugShowing){serverPoll=0;loadServerDiagnostic();}return setStatus(debugShowing?'LOG OPEN · API errors and server request status':'LOG CLOSED',6500);
+ case 'debug':debugShowing=!debugShowing;modelDiagnosticLines=[];modelDiagnosticJob=null;modelDiagnosticViewedAt=0;if(debugShowing){serverPoll=0;loadServerDiagnostic();}return setStatus(debugShowing?'LOG OPEN · API errors and server request status':'LOG CLOSED',6500);
  case 'branch':return selected?.kind==='object'?openBranch(selected.data.id):null;case 'parent':return upBranch();
  case 'createimage':return openPrompt();case 'prompt':return openPrompt();case 'segment':return selected?.kind==='source'?runExtract():extractParts();case 'refine':return restoreSelected();case 'apply':return applyPrompt();
  case 'follow':return toggleFollow();case 'gallery':galleryPage=0;return openGallery(0);
@@ -2230,7 +2266,7 @@ async function start(options={}){if(session)return;uiSettings=window.FreeLabXRUI
  session.addEventListener('selectend',e=>{lastNative.set(e.inputSource,performance.now());if(e.inputSource.handedness==='left'&&labSelector?.open)return;grabEnd(e.inputSource,e.frame);});
  session.addEventListener('squeezestart',e=>{lastNative.set(e.inputSource,performance.now());if(e.inputSource.handedness==='left'&&labSelector?.open)return;grabStart(e.frame,e.inputSource);});
  session.addEventListener('squeezeend',e=>{lastNative.set(e.inputSource,performance.now());if(e.inputSource.handedness==='left'&&labSelector?.open)return;grabEnd(e.inputSource,e.frame);});
- session.addEventListener('end',()=>{window.FreeLabRooms?.end?.();for(const v of visitorBadges)if(v.front&&gl)gl.deleteTexture(v.front);visitorBadges=[];visitorPollAt=0;if(labMenu?.front)gl.deleteTexture(labMenu.front);labMenu=null;labMenuIndex=-1;labSelector?.reset();labSelector=null;for(const photo of framePhotos){if(photo.texture&&gl)gl.deleteTexture(photo.texture);if(photo.buffer&&gl)gl.deleteBuffer(photo.buffer);}framePhotos=[];framePhotoBusy=false;frameLab?.clear();frameLab=null;triangleLab=null;shapeTargets=[];frameGames?.clear();frameGames=null;mascotHitUntil=0;if(mascotImpactSprite){gl.deleteTexture(mascotImpactSprite);mascotImpactSprite=null;}if(frameGameCubeBuffer){gl.deleteBuffer(frameGameCubeBuffer);frameGameCubeBuffer=null;}frameTouch=null;frameErase=null;frameLabState=null;window.FreeLabSound?.fingersStopAll?.();fingerLab?.setEnabled(false);fingerLab=null;fingerLabState=null;leftStickDown=false;window.FreeLabSound?.stringStop?.();stringLab?.setEnabled(false);stringLab=null;stringLabState=null;rightStickDown=false;cue('release');session=null;poseReady=false;held=null;clearCards();if(darkroom?.ownedTexture&&darkroom.front)gl.deleteTexture(darkroom.front);if(darkFloor?.front)gl.deleteTexture(darkFloor.front);if(darkClose?.front)gl.deleteTexture(darkClose.front);for(const b of [darkPrevious,darkNext])if(b?.front)gl.deleteTexture(b.front);darkPrevious=null;darkNext=null;darkroom=null;darkBackdrop=null;darkClose=null;darkFloor=null;descriptionQuestionMode=false;if(voiceBadge?.front)gl.deleteTexture(voiceBadge.front);voiceBadge=null;dismissVoice();gestureDebounce.clear();gestureSpeechTimes.clear();lastGestureAnnouncement=-100000;if(mascotSpeech?.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(cameraHint?.front)gl.deleteTexture(cameraHint.front);cameraHint=null;cameraHintState='';if(captureEye?.front)gl.deleteTexture(captureEye.front);if(voiceButton?.front)gl.deleteTexture(voiceButton.front);if(extractButton?.front)gl.deleteTexture(extractButton.front);voiceButton=null;extractButton=null;extractVisualActive=null;inferenceCard=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;document.getElementById('xrPromptEditor')?.classList.add('hidden');document.getElementById('xrPromptEditor')?.classList.remove('xr-native-open');if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;if(configPanel?.front)gl.deleteTexture(configPanel.front);configPanel=null;configShowing=false;if(descriptionPanel?.front)gl.deleteTexture(descriptionPanel.front);descriptionPanel=null;for(const m of meshPreviews)releaseMeshPreview(m);meshPreviews=[];voiceRecord?.cancel?.();voiceRecord=null;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
+ session.addEventListener('end',()=>{window.FreeLabRooms?.end?.();for(const v of visitorBadges)if(v.front&&gl)gl.deleteTexture(v.front);visitorBadges=[];visitorPollAt=0;if(labMenu?.front)gl.deleteTexture(labMenu.front);labMenu=null;labMenuIndex=-1;labSelector?.reset();labSelector=null;for(const photo of framePhotos){if(photo.texture&&gl)gl.deleteTexture(photo.texture);if(photo.buffer&&gl)gl.deleteBuffer(photo.buffer);}framePhotos=[];framePhotoBusy=false;frameLab?.clear();frameLab=null;triangleLab=null;shapeTargets=[];frameGames?.clear();frameGames=null;mascotHitUntil=0;if(mascotImpactSprite){gl.deleteTexture(mascotImpactSprite);mascotImpactSprite=null;}if(frameGameCubeBuffer){gl.deleteBuffer(frameGameCubeBuffer);frameGameCubeBuffer=null;}frameTouch=null;frameErase=null;frameLabState=null;window.FreeLabSound?.fingersStopAll?.();fingerLab?.setEnabled(false);fingerLab=null;fingerLabState=null;leftStickDown=false;window.FreeLabSound?.stringStop?.();stringLab?.setEnabled(false);stringLab=null;stringLabState=null;rightStickDown=false;cue('release');session=null;poseReady=false;held=null;clearCards();if(darkroom?.ownedTexture&&darkroom.front)gl.deleteTexture(darkroom.front);if(darkFloor?.front)gl.deleteTexture(darkFloor.front);if(darkClose?.front)gl.deleteTexture(darkClose.front);for(const b of [darkPrevious,darkNext])if(b?.front)gl.deleteTexture(b.front);darkPrevious=null;darkNext=null;darkroom=null;darkBackdrop=null;darkClose=null;darkFloor=null;descriptionQuestionMode=false;if(voiceBadge?.front)gl.deleteTexture(voiceBadge.front);voiceBadge=null;dismissVoice();gestureDebounce.clear();gestureSpeechTimes.clear();lastGestureAnnouncement=-100000;if(mascotSpeech?.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(cameraHint?.front)gl.deleteTexture(cameraHint.front);cameraHint=null;cameraHintState='';if(captureEye?.front)gl.deleteTexture(captureEye.front);if(voiceButton?.front)gl.deleteTexture(voiceButton.front);if(extractButton?.front)gl.deleteTexture(extractButton.front);voiceButton=null;extractButton=null;extractVisualActive=null;inferenceCard=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;document.getElementById('xrPromptEditor')?.classList.add('hidden');document.getElementById('xrPromptEditor')?.classList.remove('xr-native-open');if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;modelDiagnosticLines=[];modelDiagnosticJob=null;modelDiagnosticViewedAt=0;if(configPanel?.front)gl.deleteTexture(configPanel.front);configPanel=null;configShowing=false;if(descriptionPanel?.front)gl.deleteTexture(descriptionPanel.front);descriptionPanel=null;for(const m of meshPreviews)releaseMeshPreview(m);meshPreviews=[];voiceRecord?.cancel?.();voiceRecord=null;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
  const saved=await window.FreeLab.listXRClouds().catch(()=>[]);clouds=saved;refreshToolbar();
  // Session-scoped XR placements are temporary, but every private JPEG and job remains in SQLite.
  // Resume queued cloud jobs after headset/browser restarts, without submitting a new paid request.

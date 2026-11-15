@@ -6,7 +6,7 @@ XR=(ROOT/'frontend/assets/xr.js').read_text()
 
 class QuestInteractionRegression(unittest.TestCase):
     def test_release_action_is_latched_before_movement(self):
-        self.assertIn("if(h.id){window.FreeLab?.traceEvent?.('XR image action: '+h.id,'info');return action(h.id);}",XR)
+        self.assertIn("if(h.id){window.FreeLab?.traceEvent?.('XR image action: '+h.id,'info');if(h.id==='3djobdiagnostics')return showMeshDiagnostics(h.card.jobId);return action(h.id);}",XR)
         self.assertIn("if(!held||held.id)return",XR)
         self.assertNotIn("setVoicePhase('gesture'",XR)
         self.assertIn('mascotSay(spoken)',XR)
