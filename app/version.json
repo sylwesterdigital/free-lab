@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.43",
-  "description": "Desktop model preview uses true glTF transforms and camera-aligned upright framing"
+  "version": "0.10.44",
+  "description": "Correct initial fullscreen 3D viewer aspect ratio and responsive camera sizing"
 }

@@ -1,4 +1,4 @@
-"""v0.10.43 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
+"""v0.10.44 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -188,7 +188,7 @@ class Tripo31(unittest.TestCase):
 if __name__=='__main__':unittest.main()
 
 
-# v0.10.43: private Blender thumbnails and XR GPU lifecycle diagnostics.
+# v0.10.44: private Blender thumbnails and XR GPU lifecycle diagnostics.
 class ModelThumbnailTests(unittest.TestCase):
  def test_backend_exposes_thumbnail_and_source_fallback(self):
   self.assertIn('def _model_thumb_path(owner,jid):',APP)
@@ -235,7 +235,7 @@ class XR3DDiagnosticsTests(unittest.TestCase):
   self.assertIn("'Cache-Control'",source)
 
 class XRMeshOwnershipAndLibraryRegressionTests(unittest.TestCase):
- """v0.10.43 regression: GPU buffers must remain owned by the XR model."""
+ """v0.10.44 regression: GPU buffers must remain owned by the XR model."""
  def test_ownership_transfer_preserves_mesh_parts_during_finally_cleanup(self):
   xr=(ROOT/'frontend/assets/xr.js').read_text()
   self.assertIn("kind:'3dmesh',parts:pieces.slice()",xr)
@@ -265,7 +265,7 @@ class XRMeshOwnershipAndLibraryRegressionTests(unittest.TestCase):
   self.assertIn("c.kind==='gallery')&&c.captionNormal",xr)
   self.assertIn("cards.filter(c=>c.kind!=='galleryheader')",xr)
 
-# v0.10.43: Quest controllers, local axis gizmos and static library animation.
+# v0.10.44: Quest controllers, local axis gizmos and static library animation.
 class XRTransformAndLibraryTests(unittest.TestCase):
  def test_library_header_is_static_and_tween_skips_unanimated_cards(self):
   self.assertIn("kind:'galleryheader',data:{},pos:[0,.67,-.04],from:[0,.67,-.04],to:[0,.67,-.04],start:0,duration:0",XR)
@@ -314,7 +314,7 @@ class XRTransformAndLibraryTests(unittest.TestCase):
   self.assertIn('mesh.parts',XR)
   self.assertNotIn('THREE.TransformControls',XR)
 
-# v0.10.43 — unified archive, native two-hand model dragging and Z-up presentation.
+# v0.10.44 — unified archive, native two-hand model dragging and Z-up presentation.
 class MediaArchiveDirectGrab42(unittest.TestCase):
  def test_media_tabs_group_3d_with_saved_sources(self):
   self.assertIn('id="archiveMediaNav"',HTML)
@@ -369,9 +369,42 @@ class MediaArchiveDirectGrab42(unittest.TestCase):
   func=STAGE[STAGE.index('function frame(){'):STAGE.index('function clearRoot(){')]
   script=("let active=true,raf=0,uprightAxis='z',yaw=.37,pitch=.12,dist=3;"
    "const camera={up:{set(x,y,z){this.value=[x,y,z]}},position:{set(x,y,z){this.value=[x,y,z]}},lookAt(){}};"
-   "const renderer={render(){}},scene={};function requestAnimationFrame(){return 1;}"
+   "const renderer={render(){}},scene={};function requestAnimationFrame(){return 1;}function resize(){};let renderCount=0,viewportWidth=0;"
    +func+"frame();console.log(JSON.stringify({up:camera.up.value,pos:camera.position.value}));")
   result=json.loads(subprocess.check_output(['node','-e',script],text=True))
   self.assertEqual(result['up'],[0,0,1])
   self.assertAlmostEqual(math.sqrt(sum(p*p for p in result['pos'])),3.0,places=5)
   self.assertLess(result['pos'][2],0.5)  # Camera is side-on to the bottle's Z axis.
+
+ def test_desktop_viewport_resize_initial_and_reopen_preserves_aspect(self):
+  # Execute the real resize function in V8. Canvas sizes from a previous render
+  # must never override the visible viewport, including after opening fullscreen.
+  import subprocess,json
+  func=STAGE[STAGE.index('function resize(){'):STAGE.index('function frame(){')]
+  script=(
+   "let active=true,viewportWidth=0,viewportHeight=0,viewportRatio=0;"
+   "const viewport={clientWidth:1440,clientHeight:810};"
+   "const $=id=>id==='modelStageViewport'?viewport:null;"
+   "const window={devicePixelRatio:2};"
+   "const renderer={sizes:[],setPixelRatio(n){this.dpr=n;},setSize(w,h){this.sizes.push([w,h]);}};"
+   "const camera={aspect:0,updates:0,updateProjectionMatrix(){this.updates++;}};"
+   +func+
+   "resize();viewport.clientWidth=1000;viewport.clientHeight=700;resize();"
+   "viewport.clientHeight=0;resize();viewport.clientHeight=500;"
+   "viewportWidth=0;resize();"
+   "console.log(JSON.stringify({sizes:renderer.sizes,aspect:camera.aspect,dpr:renderer.dpr,updates:camera.updates}));"
+  )
+  result=json.loads(subprocess.check_output(['node','-e',script],text=True))
+  self.assertEqual(result['sizes'],[[1440,810],[1000,700],[1000,500]])
+  self.assertAlmostEqual(result['aspect'],2.0)
+  self.assertEqual(result['dpr'],1.5)
+  self.assertEqual(result['updates'],3)
+
+ def test_viewport_isolated_from_canvas_intrinsic_grid_sizing(self):
+  html=(ROOT/'frontend/index.html').read_text()
+  css=(ROOT/'frontend/assets/style.css').read_text()
+  self.assertIn('id="modelStageViewport" class="model-stage-viewport"',html)
+  self.assertIn('.model-stage-viewport{position:relative;flex:1 1 0%;min-width:0;min-height:0;overflow:hidden}',css)
+  self.assertIn('.model-stage .model-stage-viewport canvas,.model-stage .model-stage-viewport img{position:absolute;inset:0;',css)
+  self.assertIn("resizingObserver=new ResizeObserver(()=>resize())",STAGE)
+  self.assertIn('if(++renderCount%12===1||!viewportWidth)resize();',STAGE)

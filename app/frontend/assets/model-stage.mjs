@@ -3,6 +3,7 @@ const $=id=>document.getElementById(id);
 let renderer=null,scene=null,camera=null,root=null,raf=0,active=false,loadingToken=0,drag=null,yaw=.48,pitch=.20,dist=2.8,lastTouchDistance=0;
 let THREE=null,GLTFLoader=null,DRACOLoader=null,draco=null;
 let uprightAxis='y',axisChoice='auto',modelBounds=null;
+let viewportWidth=0,viewportHeight=0,viewportRatio=0,resizingObserver=null,renderCount=0;
 async function loadThree(){
  if(THREE)return;
  THREE=await import('three');
@@ -17,9 +18,24 @@ async function loadThree(){
  }catch(e){GLTFLoader=null;DRACOLoader=null;console.warn('FREELAB GLB/Draco decoder unavailable:',e.message);}
 }
 function state(message,working=false){const p=$('modelStageStatus');if(!p)return;p.textContent=message;p.classList.toggle('working',working);}
-function resize(){if(!renderer||!camera)return;const canvas=$('modelStageCanvas');const w=Math.max(1,canvas.clientWidth),h=Math.max(1,canvas.clientHeight);
- renderer.setPixelRatio(Math.min(1.5,devicePixelRatio||1));renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
+// The visible VIEWPORT defines the WebGL size. Reading the canvas's intrinsic
+// dimensions during initial grid layout used to produce a stretched first frame
+// until a manual browser resize updated the camera's aspect ratio.
+function resize(){
+ if(!active||!renderer||!camera)return;
+ const viewport=$('modelStageViewport');
+ if(!viewport)return;
+ const w=Math.round(viewport.clientWidth),h=Math.round(viewport.clientHeight);
+ if(w<2||h<2)return;  // Hidden or not yet laid out: do not apply a bogus aspect.
+ const ratio=Math.min(1.5,window.devicePixelRatio||1);
+ if(w===viewportWidth&&h===viewportHeight&&ratio===viewportRatio)return;
+ viewportWidth=w;viewportHeight=h;viewportRatio=ratio;
+ renderer.setPixelRatio(ratio);renderer.setSize(w,h,false);
+ camera.aspect=w/h;camera.updateProjectionMatrix();
+}
 function frame(){if(!active)return;raf=requestAnimationFrame(frame);if(!renderer||!camera||!scene)return;
+ // Correct first-open and viewport changes independently of window.resize.
+ if(++renderCount%12===1||!viewportWidth)resize();
  // Rotate the camera around the object's original long axis; never rotate or
  // non-uniformly scale the imported GLB to force a portrait presentation.
  const horizontal=Math.cos(pitch)*dist,vertical=Math.sin(pitch)*dist;
@@ -114,6 +130,7 @@ async function open(id,avatar=false,localFile=null,posterUrl=''){const token=++l
   scene=new THREE.Scene();scene.background=new THREE.Color(0x101c1b);camera=new THREE.PerspectiveCamera(43,1,.01,120);
   scene.add(new THREE.HemisphereLight(0xf3fffb,0x1b3535,2.4));const key=new THREE.DirectionalLight(0xffe7cb,2.7);key.position.set(2,5,4);scene.add(key);
   const edge=new THREE.DirectionalLight(0xb1d6ff,1.1);edge.position.set(-2,1,-3);scene.add(edge);}
+  viewportWidth=0;viewportHeight=0;viewportRatio=0;renderCount=0;
   resize();if(!raf)frame();
   const rawUrl=avatar?'/api/me/avatar-3d':'/api/media/3d/'+id+'/asset';const fallbackUrl=avatar?'/api/me/avatar-3d/preview':'/api/media/3d/'+id+'/preview';
   // Download the actual authenticated GLB into the viewer. Only if that fails, use a bounded geometry preview.
@@ -131,10 +148,12 @@ async function open(id,avatar=false,localFile=null,posterUrl=''){const token=++l
    catch(fallbackError){throw Error('GLB loader: '+e.message+' · XR preview: '+fallbackError.message);}
   }
   if(token!==loadingToken)return;fit(object);if(poster)poster.classList.add('hidden');
+  // Asset readiness can change the dialog layout; remeasure before displaying it.
+  viewportWidth=0;resize();requestAnimationFrame(()=>{if(token===loadingToken)resize();});
  }catch(e){if(token===loadingToken)state('3D preview unavailable: '+e.message);}
  finally{if(token===loadingToken)$('modelStageStatus')?.classList.remove('working');}
 }
-function close(){++loadingToken;active=false;cancelAnimationFrame(raf);raf=0;clearRoot();const poster=$('modelStagePoster');if(poster){poster.classList.add('hidden');poster.removeAttribute('src');}$('modelStage').classList.add('hidden');}
+function close(){++loadingToken;active=false;cancelAnimationFrame(raf);raf=0;viewportWidth=0;viewportHeight=0;clearRoot();const poster=$('modelStagePoster');if(poster){poster.classList.add('hidden');poster.removeAttribute('src');}$('modelStage').classList.add('hidden');}
 const cv=$('modelStageCanvas');if(cv){cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY};cv.setPointerCapture(e.pointerId);});
  cv.addEventListener('pointermove',e=>{if(!drag)return;yaw+=(e.clientX-drag.x)*.008;pitch=Math.max(-1.3,Math.min(1.3,pitch+(e.clientY-drag.y)*.006));drag={x:e.clientX,y:e.clientY};});
  cv.addEventListener('pointerup',()=>{drag=null;});cv.addEventListener('pointercancel',()=>{drag=null;});
@@ -148,4 +167,11 @@ $('modelStageAxis')?.addEventListener('click',()=>{
  uprightAxis=chooseUprightAxis(modelBounds);refreshViewAxisButton();
 });
 $('modelStageClose')?.addEventListener('click',close);window.addEventListener('keydown',e=>{if(e.key==='Escape'&&active)close();});window.addEventListener('resize',resize);
+// DevTools docking, browser chrome and CSS layout changes may resize the viewer
+// without a window resize event. Observe its actual display region.
+if(typeof ResizeObserver!=='undefined'){
+ const viewport=$('modelStageViewport');
+ if(viewport){resizingObserver=new ResizeObserver(()=>resize());resizingObserver.observe(viewport);}
+}
+
 window.FreeLabModelStage={open,openLocal:file=>open(null,false,file),close};
