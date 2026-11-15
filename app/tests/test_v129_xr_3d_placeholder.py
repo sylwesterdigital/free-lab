@@ -1,4 +1,4 @@
-"""v0.10.30: offline XR 3D job cubes and private GLB preview preparation."""
+"""v0.10.31: offline XR 3D job cubes and private GLB preview preparation."""
 import struct, unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -66,7 +66,9 @@ class Cube129(unittest.TestCase):
   self.assertIn('window.FreeLab.modelXRDiagnostics(jobId)',XR)
   self.assertIn('window.FreeLab.retryXRPreview(jobId)',XR)
   self.assertIn('meshPreviewFailures.delete(jobId)',XR)
-  self.assertIn('TAP THE RED CUBE AGAIN TO RETRY',XR)
+  self.assertIn('TAP CUBE AGAIN TO RETRY',XR)
+  self.assertNotIn('void showMeshDiagnostics(jobId);',XR)
+  self.assertNotIn('debugShowing=true;debugLast=0;return;',XR)
  def test_pin_model_version_in_additive_migration(self):
   import tempfile
   from backend import db

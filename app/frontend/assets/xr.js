@@ -1852,37 +1852,33 @@ function meshAnchor(model){
 // explicit instead of silently leaving an empty XR scene.
 async function showMeshDiagnostics(jobId){
  if(!session||!Number.isInteger(jobId))return;
- // A second deliberate tap on the same failed model retries ONLY Quest preview.
- // No provider generation POST and no additional paid task are made.
+ // A second tap on the red cube retries the already-paid model's XR preview.
  if(modelDiagnosticJob===jobId&&meshPreviewFailures.has(jobId)&&performance.now()-modelDiagnosticViewedAt<45000){
-  modelDiagnosticViewedAt=0;modelDiagnosticLines=['XR PREVIEW RETRY · job #'+jobId,'No new provider generation requested.'];
+  modelDiagnosticViewedAt=0;
   try{
    await window.FreeLab.retryXRPreview(jobId);
    meshPreviewFailures.delete(jobId);meshPreviewRetries.delete(jobId);
    const job=await window.FreeLab.checkXR3D(jobId,true);
-   if(job.status==='SUCCEEDED'&&session&&cloud?.id===job.capture_id){
-    const badge=meshJobBadges.get(jobId);if(badge){badge.error='';badge.status='LOADING';}
-    void spawnMeshPreview(job);
-   }
-   setStatus('XR PREVIEW RETRY · reusing already generated model',10000);
-  }catch(e){modelDiagnosticLines=['XR RETRY FAILED · '+String(e.message).slice(0,105)];}
-  debugShowing=true;debugLast=0;return;
+   const badge=meshJobBadges.get(jobId);if(badge){badge.error='';badge.status='LOADING';}
+   if(job.status==='SUCCEEDED'&&cloud?.id===job.capture_id)void spawnMeshPreview(job);
+   setStatus('RETRYING 3D MODEL · existing Tripo task, no new generation fee',8500);
+  }catch(e){setStatus('3D RETRY · '+String(e.message).slice(0,75),9500);}
+  return;
  }
- modelDiagnosticJob=jobId;modelDiagnosticViewedAt=performance.now();modelDiagnosticLines=['3D JOB #'+jobId+' · loading private diagnostics…'];debugShowing=true;debugLast=0;
+ modelDiagnosticJob=jobId;modelDiagnosticViewedAt=performance.now();
  try{
   const d=await window.FreeLab.modelXRDiagnostics(jobId);
   if(!session||modelDiagnosticJob!==jobId)return;
-  modelDiagnosticLines=['3D JOB #'+jobId+' · '+String(d.provider||'').toUpperCase()+' · '+(d.model_id||'model version not recorded'),
-    'PROVIDER: '+d.provider_status+' · '+d.progress+'%','CURRENT STAGE: '+d.stage,
-    'GLB CACHE: '+(d.model?.cached?(d.model.bytes/1000000).toFixed(2)+' MB':'NOT DOWNLOADED'),
-    'COMPRESSION: '+(d.model?.compression?.join(', ')||'none reported'),
-    'BLENDER: '+(d.blender_available?'AVAILABLE':'NOT AVAILABLE'),
-    ...d.steps.slice(-3).map(x=>x.name+': '+x.state+' · '+String(x.detail||'')),
-    'NEXT: '+d.next_action, ...(meshPreviewFailures.has(jobId)?['TAP THE RED CUBE AGAIN TO RETRY · NO GENERATION FEE']:[])].slice(0,11);
-  setStatus('3D DIAGNOSTICS · '+d.stage+' · see readable LOG panel',10000);
- }catch(e){modelDiagnosticLines=['3D JOB #'+jobId+' · diagnostics unavailable',String(e.message).slice(0,130)];}
- debugLast=0;
+  modelDiagnosticLines=['3D JOB #'+jobId+' · '+d.provider+' · '+(d.model_id||'existing task'),
+   'Status '+d.provider_status+' · '+d.stage,
+   'Cache '+(d.model?.cached?(d.model.bytes/1000000).toFixed(1)+' MB':'not yet saved'),
+   ...d.steps.slice(-3).map(x=>x.name+': '+x.state+' · '+String(x.detail||''))];
+  // The existing LOG panel can show details if explicitly opened by the user.
+  // Never cover the XR scene with a second unsolicited debug panel.
+  setStatus('3D #'+jobId+' · '+String(d.stage).toUpperCase().slice(0,28)+(meshPreviewFailures.has(jobId)?' · TAP CUBE AGAIN TO RETRY':''),9000);
+ }catch(e){setStatus('3D MODEL · '+String(e.message).slice(0,75),8500);}
 }
+
 function meshJobCaption(job){
  const status=String(job.status||'PENDING').toUpperCase();
  if(['FAILED','CANCELED'].includes(status))return '3D FAILED';
@@ -1901,7 +1897,7 @@ function meshJobTexture(job){
  const detail=bad?(String(job.error||'3D model could not load').slice(0,46)):
   `${String(job.provider||'3D').toUpperCase()}  ·  ${['PREPARING','WAITING','LOADING'].includes(job.status)?'PREPARING MODEL':Math.round(Number(job.progress)||0)+'%'} `;
  text(ctx,detail,22,130,30,bad?'#ffc9cf':'#e5fff6',600);
- text(ctx,'TAP FOR 3D DIAGNOSTICS  ·  JOB #'+job.jobId,22,194,25,'#e9f6ef',650);
+ text(ctx,'TAP FOR STATUS / RETRY · JOB #'+job.jobId,22,194,25,'#e9f6ef',650);
  return texture(c);
 }
 function drawMeshJobCube(badge,anchor,vp,t,owner){
@@ -2040,7 +2036,7 @@ async function spawnMeshPreview(job,origin=null){
   const a=meshAnchor(model);if(a)launchParticles(a.pos);
   setStatus('3D POPPED INTO XR · '+(result.texture_omitted?'solid mesh':'textured mesh')+' · attached to source',10500);
   cue('bloom');
- }catch(e){if(scope===meshGeneration){meshPreviewFailures.add(jobId);markMeshPreviewError(jobId,e.message);setStatus('3D MODEL ERROR · tap red 3D cube for the precise failure stage',15000);void showMeshDiagnostics(jobId);}}
+ }catch(e){if(scope===meshGeneration){meshPreviewFailures.add(jobId);markMeshPreviewError(jobId,e.message);setStatus('3D MODEL NOT READY · tap red cube for status or retry',12000);}}
  finally{for(const part of pieces){if(part.buffer)gl.deleteBuffer(part.buffer);if(part.texture)gl.deleteTexture(part.texture);}meshLoadingJobs.delete(jobId);}
 }
 function drawMeshPreview(mesh,vp,t){

@@ -6,7 +6,7 @@ GET balance/status operations are read-only. All outbound hosts and response
 sizes are bounded, redirects are refused, and credentials never reach clients.
 """
 from __future__ import annotations
-import json, re, secrets, urllib.request, urllib.error
+import json, re, secrets, urllib.request, urllib.error, socket, ipaddress
 from urllib.parse import urlsplit
 
 BASE='https://openapi.tripo3d.ai/v3'
@@ -31,7 +31,7 @@ def request_api(method,path,key,payload=None,raw=None,content_type='application/
     if data is not None and len(data)>2_500_000:raise ValueError('Tripo request exceeds safe size limit')
     req=urllib.request.Request(BASE+path,data=data,method=method,headers={
         'Authorization':'Bearer '+key,'Accept':'application/json',
-        'Content-Type':content_type,'User-Agent':'FREELAB-Tripo/0.10.30'})
+        'Content-Type':content_type,'User-Agent':'FREELAB-Tripo/0.10.31'})
     try:
         with urllib.request.build_opener(NoRedirect).open(req,timeout=35) as res:
             raw_response=res.read(MAX_RESPONSE+1)
@@ -86,18 +86,84 @@ def submit(jpeg,key,prompt=''):
         raise RuntimeError('Tripo did not return a valid 3D task ID')
     return task
 
-def safe_file_url(url):
-    if not isinstance(url,str) or len(url)>4096:return None
-    try:u=urlsplit(url)
-    except ValueError:return None
-    # Trust only official Tripo-controlled HTTPS download domains; do not fetch
-    # arbitrary hosts or follow redirects in the private model cache.
+def output_url(value):
+    """Tripo v2/v3 compatibility: URL strings and {url: ...}/{href: ...}."""
+    if isinstance(value,str):return value.strip()
+    if isinstance(value,dict):
+        for name in ('url','href'):
+            if isinstance(value.get(name),str):return value[name].strip()
+    return ''
+
+
+def task_model_url(output):
+    """Prefer textured output; accept existing and legacy provider shapes."""
+    if not isinstance(output,dict):return None
+    urls=output.get('model_urls') if isinstance(output.get('model_urls'),dict) else {}
+    for value in (output.get('model_url'),output.get('pbr_model'),urls.get('pbr_model'),
+                  output.get('model'),output.get('model_mesh'),urls.get('glb'),
+                  output.get('base_model'),urls.get('base_model')):
+        candidate=output_url(value)
+        if candidate:
+            approved=safe_file_url(candidate,trusted_task=True)
+            if approved:return approved
+    return None
+
+
+def safe_file_url(url, trusted_task=False):
+    """Accept HTTPS from task output, never user-provided arbitrary fetch URLs.
+
+    Tripo's signed models can reside on cloud object storage or its CDN rather
+    than tripo3d.ai. trusted_task=True is ONLY for URLs returned by the
+    authenticated Tripo task status response or persisted from that response.
+    The downloader also checks all DNS addresses before opening a connection.
+    """
+    if not isinstance(url,str) or not url or len(url)>4096:return None
     try:
-        if u.scheme!='https' or u.username or u.password or u.port not in (None,443):return None
-        host=(u.hostname or '').lower()
+        u=urlsplit(url)
+        if u.scheme.lower()!='https' or u.username or u.password or u.port not in (None,443):return None
+        if not u.netloc or not u.path or u.fragment:return None
+        host=(u.hostname or '').lower().rstrip('.')
+        if not re.fullmatch(r'[a-z0-9][a-z0-9.-]{1,251}[a-z0-9]',host):return None
+        if '..' in host or '.' not in host:return None
+        if host.endswith(('.local','.internal','.localhost','.test','.invalid')) or host in ('localhost','metadata.google.internal'):return None
+        try:ipaddress.ip_address(host);return None
+        except ValueError:pass
+        if not trusted_task and not (host=='tripo3d.ai' or host.endswith('.tripo3d.ai') or
+                                    host=='tripo3d.com' or host.endswith('.tripo3d.com')):return None
+        return url
     except ValueError:return None
-    if host!='tripo3d.ai' and not host.endswith('.tripo3d.ai'):return None
-    return url
+
+
+def verify_public_download_host(url):
+    """Best-effort anti-SSRF DNS guard on authenticated Tripo model links."""
+    good=safe_file_url(url,trusted_task=True)
+    if not good:raise ValueError('Invalid Tripo model download URL')
+    host=urlsplit(good).hostname
+    try:addresses=socket.getaddrinfo(host,443,type=socket.SOCK_STREAM)
+    except (OSError,socket.gaierror) as e:raise ValueError('Tripo model download DNS unavailable') from e
+    if not addresses:raise ValueError('Tripo download host could not be resolved')
+    for addr in addresses:
+        ip=ipaddress.ip_address(addr[4][0])
+        if not ip.is_global:raise ValueError('Tripo model download hostname resolves to a blocked address')
+    return good
+
+
+class TripoModelRedirect(urllib.request.HTTPRedirectHandler):
+    """Allow a few provider-controlled HTTPS redirects, never internal hosts."""
+    def __init__(self):self.count=0
+    def redirect_request(self,req,fp,code,msg,headers,newurl):
+        self.count+=1
+        if self.count>3:raise ValueError('Tripo model download redirected too many times')
+        verify_public_download_host(newurl)
+        return super().redirect_request(req,fp,code,msg,headers,newurl)
+
+
+def open_model_download(url,timeout=20):
+    """Only for URLs obtained from the authenticated Tripo task result."""
+    verified=verify_public_download_host(url)
+    req=urllib.request.Request(verified,headers={'User-Agent':'FREELAB-3D-PrivateCache/0.10'})
+    return urllib.request.build_opener(TripoModelRedirect()).open(req,timeout=timeout)
+
 
 def status(task,key):
     if not isinstance(task,str) or not TASK_RE.fullmatch(task):raise ValueError('Invalid Tripo task ID')
@@ -113,7 +179,7 @@ def status(task,key):
     credits=data.get('credits_consumed')
     error=str(data.get('error_message') or data.get('error_code') or '')[:180] if state=='FAILED' else ''
     return {'status':state,'progress':progress,
-            'glb_url':safe_file_url(output.get('model_url')),
-            'thumbnail_url':safe_file_url(output.get('rendered_image_url')),
+            'glb_url':task_model_url(output),
+            'thumbnail_url':safe_file_url(output_url(output.get('rendered_image_url') or output.get('rendered_image') or output.get('generated_image')),trusted_task=True),
             'credits':round(credits,2) if isinstance(credits,(int,float)) and not isinstance(credits,bool) and credits>=0 else None,
             'error':error}

@@ -8,14 +8,16 @@ from . import meshy3d,aholo3d,tripo3d
 MAX_MODEL=32_000_000
 
 def store(url,provider,folder:Path,owner:int,jid:int):
-    good=(aholo3d.safe_preview_url(url) if provider=='aholo' else tripo3d.safe_file_url(url) if provider=='tripo' else meshy3d.safe_file_url(url) if provider=='meshy' else None)
-    if not good:raise ValueError('Provider output URL uses an unsupported download host; use the provider link while valid')
+    good=(aholo3d.safe_preview_url(url) if provider=='aholo' else tripo3d.safe_file_url(url,trusted_task=True) if provider=='tripo' else meshy3d.safe_file_url(url) if provider=='meshy' else None)
+    if not good:raise ValueError('Provider output URL is missing or invalid; retry the existing task without regeneration')
+    # A Tripo model URL is an authenticated task result, not a user request.
     folder.mkdir(parents=True,exist_ok=True)
     name=f'{owner}_{jid}.glb'
     dest=folder/name
     if dest.is_file() and dest.stat().st_size>=20:return name
     request=urllib.request.Request(good,headers={'User-Agent':'FREELAB-3D-PrivateCache/0.10.19'})
-    with urllib.request.build_opener(meshy3d.NoRedirect).open(request,timeout=15) as response:
+    with (tripo3d.open_model_download(good,timeout=20) if provider=='tripo'
+          else urllib.request.build_opener(meshy3d.NoRedirect).open(request,timeout=15)) as response:
         if response.headers.get('Content-Length') and int(response.headers['Content-Length'])>MAX_MODEL:
             raise ValueError('Generated model exceeds private cache limit of 32 MB')
         raw=response.read(MAX_MODEL+1)

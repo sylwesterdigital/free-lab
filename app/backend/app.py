@@ -939,7 +939,9 @@ def media_3d_status(jid):
     row=g.con.execute('SELECT * FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
     if not row:abort(404)
     # The read-only status call never creates an additional billable task.
-    if row['status'] in ('PENDING','IN_PROGRESS','UNKNOWN') or (row['status']=='SUCCEEDED' and request.args.get('refresh')=='1'):
+    if (row['status'] in ('PENDING','IN_PROGRESS','UNKNOWN') or
+        (row['status']=='SUCCEEDED' and (request.args.get('refresh')=='1' or
+          (row['provider']=='tripo' and not row['model_path'] and not row['glb_url'])))):
         key=provider_key(row['provider'])
         if not key:return jsonify(error=row['provider'].upper()+' key missing: cannot poll task'),503
         try:
@@ -950,7 +952,7 @@ def media_3d_status(jid):
         with g.con:
             g.con.execute('''UPDATE jobs_3d SET status=?,progress=?,credits=?,glb_url=?,thumbnail_url=?,error=?,
                   updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND owner_id=?''',
-                  (info['status'],info['progress'],info['credits'],info['glb_url'],info['thumbnail_url'],info['error'],jid,g.user['id']))
+                  (info['status'],info['progress'],info['credits'],info['glb_url'] or row['glb_url'],info['thumbnail_url'] or row['thumbnail_url'],info['error'],jid,g.user['id']))
         row=g.con.execute('SELECT * FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
     if row['status']=='SUCCEEDED' and row['glb_url'] and not row['model_path'] and (not row['cache_error'] or request.args.get('refresh')=='1'):
         try:
@@ -979,7 +981,7 @@ def _model_pipeline_diagnostics(row, jid, owner):
     """Owner-only, read-only inspection: no provider calls, no credentials or URLs."""
     converted,failed,pending=_xr_preview_paths(owner,jid)
     provider=row['provider'];known=('aholo','meshy','tripo')
-    valid_url=(tripo3d.safe_file_url(row['glb_url']) if provider=='tripo'
+    valid_url=(tripo3d.safe_file_url(row['glb_url'],trusted_task=True) if provider=='tripo'
                else meshy3d.safe_file_url(row['glb_url']) if provider=='meshy'
                else aholo3d.safe_preview_url(row['glb_url']) if provider=='aholo' else None)
     result={'job_id':jid,'provider':provider,'model_id':row['model_id'] or None,
@@ -1088,7 +1090,7 @@ def media_3d_preview(jid):
     Draco/dense meshes are decoded by headless Blender in a bounded background
     worker. A paid generation operation is NEVER triggered by this endpoint.
     """
-    row=g.con.execute('SELECT status,provider,glb_url,model_path FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
+    row=g.con.execute('SELECT status,provider,provider_task,glb_url,model_path FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
     if not row:abort(404)
     if row['status']!='SUCCEEDED':return jsonify(error='3D model is still generating',stage='generation',code='JOB_NOT_FINISHED',job_id=jid),409
     owner=g.user['id']
@@ -1102,13 +1104,23 @@ def media_3d_preview(jid):
             if row['model_path']!=f'{owner}_{jid}.glb':abort(404)
             raw=(MODEL_DIR/row['model_path']).read_bytes()
         else:
-            # Provider URLs are strictly allowlisted and redirects are blocked.
+            # Completed Tripo jobs retain a task ID. Requery it for a fresh
+            # signed model URL; this is read-only, not a second paid generation.
+            if row['provider']=='tripo':
+                key=provider_key('tripo')
+                if not key:return jsonify(error='Tripo API key not configured for private model recovery',stage='provider output',code='KEY_MISSING',job_id=jid),503
+                current=tripo3d.status(row['provider_task'],key)
+                if current['glb_url']:
+                    with g.con:g.con.execute('UPDATE jobs_3d SET glb_url=?,thumbnail_url=?,cache_error=? WHERE id=? AND owner_id=?',
+                         (current['glb_url'],current['thumbnail_url'] or '', '',jid,owner))
+                    row=g.con.execute('SELECT status,provider,provider_task,glb_url,model_path FROM jobs_3d WHERE id=? AND owner_id=?',(jid,owner)).fetchone()
             safe=(meshy3d.safe_file_url(row['glb_url']) if row['provider']=='meshy'
-                  else tripo3d.safe_file_url(row['glb_url']) if row['provider']=='tripo'
+                  else tripo3d.safe_file_url(row['glb_url'],trusted_task=True) if row['provider']=='tripo'
                   else aholo3d.safe_preview_url(row['glb_url']))
-            if not safe:return jsonify(error='3D output is not available from the provider',stage='provider output',code='OUTPUT_URL_MISSING',job_id=jid),422
+            if not safe:return jsonify(error='The completed task has no downloadable model yet. Try reopening the source later.',stage='provider output',code='OUTPUT_URL_MISSING',job_id=jid),422
             req=urllib.request.Request(safe,headers={'User-Agent':'FREELAB-XR-Model/0.10'})
-            with urllib.request.build_opener(meshy3d.NoRedirect).open(req,timeout=18) as response:
+            with (tripo3d.open_model_download(safe,timeout=20) if row['provider']=='tripo'
+                  else urllib.request.build_opener(meshy3d.NoRedirect).open(req,timeout=18)) as response:
                 if response.headers.get('Content-Length') and int(response.headers['Content-Length'])>glb_preview.MAX_FILE:
                     return jsonify(error='3D model exceeds the private 32 MB download limit',stage='private download',code='GLB_TOO_LARGE',job_id=jid),413
                 raw=response.read(glb_preview.MAX_FILE+1)

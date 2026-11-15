@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.30",
-  "description": "Read-only 3D pipeline diagnostics, Quest model retry and explicit Tripo version tracking"
+  "version": "0.10.31",
+  "description": "Tripo v3 signed model recovery and clean XR scene diagnostics"
 }
