@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.39",
-  "description": "Spatial XR model transform gizmos, persisted XYZ scale, library crash fix"
+  "version": "0.10.40",
+  "description": "Independent XR transform toolbar, reset and uniform model scaling"
 }

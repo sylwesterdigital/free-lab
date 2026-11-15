@@ -1,16 +1,28 @@
 {
-  "version": "0.10.39",
-  "title": "FREELAB v0.10.39 — spatial XR model gizmos and library crash fix",
+  "version": "0.10.40",
+  "title": "FREELAB v0.10.40 — Independent XR transform controls and proportional scaling",
   "datetime": "2026-11-15",
   "changes": [
-    "Fixes the XR library crash caused by a static library heading entering the Bezier animation with undefined endpoints. Library pagination and returning to collection no longer break the render loop.",
-    "Select an existing generated 3D model in Quest to reveal spatial red X, green Y and blue Z transform gizmos, plus a compact MOVE / ROTATE / SCALE toolbar.",
-    "Grab and drag a coloured axis to move a model along that axis; ROTATE exposes three oriented rings for rotating around each local axis.",
-    "SCALE adjusts X, Y and Z independently with coloured handles; controller grabbing, wrist twist and two-hand uniform scaling are still supported.",
-    "Model position, quaternion rotation, uniform size and independent X/Y/Z scale are stored privately with the existing 3D job and restored when reopened.",
-    "Transforms use the existing FREELAB WebGL XR renderer without adding a competing Three.js render loop. No additional paid 3D generation is required."
+    "Move the Quest Move / Rotate / Scale control strip into an independent headset-relative position; it no longer follows the selected 3D model when the model moves or changes size.",
+    "Add RESET as the fourth control. It restores the selected 3D asset to its initial source-relative position, identity orientation and original uniform size, then saves the transform.",
+    "Scaling from any X/Y/Z gizmo handle now resizes the whole model uniformly, preserving its original aspect ratio; two-hand grip scaling also remains proportional.",
+    "Older saved unequal X/Y/Z scales are converted to one proportional scale when a model is reopened. The backend canonicalizes transform updates to uniform XYZ scale for new and legacy clients.",
+    "No existing 3D provider task is resubmitted. Original GLBs, textures, scene attachments and account data are unchanged."
   ],
   "history": [
+    {
+      "version": "0.10.39",
+      "title": "FREELAB v0.10.39 — spatial XR model gizmos and library crash fix",
+      "datetime": "2026-11-15",
+      "changes": [
+        "Fixes the XR library crash caused by a static library heading entering the Bezier animation with undefined endpoints. Library pagination and returning to collection no longer break the render loop.",
+        "Select an existing generated 3D model in Quest to reveal spatial red X, green Y and blue Z transform gizmos, plus a compact MOVE / ROTATE / SCALE toolbar.",
+        "Grab and drag a coloured axis to move a model along that axis; ROTATE exposes three oriented rings for rotating around each local axis.",
+        "SCALE adjusts X, Y and Z independently with coloured handles; controller grabbing, wrist twist and two-hand uniform scaling are still supported.",
+        "Model position, quaternion rotation, uniform size and independent X/Y/Z scale are stored privately with the existing 3D job and restored when reopened.",
+        "Transforms use the existing FREELAB WebGL XR renderer without adding a competing Three.js render loop. No additional paid 3D generation is required."
+      ]
+    },
     {
       "version": "0.10.38",
       "title": "FREELAB v0.10.38 — XR models now retain GPU parts; faster diagnostics and clearer library",

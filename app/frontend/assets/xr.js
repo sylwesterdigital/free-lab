@@ -1161,7 +1161,7 @@ function imageButtonAt(card,x,y){
 }
 function buttonFromHit(h){if(!h)return null;
  if(h.card.kind==='3djob')return '3djobdiagnostics';
- if(h.card.kind==='3dtools')return ['meshgizmo-move','meshgizmo-rotate','meshgizmo-scale'][clamp(Math.floor((h.x+.5)*3),0,2)];
+ if(h.card.kind==='3dtools')return ['meshgizmo-move','meshgizmo-rotate','meshgizmo-scale','meshgizmo-reset'][clamp(Math.floor((h.x+.5)*4),0,3)];
  if(h.card.kind==='3dmesh')return null;
  if(h.card.kind==='description'){
   if(h.x>.33&&h.y>.27)return 'descriptionclose';
@@ -1205,7 +1205,7 @@ function grabStart(frame,src,manual=false){const r=ray(frame,src);let h=pick(r);
   held.initialWorld=[...pose.pos];held.initialRot=[...(h.card.rotation||[0,0,0,1])];held.initialOffset=[...(h.card.offset||[0,0,0])];
   held.startWorldOrientation=[...pose.q];held.startRayHit=vadd(r.o,vmul(r.d,h.dist));
   if(h.kind==='gizmo'){
-   held.gizmoMode=h.mode;held.gizmoAxisIndex=h.axis;held.gizmoAxis=gizmoAxes(pose)[h.axis];held.gizmoStartScale=h.card.modelScale||1;held.gizmoStartAxisScale=[...(h.card.axisScale||[1,1,1])];
+   held.gizmoMode=h.mode;held.gizmoAxisIndex=h.axis;held.gizmoAxis=gizmoAxes(pose)[h.axis];held.gizmoStartScale=h.card.modelScale||1;
    if(h.mode==='rotate'){
     const firstPoint=planeRayPoint(r,pose.pos,held.gizmoAxis);
     held.gizmoStartVector=firstPoint?norm(vsub(firstPoint,pose.pos)):null;
@@ -1223,7 +1223,7 @@ async function grabEnd(src,frame){if(held?.second?.src===src){held.second=null;r
  if(h.id){window.FreeLab?.traceEvent?.('XR image action: '+h.id,'info');if(h.id==='3djobdiagnostics')return showMeshDiagnostics(h.card.jobId);return action(h.id);}
  if(h.card.kind==='3dmesh'){
   selectedMesh=h.card;syncMeshTools();if(h.moved){await saveMeshTransform(h.card);xr3D('MODEL_GIZMO_TRANSFORM_SAVED',{jobId:h.card.jobId,mode:h.gizmoMode||'direct',offset:h.card.offset,rotation:h.card.rotation,scale:h.card.modelScale,axisScale:h.card.axisScale});setStatus('3D MODEL · transform saved',6000);}
-  else setStatus('3D MODEL SELECTED · MOVE / ROTATE / SCALE tabs below · drag a coloured X/Y/Z handle',9500);
+  else setStatus('3D MODEL SELECTED · MOVE / ROTATE / SCALE / RESET · controls stay in view',9500);
   return;
  }
  if(h.moved){
@@ -1960,7 +1960,7 @@ function meshWorldPose(m){
 function meshHitTest(r,m){
  if(!r||!m.parts?.length||m.captureId!==cloud?.id||!meshOwnerCard(m))return null;
  const pose=meshWorldPose(m);if(!pose)return null;
- const radius=.19*pose.scale*Math.max(...(m.axisScale||[1,1,1])),oc=vsub(r.o,pose.pos),b=oc.reduce((sum,x,i)=>sum+x*r.d[i],0);
+ const radius=.19*pose.scale,oc=vsub(r.o,pose.pos),b=oc.reduce((sum,x,i)=>sum+x*r.d[i],0);
  const c=oc.reduce((sum,x)=>sum+x*x,0)-radius*radius;
  const disc=b*b-c;if(disc<0)return null;
  const d=-b-Math.sqrt(disc),dist=d>0?d:-b+Math.sqrt(disc);
@@ -1974,7 +1974,7 @@ function meshHitTest(r,m){
 const GIZMO_AXES=[[1,0,0],[0,1,0],[0,0,1]];
 const GIZMO_COLORS=[[1,.30,.36,1],[.35,1,.51,1],[.40,.64,1,1]];
 function gizmoAxes(pose){return GIZMO_AXES.map(a=>norm(quatVec(pose.q,a)));}
-function gizmoRadius(pose){return clamp(.24*pose.scale*Math.min(1.8,Math.max(...(selectedMesh?.axisScale||[1,1,1]))),.11,.55);}
+function gizmoRadius(pose){return clamp(.24*pose.scale,.11,.55);}
 function closestRayAxis(r,center,axis){
  const w=vsub(r.o,center),b=axis.reduce((n,x,i)=>n+x*r.d[i],0),dw=w.reduce((n,x,i)=>n+x*r.d[i],0),aw=w.reduce((n,x,i)=>n+x*axis[i],0);
  const den=1-b*b;if(den<.0001)return null;
@@ -2056,29 +2056,37 @@ function updateGizmoDrag(frame,r,drag){const card=drag.card,anchor=meshAnchor(ca
   const target=vadd(drag.initialWorld,vmul(axis,amount));
   card.offset=quatVec(quatInv(anchor.q),vsub(target,anchor.pos)).map(x=>clamp(x,-3,3));
  }else if(drag.gizmoMode==='scale'){
-  // Independent XYZ dimensions; the separate two-hand grip still uniformly scales.
-  const updated=[...drag.gizmoStartAxisScale];updated[drag.gizmoAxisIndex]=clamp(updated[drag.gizmoAxisIndex]*Math.exp(amount*3),.2,4);card.axisScale=updated;
+  // All three axes resize uniformly, preserving the model's original proportions.
+  card.modelScale=clamp(drag.gizmoStartScale*Math.exp(amount*3),.2,4);card.axisScale=[1,1,1];
  }
  if(Math.abs(amount)>.008)drag.moved=true;
 }
 function meshToolTexture(){
- const [c,ctx]=canvas2d(660,134);rrect(ctx,0,0,660,134,54,'rgba(18,31,31,.96)');
- for(const [i,mode] of ['move','rotate','scale'].entries()){
-  const x=i*220+9,active=meshGizmoMode===mode;
-  if(active)rrect(ctx,x,13,202,108,45,'rgba(155,247,201,.23)');
-  text(ctx,['↔','↻','⤢'][i],x+101,64,48,active?'#caffdf':'#d6eee7',700,'center');
-  text(ctx,mode.toUpperCase(),x+101,99,22,active?'#caffdf':'#e1f5ea',700,'center');
+ const [c,ctx]=canvas2d(800,134);rrect(ctx,0,0,800,134,54,'rgba(18,31,31,.96)');
+ for(const [i,mode] of ['move','rotate','scale','reset'].entries()){
+  const x=i*200+8,active=meshGizmoMode===mode;
+  if(active)rrect(ctx,x,13,184,108,43,'rgba(155,247,201,.23)');
+  text(ctx,['↔','↻','⤢','⟲'][i],x+92,64,45,active?'#caffdf':'#d6eee7',700,'center');
+  text(ctx,mode.toUpperCase(),x+92,99,20,mode==='reset'?'#ffcfbf':active?'#caffdf':'#e1f5ea',700,'center');
  }
  return texture(c);
 }
 function syncMeshTools(){
  if(!selectedMesh||!meshPreviews.includes(selectedMesh)||!meshOwnerCard(selectedMesh))return;
- const pose=meshWorldPose(selectedMesh);if(!pose)return;
- if(!meshTools){const tex=meshToolTexture();meshTools={id:'mesh-transform-tools',kind:'3dtools',front:tex,back:tex,visible:true,pos:[0,0,0],q:[0,0,0,1],scale:1,size:[.46,.094],resources:[tex]};}
- meshTools.pos=vadd(pose.pos,quatVec(pose.anchor.q,[0,-.25*pose.scale,0]));meshTools.q=pose.anchor.q;
+ const viewer=latestPose;if(!viewer)return;
+ // Independent headset-relative control strip: NEVER derive its transform
+ // from the selected model. Dragging or scaling a model cannot move the strip.
+ if(!meshTools){const tex=meshToolTexture();meshTools={id:'mesh-transform-tools',kind:'3dtools',front:tex,back:tex,visible:true,pos:[0,0,0],q:[0,0,0,1],scale:1,size:[.56,.094],resources:[tex]};}
+ meshTools.pos=point(poseForwardAnchor(viewer,1.09,-.65),[.24,0,0]);
+ meshTools.q=quatY(cameraYaw(viewer));
+}
+function resetMeshTransform(m){if(!m||!meshPreviews.includes(m))return;
+ m.offset=[0,0,0];m.rotation=[0,0,0,1];m.modelScale=1;m.axisScale=[1,1,1];
+ syncMeshTools();void saveMeshTransform(m);
+ setStatus('3D MODEL · position, rotation and uniform size reset',6000);
 }
 function saveMeshTransform(m){if(!m||!Number.isInteger(m.jobId))return;
- return window.FreeLab?.save3DTransform?.(m.jobId,{offset:m.offset||[0,0,0],rotation:m.rotation||[0,0,0,1],scale:m.modelScale||1,axis_scale:m.axisScale||[1,1,1]})
+ return window.FreeLab?.save3DTransform?.(m.jobId,{offset:m.offset||[0,0,0],rotation:m.rotation||[0,0,0,1],scale:m.modelScale||1,axis_scale:[1,1,1]})
  .catch(e=>setStatus('3D transform could not be saved · '+String(e.message).slice(0,65),9000));
 }
 // 3D jobs are asynchronous branches. Their badges persist while the parent
@@ -2284,8 +2292,10 @@ async function spawnMeshPreview(job,origin=null){
   const model={jobId,captureId,objectId,kind:'3dmesh',parts:pieces.slice(),pos:origin||[0,0,-1],
    offset:validVec(xform.offset,3)?xform.offset:[0,0,0],
    rotation:validVec(xform.rotation,4)?quatNorm(xform.rotation):[0,0,0,1],
-   modelScale:Number.isFinite(xform.scale)?clamp(xform.scale,.2,4):1,
-   axisScale:validVec(xform.axis_scale,3)&&xform.axis_scale.every(v=>v>=.2&&v<=4)?xform.axis_scale:[1,1,1],
+   // Normalize historical non-uniform transforms into a single proportional size.
+   modelScale:clamp((Number.isFinite(xform.scale)?xform.scale:1)*
+     (validVec(xform.axis_scale,3)&&xform.axis_scale.every(v=>v>0&&v<=4)?Math.cbrt(xform.axis_scale.reduce((p,v)=>p*v,1)):1),.2,4),
+   axisScale:[1,1,1],
    q:[0,0,0,1],created:performance.now()};
   if(!meshAnchor(model)){xr3D('MODEL_ANCHOR_MISSING',{jobId,captureId,objectId,cloudId:cloud?.id},'error');return;}
   meshPreviews.push(model);pieces.length=0;meshPreviewRetries.delete(jobId);meshNextAttemptAt.delete(jobId);
@@ -2314,7 +2324,7 @@ function drawMeshPreview(mesh,vp,t){
  const pose=meshWorldPose(mesh);if(!pose){xr3DThrottled('draw-anchor-'+mesh.jobId+'-'+meshGeneration,'MODEL_DRAW_NO_ANCHOR',{jobId:mesh.jobId},'error');return;}
  const k=clamp((t-mesh.created)/680,0,1),ease=Math.max(.08,k*k*(3-2*k));
  // Real-world longest axis is ~30 cm: no ceiling-filling fragment clouds.
- const axisScale=mesh.axisScale||[1,1,1];const model=matmul(translate(...pose.pos),matmul(quatMatrix(pose.q),scale(.30*pose.scale*ease*axisScale[0],.30*pose.scale*ease*axisScale[1],.30*pose.scale*ease*axisScale[2])));
+ const size=.30*pose.scale*ease;const model=matmul(translate(...pose.pos),matmul(quatMatrix(pose.q),scale(size,size,size)));
  gl.useProgram(meshProgram);
  gl.uniformMatrix4fv(gl.getUniformLocation(meshProgram,'uMVP'),false,matmul(vp,model));
  gl.uniformMatrix4fv(gl.getUniformLocation(meshProgram,'uModel'),false,model);
@@ -2510,9 +2520,10 @@ async function action(id){const t=performance.now();if(t-lastAction<200)return;l
  case 'config-borders':case 'config-backgrounds':case 'config-mascot':case 'config-experimental':case 'config-masked':case 'config-voice':{
    const key=id.slice(7);return uiUpdate(key,uiSettings[key]===false);}
  case 'debugclose':debugShowing=false;return;case 'debuglarger':if(debugPanel)debugPanel.scale=clamp(debugPanel.scale+.2,.55,2.6);return;case 'debugsmaller':if(debugPanel)debugPanel.scale=clamp(debugPanel.scale-.2,.55,2.6);return;
+ case 'meshgizmo-reset':return resetMeshTransform(selectedMesh);
  case 'meshgizmo-move':case 'meshgizmo-rotate':case 'meshgizmo-scale':{
   meshGizmoMode=id.slice(10);if(meshTools?.front&&gl){gl.deleteTexture(meshTools.front);const tex=meshToolTexture();meshTools.front=meshTools.back=tex;meshTools.resources=[tex];}
-  setStatus('3D MODEL · '+meshGizmoMode.toUpperCase()+' · grab and drag a coloured axis handle',6000);return;
+  setStatus('3D MODEL · '+meshGizmoMode.toUpperCase()+' · grab coloured axis · SCALE stays proportional',6000);return;
  }
  case 'meshsmaller':case 'meshlarger':case 'meshturn':{
   if(!selectedMesh||!meshPreviews.includes(selectedMesh))return;

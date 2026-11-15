@@ -1,4 +1,4 @@
-"""v0.10.39 checks: private bounded avatar workflow and no-camera text generation.
+"""v0.10.40 checks: private bounded avatar workflow and no-camera text generation.
 No paid services, live headset, or server Blender required.
 """
 import base64,io,json,struct,tempfile,time,unittest

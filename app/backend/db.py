@@ -136,7 +136,7 @@ def init(path):
         fields={row['name'] for row in con.execute('PRAGMA table_info(jobs_3d)')}
         if 'model_path' not in fields:con.execute("ALTER TABLE jobs_3d ADD COLUMN model_path TEXT NOT NULL DEFAULT ''")
         if 'cache_error' not in fields:con.execute("ALTER TABLE jobs_3d ADD COLUMN cache_error TEXT NOT NULL DEFAULT ''")
-        # v0.10.39: exact generation model pinned per job; historical jobs remain unknown.
+        # v0.10.40: exact generation model pinned per job; historical jobs remain unknown.
         if 'model_id' not in fields:con.execute("ALTER TABLE jobs_3d ADD COLUMN model_id TEXT NOT NULL DEFAULT ''")
         for column,definition in (
             ('quality_preset',"TEXT NOT NULL DEFAULT ''"),

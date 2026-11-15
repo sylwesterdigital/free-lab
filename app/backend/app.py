@@ -1320,9 +1320,12 @@ def update_3d_transform(jid):
         return jsonify(error='Invalid 3D position, rotation or scale'),400
     norm=math.sqrt(sum(x*x for x in rotation))
     if norm<.2 or norm>1.8:return jsonify(error='Invalid 3D orientation'),400
+    # Backward compatibility: v0.10.40 clients could send unequal XYZ scales.
+    # Store one proportional scale instead, never a distorted GLB shape.
+    uniform_size=min(4,max(.2,float(size)*math.prod(float(x) for x in axis_scale)**(1/3)))
     transform={'offset':[round(float(x),4) for x in offset],
-               'rotation':[round(float(x/norm),6) for x in rotation], 'scale':round(float(size),4),
-               'axis_scale':[round(float(x),4) for x in axis_scale]}
+               'rotation':[round(float(x/norm),6) for x in rotation], 'scale':round(uniform_size,4),
+               'axis_scale':[1.0,1.0,1.0]}
     with g.con:
         changed=g.con.execute('UPDATE jobs_3d SET transform_json=? WHERE id=? AND owner_id=?',
                               (json.dumps(transform,separators=(',',':')),jid,g.user['id']))

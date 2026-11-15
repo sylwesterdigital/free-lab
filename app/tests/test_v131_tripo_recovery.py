@@ -1,4 +1,4 @@
-"""v0.10.39 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
+"""v0.10.40 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -187,7 +187,7 @@ class Tripo31(unittest.TestCase):
 if __name__=='__main__':unittest.main()
 
 
-# v0.10.39: private Blender thumbnails and XR GPU lifecycle diagnostics.
+# v0.10.40: private Blender thumbnails and XR GPU lifecycle diagnostics.
 class ModelThumbnailTests(unittest.TestCase):
  def test_backend_exposes_thumbnail_and_source_fallback(self):
   self.assertIn('def _model_thumb_path(owner,jid):',APP)
@@ -234,7 +234,7 @@ class XR3DDiagnosticsTests(unittest.TestCase):
   self.assertIn("'Cache-Control'",source)
 
 class XRMeshOwnershipAndLibraryRegressionTests(unittest.TestCase):
- """v0.10.39 regression: GPU buffers must remain owned by the XR model."""
+ """v0.10.40 regression: GPU buffers must remain owned by the XR model."""
  def test_ownership_transfer_preserves_mesh_parts_during_finally_cleanup(self):
   xr=(ROOT/'frontend/assets/xr.js').read_text()
   self.assertIn("kind:'3dmesh',parts:pieces.slice()",xr)
@@ -264,7 +264,7 @@ class XRMeshOwnershipAndLibraryRegressionTests(unittest.TestCase):
   self.assertIn("c.kind==='gallery')&&c.captionNormal",xr)
   self.assertIn("cards.filter(c=>c.kind!=='galleryheader')",xr)
 
-# v0.10.39: Quest controllers, local axis gizmos and static library animation.
+# v0.10.40: Quest controllers, local axis gizmos and static library animation.
 class XRTransformAndLibraryTests(unittest.TestCase):
  def test_library_header_is_static_and_tween_skips_unanimated_cards(self):
   self.assertIn("kind:'galleryheader',data:{},pos:[0,.67,-.04],from:[0,.67,-.04],to:[0,.67,-.04],start:0,duration:0",XR)
@@ -297,14 +297,20 @@ class XRTransformAndLibraryTests(unittest.TestCase):
   self.assertIn("if(h.kind==='gizmo')",XR)
   self.assertIn("if(held.gizmoMode){updateGizmoDrag(frame,r,held);",XR)
   self.assertIn('MODEL_GIZMO_TRANSFORM_SAVED',XR)
-  self.assertIn("'meshgizmo-move','meshgizmo-rotate','meshgizmo-scale'",XR)
-  self.assertIn("for(const [i,mode] of ['move','rotate','scale'].entries())",XR)
+  self.assertIn("'meshgizmo-move','meshgizmo-rotate','meshgizmo-scale','meshgizmo-reset'",XR)
+  self.assertIn("for(const [i,mode] of ['move','rotate','scale','reset'].entries())",XR)
   self.assertIn('drawMeshGizmo(vp);syncMeshTools()',XR)
- def test_xyz_axis_scale_persists_on_existing_model(self):
-  self.assertIn("axis_scale:m.axisScale||[1,1,1]",XR)
-  self.assertIn("axisScale:validVec(xform.axis_scale,3)",XR)
-  self.assertIn("card.axisScale=updated",XR)
-  self.assertIn('axis_scale=v.get(\'axis_scale\',[1,1,1])',APP)
-  self.assertIn("'axis_scale':[round(float(x),4) for x in axis_scale]",APP)
+ def test_uniform_scale_and_independent_reset_controls(self):
+  self.assertIn('function resetMeshTransform(m){',XR)
+  self.assertIn("case 'meshgizmo-reset':return resetMeshTransform(selectedMesh);",XR)
+  self.assertIn("card.modelScale=clamp(drag.gizmoStartScale*Math.exp(amount*3),.2,4);card.axisScale=[1,1,1];",XR)
+  self.assertIn('scale(size,size,size)',XR)
+  self.assertIn("m.offset=[0,0,0];m.rotation=[0,0,0,1];m.modelScale=1;m.axisScale=[1,1,1]",XR)
+  self.assertIn('meshTools.pos=point(poseForwardAnchor(viewer,1.09,-.65),[.24,0,0]);',XR)
+  self.assertIn('meshTools.q=quatY(cameraYaw(viewer))',XR)
+  self.assertNotIn('meshTools.pos=vadd(pose.pos',XR)
+  self.assertIn('axis_scale:[1,1,1]',XR)
+  self.assertIn("'axis_scale':[1.0,1.0,1.0]",APP)
+  self.assertIn('math.prod(float(x) for x in axis_scale)',APP)
   self.assertIn('mesh.parts',XR)
   self.assertNotIn('THREE.TransformControls',XR)
