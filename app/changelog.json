@@ -1,16 +1,28 @@
 {
-  "version": "0.10.42",
-  "title": "FREELAB v0.10.42 — direct XR grabbing and linked media archive",
+  "version": "0.10.43",
+  "title": "FREELAB v0.10.43 — preserve 3D proportions in desktop viewer",
   "datetime": "2026-11-15",
   "changes": [
-    "Desktop 3D viewer corrects tall GLB presentation by orienting Z-up geometry in a separate display-only pivot, preserving native axis proportions and removing the near top-down camera fit.",
-    "Private Collection now offers All Media, Images and 3D Models filters; generated models appear beside related images with provider identification, preview thumbnails and clickable source links.",
-    "Quest replaces intrusive model axis gizmos with direct controller/hand drag-and-turn; a second hand scales proportionally, and one small reset button remains headset-relative.",
-    "3D jobs from Tripo and AHOLO are presented as distinct source-related spatial branches, including jobs created from edited images, without submitting new paid generation.",
-    "Quest cinematic preview includes source and saved descendants not presently visible on the active tree page, so previous/next navigate the full local image chain.",
-    "Preserves saved models, textures, transforms and private library records; no database migration or new paid generation is performed."
+    "Desktop GLB viewer no longer rotates imported model geometry by 90 degrees based on a bounding-box heuristic; the original glTF scene transforms and uniform scale remain intact.",
+    "Camera orbital frame now uses the model’s original up direction (Y-up for glTF, Z-up when the model is clearly tall in Z), eliminating the top/edge-on presentation that made bottle models appear flattened.",
+    "An optional Upright control cycles automatic, Y-, Z- and X-up camera views without editing GLB data or generating any new asset.",
+    "The desktop viewer logs original model bounds, selected viewing axis and uniform display scale once per model load for targeted troubleshooting.",
+    "Existing saved GLBs, XR geometry and model transforms are untouched. No migration or paid provider call is required."
   ],
   "history": [
+    {
+      "version": "0.10.42",
+      "title": "FREELAB v0.10.42 — direct XR grabbing and linked media archive",
+      "datetime": "2026-11-15",
+      "changes": [
+        "Desktop 3D viewer corrects tall GLB presentation by orienting Z-up geometry in a separate display-only pivot, preserving native axis proportions and removing the near top-down camera fit.",
+        "Private Collection now offers All Media, Images and 3D Models filters; generated models appear beside related images with provider identification, preview thumbnails and clickable source links.",
+        "Quest replaces intrusive model axis gizmos with direct controller/hand drag-and-turn; a second hand scales proportionally, and one small reset button remains headset-relative.",
+        "3D jobs from Tripo and AHOLO are presented as distinct source-related spatial branches, including jobs created from edited images, without submitting new paid generation.",
+        "Quest cinematic preview includes source and saved descendants not presently visible on the active tree page, so previous/next navigate the full local image chain.",
+        "Preserves saved models, textures, transforms and private library records; no database migration or new paid generation is performed."
+      ]
+    },
     {
       "version": "0.10.41",
       "title": "FREELAB v0.10.41 — 3D texture and proportion fixes",

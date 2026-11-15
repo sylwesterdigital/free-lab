@@ -1,4 +1,4 @@
-"""v0.10.42: models remain attached to saved sources; bounded textured GLB previews.
+"""v0.10.43: models remain attached to saved sources; bounded textured GLB previews.
 No AI requests, no provider costs and no remote network.
 """
 import io,json,math,struct,unittest
@@ -106,12 +106,13 @@ class TexturedXR124(unittest.TestCase):
 
     def test_desktop_upright_model_is_not_squashed_by_top_down_camera(self):
         source=(ROOT/'frontend/assets/model-stage.mjs').read_text()
-        self.assertIn('const display=new THREE.Group();display.add(obj)',source)
-        self.assertIn('display.rotation.x=-Math.PI/2',source)
-        self.assertIn('root.scale.setScalar(1.45/(Math.max(size.x,size.y,size.z)||1))',source)
+        self.assertIn('root=new THREE.Group();root.add(obj);scene.add(root)',source)
+        self.assertIn('root.scale.setScalar(1.75/longest)',source)
         self.assertIn('root.position.copy(center).multiplyScalar(-root.scale.x)',source)
-        self.assertIn('yaw=.37;pitch=.12;dist=2.65',source)
-        self.assertNotIn('pitch=1.18',source)
+        self.assertIn("camera.up.set(0,0,1)",source)
+        self.assertIn("camera.up.set(0,1,0)",source)
+        self.assertIn('yaw=.37;pitch=.12;dist=3.0',source)
+        self.assertNotIn('display.rotation.x=-Math.PI/2',source)
         self.assertNotIn('root.scale.multiplyScalar(scale)',source)
 
     def test_xr_textured_shader_and_source_lifecycle(self):

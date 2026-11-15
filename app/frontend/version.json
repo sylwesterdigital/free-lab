@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.42",
-  "description": "Source-linked media collection, natural XR grabbing, and correct desktop model proportions"
+  "version": "0.10.43",
+  "description": "Desktop model preview uses true glTF transforms and camera-aligned upright framing"
 }

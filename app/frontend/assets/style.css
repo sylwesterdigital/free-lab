@@ -487,7 +487,7 @@
 .model-provider-settings #profile3DQuality,.model-provider-settings #profile3DTexture,.model-provider-settings #profile3DXRTexture{width:min(100%,480px)}
 @media(max-width:650px){.capture-chat #capture3DQuality{max-width:100px;padding:6px 4px;font-size:11px}}
 
-/* v0.10.42 — unified media archive: source image and generated 3D branches */
+/* v0.10.43 — unified media archive: source image and generated 3D branches */
 .archive-media-nav{display:flex;align-items:center;flex-wrap:wrap;gap:9px;padding:17px 0 12px;border-bottom:1px solid #42554b68;position:sticky;top:92px;z-index:2;background:#1c2320f5;backdrop-filter:blur(12px)}
 .archive-media-nav .media-filter{border:1px solid #526b5f;background:transparent;color:#c5dad0;font-size:12px;font-weight:700;letter-spacing:.055em;border-radius:14px;padding:11px 17px;min-height:42px}
 .archive-media-nav .media-filter.active{background:#c6f3d7;color:#153020;border-color:#c6f3d7}

@@ -1,4 +1,4 @@
-"""v0.10.42 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
+"""v0.10.43 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -188,7 +188,7 @@ class Tripo31(unittest.TestCase):
 if __name__=='__main__':unittest.main()
 
 
-# v0.10.42: private Blender thumbnails and XR GPU lifecycle diagnostics.
+# v0.10.43: private Blender thumbnails and XR GPU lifecycle diagnostics.
 class ModelThumbnailTests(unittest.TestCase):
  def test_backend_exposes_thumbnail_and_source_fallback(self):
   self.assertIn('def _model_thumb_path(owner,jid):',APP)
@@ -235,7 +235,7 @@ class XR3DDiagnosticsTests(unittest.TestCase):
   self.assertIn("'Cache-Control'",source)
 
 class XRMeshOwnershipAndLibraryRegressionTests(unittest.TestCase):
- """v0.10.42 regression: GPU buffers must remain owned by the XR model."""
+ """v0.10.43 regression: GPU buffers must remain owned by the XR model."""
  def test_ownership_transfer_preserves_mesh_parts_during_finally_cleanup(self):
   xr=(ROOT/'frontend/assets/xr.js').read_text()
   self.assertIn("kind:'3dmesh',parts:pieces.slice()",xr)
@@ -265,7 +265,7 @@ class XRMeshOwnershipAndLibraryRegressionTests(unittest.TestCase):
   self.assertIn("c.kind==='gallery')&&c.captionNormal",xr)
   self.assertIn("cards.filter(c=>c.kind!=='galleryheader')",xr)
 
-# v0.10.42: Quest controllers, local axis gizmos and static library animation.
+# v0.10.43: Quest controllers, local axis gizmos and static library animation.
 class XRTransformAndLibraryTests(unittest.TestCase):
  def test_library_header_is_static_and_tween_skips_unanimated_cards(self):
   self.assertIn("kind:'galleryheader',data:{},pos:[0,.67,-.04],from:[0,.67,-.04],to:[0,.67,-.04],start:0,duration:0",XR)
@@ -314,7 +314,7 @@ class XRTransformAndLibraryTests(unittest.TestCase):
   self.assertIn('mesh.parts',XR)
   self.assertNotIn('THREE.TransformControls',XR)
 
-# v0.10.42 — unified archive, native two-hand model dragging and Z-up presentation.
+# v0.10.43 — unified archive, native two-hand model dragging and Z-up presentation.
 class MediaArchiveDirectGrab42(unittest.TestCase):
  def test_media_tabs_group_3d_with_saved_sources(self):
   self.assertIn('id="archiveMediaNav"',HTML)
@@ -346,8 +346,32 @@ class MediaArchiveDirectGrab42(unittest.TestCase):
   self.assertIn('m.modelScale=1;m.axisScale=[1,1,1]',XR)
   self.assertNotIn('drawMeshGizmo(vp);syncMeshTools()',XR)
 
- def test_desktop_pivot_preserves_proportions_without_top_down_camera(self):
-  self.assertIn('const zUp=size.z>Math.max(size.x,size.y)*1.45',STAGE)
-  self.assertIn('display.rotation.x=-Math.PI/2',STAGE)
-  self.assertIn('yaw=.37;pitch=.12;dist=2.65',STAGE)
+ def test_desktop_camera_aligns_with_original_model_long_axis(self):
+  self.assertIn("return size.z>Math.max(size.x,size.y)*1.3?'z':'y'",STAGE)
+  self.assertIn('root=new THREE.Group();root.add(obj);scene.add(root);',STAGE)
+  self.assertIn("camera.up.set(0,0,1)",STAGE)
+  self.assertIn("camera.up.set(0,1,0)",STAGE)
+  self.assertIn('yaw=.37;pitch=.12;dist=3.0',STAGE)
+  self.assertIn('root.scale.setScalar(1.75/longest)',STAGE)
+  self.assertNotIn('display.rotation.x=-Math.PI/2',STAGE)
   self.assertNotIn('pitch=1.18',STAGE)
+
+ def test_desktop_upright_auto_selection_executes_for_tall_bottles(self):
+  # Execute the actual decision function with V8, not just a text assertion.
+  import subprocess,json
+  func=STAGE[STAGE.index('function chooseUprightAxis('):STAGE.index('function refreshViewAxisButton()')]
+  script="const axisChoice='auto';"+func+"console.log(JSON.stringify([chooseUprightAxis({x:1,y:1,z:5}),chooseUprightAxis({x:1,y:5,z:1}),chooseUprightAxis({x:5,y:.3,z:1})]));"
+  value=subprocess.check_output(['node','-e',script],text=True).strip()
+  self.assertEqual(json.loads(value),['z','y','y'])
+
+ def test_desktop_frame_uses_selected_axis_without_rotating_mesh(self):
+  import subprocess,json,math
+  func=STAGE[STAGE.index('function frame(){'):STAGE.index('function clearRoot(){')]
+  script=("let active=true,raf=0,uprightAxis='z',yaw=.37,pitch=.12,dist=3;"
+   "const camera={up:{set(x,y,z){this.value=[x,y,z]}},position:{set(x,y,z){this.value=[x,y,z]}},lookAt(){}};"
+   "const renderer={render(){}},scene={};function requestAnimationFrame(){return 1;}"
+   +func+"frame();console.log(JSON.stringify({up:camera.up.value,pos:camera.position.value}));")
+  result=json.loads(subprocess.check_output(['node','-e',script],text=True))
+  self.assertEqual(result['up'],[0,0,1])
+  self.assertAlmostEqual(math.sqrt(sum(p*p for p in result['pos'])),3.0,places=5)
+  self.assertLess(result['pos'][2],0.5)  # Camera is side-on to the bottle's Z axis.
