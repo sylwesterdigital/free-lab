@@ -26,7 +26,14 @@ async function api(path,opts={}){
  try{response=await fetch('/api'+path,init);let result={};try{result=await response.json()}catch{}
   const duration=Math.round(performance.now()-began);
   traceEvent(`${opts.method||'GET'} ${path.replace(/\/\d+(?=\/|$)/g,'/:id')} → HTTP ${response.status} (${duration} ms)${result.error?' · '+String(result.error).slice(0,135):''}`,response.ok?'api':'error');
-  if(!response.ok){const err=Error(result.error||'HTTP '+response.status);err.status=response.status;
+  if(!response.ok){
+   if(response.status===401&&path!=='/login'){
+    traceEvent('PRIVATE SESSION EXPIRED · sign in again before using 3D or Collection','error');
+    if(state.user){state.user=null;notify('Session expired. Sign in again to access private 3D models.');
+     if(!window.FreeLabXR?.isRunning?.()){$('loginView')?.classList.remove('hidden');$('main')?.classList.add('hidden');}}
+   }
+   const reason=response.status===502||response.status===503?'3D service temporarily unavailable (HTTP '+response.status+'). No new paid request was sent.':null;
+   const err=Error(result.error||reason||'HTTP '+response.status);err.status=response.status;
    err.upstreamStatus=result.upstream_status||null;err.providerCode=result.provider_code||'';
    err.retryable=Boolean(result.retryable);err.retryAfter=result.retry_after||null;
    err.providerRequestId=result.request_id||'';throw err;}return result;
@@ -573,7 +580,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.35');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.36');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{

@@ -1,4 +1,4 @@
-"""v0.10.35 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
+"""v0.10.36 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -89,7 +89,7 @@ class Tripo31(unittest.TestCase):
   from test_v124_textured_xr import glb_fixture
   from types import SimpleNamespace
   source=ast.parse(APP)
-  names=('_xr_preview_json_path','_xr_preview_stage_path','_xr_preview_error_version_path','_xr_preview_stage',
+  names=('_xr_decode_isolated','_xr_preview_json_path','_xr_preview_stage_path','_xr_preview_error_version_path','_xr_preview_stage',
          '_xr_preview_heartbeat','_xr_preview_paths','_xr_existing_job_worker')
   functions=[n for n in source.body if isinstance(n,ast.FunctionDef) and n.name in names]
   with tempfile.TemporaryDirectory() as tmp:
@@ -100,7 +100,7 @@ class Tripo31(unittest.TestCase):
    fixture=glb_fixture()
    environment={'MODEL_DIR':directory,'DB':database,'db':db,'glb_xr':glb_xr,'model_cache':model_cache,
                 'avatar_optimizer':SimpleNamespace(blender_command=lambda:'/fake/blender',optimize_xr_preview=lambda raw:fixture),
-                'threading':threading,'time':time,'os':os,'re':re,'json':json,'sqlite3':sqlite3,'secrets':secrets,
+                'threading':threading,'time':time,'os':os,'re':re,'json':json,'sqlite3':sqlite3,'secrets':secrets,'tempfile':tempfile,
                 '_xr_preview_guard':threading.Lock(),'_xr_preview_active':{(uid,jid)}}
    exec(compile(ast.Module(body=functions,type_ignores=[]),'<xr-worker>','exec'),environment)
    pending=directory/f'{uid}_{jid}.xr.pending'
@@ -149,7 +149,29 @@ class Tripo31(unittest.TestCase):
     self.assertEqual(row,('SUCCEEDED',100,'https://cdn.tripo3d.ai/finished.glb'))
   self.assertIn('pending3dJobs.unshift(',XR)
   self.assertIn('meshPollCursor=(meshPollCursor+count)%pending3dJobs.length',XR)
-  self.assertIn("_xr_ensure_job_monitor(g.user['id'],job,key)",APP)
+  self.assertIn('def _xr_ensure_job_monitor(owner,jid,key):',APP)
+  self.assertIn('No Tripo auth/decryption or background task creation on a plain list GET.',APP)
+
+
+ def test_private_model_list_does_not_launch_provider_network(self):
+  section=APP.split("@app.get('/api/media/3d')",1)[1].split("@app.get('/api/media/3d/check')",1)[0]
+  self.assertNotIn('_xr_ensure_job_monitor(',section)
+  self.assertNotIn('provider_key(',section)
+  self.assertIn('LIMIT 100',section)
+  self.assertIn('AUTH_REQUIRED',APP)
+  self.assertIn('def _xr_decode_isolated(raw,texture_edge):',APP)
+
+ def test_isolated_glb_decoder_command_line(self):
+  from backend import glb_xr
+  from test_v124_textured_xr import glb_fixture
+  import tempfile,subprocess,sys,json
+  with tempfile.TemporaryDirectory() as t:
+   inp=Path(t)/'input.glb';out=Path(t)/'output.json';inp.write_bytes(glb_fixture())
+   proc=subprocess.run([sys.executable,'-m','backend.glb_xr',str(inp),str(out),'512'],
+      cwd=ROOT,capture_output=True,timeout=15)
+   self.assertEqual(proc.returncode,0,proc.stderr.decode(errors='replace'))
+   model=json.loads(out.read_text())
+   self.assertEqual(model['triangles'],2)
 
  def test_no_auto_debug_pane(self):
   self.assertIn('async function showMeshDiagnostics(jobId){',XR)

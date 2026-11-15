@@ -1,6 +1,6 @@
 """Flask API: identity-scoped private object collection with optional Meta inference."""
 from __future__ import annotations
-import base64,hashlib,hmac,io,json,math,os,re,secrets,sqlite3,threading,time,urllib.request,urllib.error
+import base64,hashlib,hmac,io,json,math,os,re,secrets,sqlite3,threading,time,urllib.request,urllib.error,subprocess,sys,tempfile
 from pathlib import Path
 from functools import wraps
 from contextlib import closing
@@ -66,6 +66,38 @@ def _xr_preview_heartbeat(pending,stop):
         try:pending.touch()
         except OSError:return
 
+def _xr_decode_isolated(raw,texture_edge):
+    """Bounded child-process GLB decode: protect Gunicorn from expensive geometry.
+
+    The subprocess reads a private temporary GLB and writes only the decoded JSON.
+    No credentials, external URLs, paid requests or Flask state cross this boundary.
+    """
+    if len(raw)<1_500_000:
+        return glb_xr.decode_visual(raw,texture_edge=texture_edge)
+    with tempfile.TemporaryDirectory(prefix='freelab-xr-decode-') as folder:
+        input_path=Path(folder)/'source.glb';output_path=Path(folder)/'preview.json'
+        input_path.write_bytes(raw)
+        os.chmod(input_path,0o600)
+        def limits():
+            if sys.platform.startswith('linux'):
+                import resource
+                resource.setrlimit(resource.RLIMIT_AS,(850_000_000,850_000_000))
+                resource.setrlimit(resource.RLIMIT_CPU,(65,65))
+        try:
+            completed=subprocess.run([sys.executable,'-m','backend.glb_xr',str(input_path),str(output_path),str(texture_edge)],
+                       cwd=str(APP_ROOT),stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,
+                       stderr=subprocess.PIPE,timeout=85,check=False,
+                       preexec_fn=limits if sys.platform.startswith('linux') else None)
+        except subprocess.TimeoutExpired as exc:
+            raise ValueError('Quest model decoder timed out; try a lower-poly model') from exc
+        except OSError as exc:
+            raise ValueError('Quest model decoder could not start') from exc
+        if completed.returncode or not output_path.is_file():
+            raise ValueError('Quest model decoding failed in isolated worker; try XR-ready P2 quality')
+        if output_path.stat().st_size>18_000_000:
+            raise ValueError('Quest model preview exceeds decoded geometry budget')
+        return json.loads(output_path.read_text())
+
 def _xr_existing_job_worker(owner,jid,key):
     # Read-only recovery of an already paid job. All database access belongs to
     # this thread; never use Flask request globals or share SQLite connections.
@@ -106,7 +138,7 @@ def _xr_existing_job_worker(owner,jid,key):
         # prefer the bounded, separate Blender conversion if available.
         use_blender=len(raw)>10_000_000 and bool(avatar_optimizer.blender_command())
         if not use_blender:
-            try:result=glb_xr.decode_visual(raw,texture_edge=texture_edge)
+            try:result=_xr_decode_isolated(raw,texture_edge)
             except (ValueError,TypeError,KeyError,IndexError):use_blender=True
         if use_blender:
             if not avatar_optimizer.blender_command():
@@ -114,7 +146,7 @@ def _xr_existing_job_worker(owner,jid,key):
             _xr_preview_stage(owner,jid,'Optimizing GLB for Quest')
             optimized=avatar_optimizer.optimize_xr_preview(raw)
             _xr_preview_stage(owner,jid,'Decoding optimized mesh')
-            result=glb_xr.decode_visual(optimized,texture_edge=texture_edge)
+            result=_xr_decode_isolated(optimized,texture_edge)
             temp=MODEL_DIR/(f'{owner}_{jid}.xr.glb.tmp-'+secrets.token_hex(4))
             try:
                 with temp.open('xb') as f:os.fchmod(f.fileno(),0o600);f.write(optimized)
@@ -318,7 +350,7 @@ def close_db(e):
 def require_user(fn):
     @wraps(fn)
     def wrapper(*args,**kw):
-        if not g.user:return jsonify(error='Sign in first'),401
+        if not g.user:return jsonify(error='Session expired or missing. Sign in again before requesting private 3D assets.',code='AUTH_REQUIRED'),401
         return fn(*args,**kw)
     return wrapper
 
@@ -1096,9 +1128,9 @@ def job_3d_dict(row):
 @app.get('/api/media/3d')
 @require_user
 def jobs_3d():
-    rows=g.con.execute('SELECT * FROM jobs_3d WHERE owner_id=? ORDER BY id DESC LIMIT 500',(g.user['id'],)).fetchall()
-    for job in (r for r in rows[:12] if r['status'] in ('PENDING','IN_PROGRESS','UNKNOWN')):
-        _xr_ensure_job_monitor(g.user['id'],job['id'],provider_key(job['provider']))
+    # No Tripo auth/decryption or background task creation on a plain list GET.
+    # Repeated room/XR collection reads must remain cheap even during conversion.
+    rows=g.con.execute('SELECT * FROM jobs_3d WHERE owner_id=? ORDER BY id DESC LIMIT 100',(g.user['id'],)).fetchall()
     return jsonify(jobs=[job_3d_dict(row) for row in rows])
 
 @app.get('/api/media/3d/check')

@@ -254,3 +254,28 @@ def decode_visual(data, texture_edge=640):
     return {'parts':parts,'triangles':sum(p['triangles'] for p in parts),'texture_omitted':not any(p['texture'] for p in parts),
             'simplified':any(p['simplified'] for p in parts),'normalized':True,
             'note':'Bounded textured XR preview. Full original GLB is available in Collection.'}
+
+
+def _command_line():
+    """Private command entrypoint used only by the bounded XR preview worker."""
+    import os, sys
+    from pathlib import Path
+    if len(sys.argv)!=4:raise SystemExit(2)
+    source,output,edge=map(str,sys.argv[1:])
+    try:
+        edge=int(edge)
+        if edge not in (512,640,1024,2048):raise ValueError('Invalid texture budget')
+        path=Path(source)
+        if path.stat().st_size>MAX_FILE:raise ValueError('GLB exceeds Quest decoder input budget')
+        model=decode_visual(path.read_bytes(),texture_edge=edge)
+        encoded=json.dumps(model,separators=(',',':')).encode('utf-8')
+        if len(encoded)>18_000_000:raise ValueError('XR decoded preview too large')
+        with open(output,'xb') as stream:
+            os.fchmod(stream.fileno(),0o600)
+            stream.write(encoded)
+    except (ValueError,OSError,MemoryError,KeyError,IndexError,TypeError) as exc:
+        sys.stderr.write('XR decode failed: '+type(exc).__name__+'\n')
+        raise SystemExit(1)
+
+if __name__=='__main__':
+    _command_line()

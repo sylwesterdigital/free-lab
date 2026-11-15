@@ -1,16 +1,29 @@
 {
-  "version": "0.10.35",
-  "title": "FREELAB v0.10.35 — Tripo completion-to-XR delivery recovery",
+  "version": "0.10.36",
+  "title": "FREELAB v0.10.36 — 3D API stability and session recovery",
   "datetime": "2026-11-15",
   "changes": [
-    "New Tripo generation jobs are now followed by a bounded server-side monitor that saves completed GLBs immediately; headset and collection polling are not required to start private download before signed provider links expire.",
-    "On return to Collection after a Gunicorn restart, outstanding jobs resume provider status monitoring without any new paid generation request.",
-    "Quest XR cycles status checks across all pending 3D jobs, prioritizing the newest job; older stalled jobs cannot starve new jobs of updates.",
-    "A downloaded GLB is accepted from cache only if its file header and declared size are valid; interrupted cache files are replaced on the next authenticated provider fetch.",
-    "Quest model upload explicitly rejects lost WebGL contexts or failed GPU allocations rather than falsely reporting a model as attached.",
-    "Models remain source-linked and the existing compact 3D progress cube is retained; no floating diagnostics panel or extra paid task is introduced."
+    "Fix older Ubuntu environments missing FREE_LAB_SESSION_KEY: installer now creates one persistent Flask signing key rather than allowing Gunicorn workers to use incompatible random keys (401 errors).",
+    "The private /api/media/3d list now serves only bounded SQLite job metadata; it does not start multiple Tripo network monitors and Blender jobs from a frequent XR/Collection GET request.",
+    "Large GLB surface decoding now runs in a separate resource-limited process so excessive geometry cannot exhaust Gunicorn memory or block private API workers (502 mitigation).",
+    "SQLite WAL mode is configured during database initialization, rather than requiring journal-mode changes on every request and background-thread connection.",
+    "Session expiry is clearly reported, and desktop/mobile login is shown again without treating authentication failure as Tripo failure; XR prompts the user to sign in after leaving the session.",
+    "The original paid model job and source-linked spatial placeholder are preserved; this release does not generate a new paid model."
   ],
   "history": [
+    {
+      "version": "0.10.35",
+      "title": "FREELAB v0.10.35 — Tripo completion-to-XR delivery recovery",
+      "datetime": "2026-11-15",
+      "changes": [
+        "New Tripo generation jobs are now followed by a bounded server-side monitor that saves completed GLBs immediately; headset and collection polling are not required to start private download before signed provider links expire.",
+        "On return to Collection after a Gunicorn restart, outstanding jobs resume provider status monitoring without any new paid generation request.",
+        "Quest XR cycles status checks across all pending 3D jobs, prioritizing the newest job; older stalled jobs cannot starve new jobs of updates.",
+        "A downloaded GLB is accepted from cache only if its file header and declared size are valid; interrupted cache files are replaced on the next authenticated provider fetch.",
+        "Quest model upload explicitly rejects lost WebGL contexts or failed GPU allocations rather than falsely reporting a model as attached.",
+        "Models remain source-linked and the existing compact 3D progress cube is retained; no floating diagnostics panel or extra paid task is introduced."
+      ]
+    },
     {
       "version": "0.10.34",
       "title": "FREELAB v0.10.34 — 3D presets, model transforms and textured preview recovery",

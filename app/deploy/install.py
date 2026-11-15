@@ -262,7 +262,20 @@ def wait_health(version):
                        ' | Last health check: '+last)
 
 def ensure_environment():
-    if ENV.exists():return
+    if ENV.exists():
+        # Older deployments can have an env file without a session secret.
+        # Flask otherwise generates a different signing key per Gunicorn worker,
+        # causing intermittent 401 responses and invalid login cookies.
+        lines=ENV.read_text().splitlines()
+        keys=[i for i,line in enumerate(lines) if line.startswith('FREE_LAB_SESSION_KEY=')]
+        if keys and lines[keys[-1]].partition('=')[2].strip():return
+        secret='FREE_LAB_SESSION_KEY='+secrets.token_hex(48)
+        if keys:lines[keys[-1]]=secret
+        else:lines.append(secret)
+        # Preserve all configured API credentials and other settings unchanged.
+        with ENV.open('w') as stream:stream.write('\n'.join(lines)+'\n')
+        os.chmod(ENV,0o600)
+        return
     session=secrets.token_hex(48)
     text=('FREE_LAB_DATA_DIR=/var/lib/free-lab\nFREE_LAB_DB=/var/lib/free-lab/free-lab.sqlite3\n'
           'FREE_LAB_HTTPS=1\nFREE_LAB_SESSION_KEY='+session+'\n'
