@@ -1,4 +1,4 @@
-"""v0.10.38 nginx active-vhost and real browser module MIME regression checks."""
+"""v0.10.39 nginx active-vhost and real browser module MIME regression checks."""
 import unittest
 from pathlib import Path
 from deploy import install

@@ -8,7 +8,7 @@ let gl,canvas,program,lineProgram,quad,rayBuffer,refSpace,session,root,poseReady
 let pending3dJobs=[],galleryPage=0,darkroom=null,darkBackdrop=null,darkClose=null,darkFloor=null,descriptionContext=null,descriptionQuestionMode=false,frameTouch=null,frameErase=null,lastMascotQuip=0,statusBorn=0,jobProvider='auto';
 let meshUniforms=null,meshProgram=null,meshJobProgram=null,meshWhite=null,meshGeneration=0,meshSyncAt=0,meshSyncBusy=false;
 let configPanel=null,configShowing=false,config3DChoice='aholo',config3DAvailable=false,uiSettings=window.FreeLabXRUI?.read?.()||{},lastConfigTick=0,mascotTrailAt=0;
-let toolbar=null,editbar=null,statusCard=null,cloud=null,clouds=[],cards=[],zones=[],selected=null,held=null,selectedMesh=null,meshTools=null;
+let toolbar=null,editbar=null,statusCard=null,cloud=null,clouds=[],cards=[],zones=[],selected=null,held=null,selectedMesh=null,meshTools=null,meshGizmoMode="move";
 let branchFocusId=null,branchPage=0; // Parent-based tree browsing, no fixed generation/depth limit.
 let imageMenuOpen=false,voiceBadge=null,voicePhase='idle',voiceMessage='',voiceUntil=0,voicePending=null,voiceOk=null,voiceCancel=null,voiceResultStamp=0;
 let mascotProgram=null,mascotBuffer=null,mascotVertexCount=0,mascotMood='curious',mascotMoodUntil=0,mascotVelocity=[.25,.22,.19],lastMascotTick=0,mascotSpeechBorn=0;
@@ -978,7 +978,11 @@ function refreshToolbar(){if(!toolbar||!gl)return;const newTexture=toolbarTextur
 
 function animate(c,to,delay=0,ms=950,shrinking=false){c.from=[...c.pos];c.to=[...to];c.start=performance.now()+delay;c.duration=ms;c.shrinking=shrinking;}
 function easing(t){return t*t*(3-2*t);}
-function tween(t){const now=performance.now();for(const c of cards){if(c.duration<=0)continue;if(now<c.start)continue;const k=clamp((now-c.start)/c.duration,0,1),e=easing(k);
+function tween(t){const now=performance.now();for(const c of cards){
+ // Library headers and some older cards are static, so they have no animation
+ // endpoints. Undefined duration must never enter the Bezier interpolation.
+ if(!Number.isFinite(c.duration)||c.duration<=0||!Array.isArray(c.from)||c.from.length!==3||!Array.isArray(c.to)||c.to.length!==3){c.duration=0;continue;}
+ if(now<c.start)continue;const k=clamp((now-c.start)/c.duration,0,1),e=easing(k);
  // Arcing Bezier trajectory with an overshoot along depth. Keep final coordinates stable.
  const a=c.from,b=c.to,u=1-e;
  const c1=[a[0]+(b[0]-a[0])*.16,a[1]+.42,a[2]+.22];
@@ -1000,7 +1004,7 @@ function clearCollectionMeshes(){
  meshGeneration++;xr3DOnce.clear();
  meshPreviews=meshPreviews.filter(m=>{if(m.guestId)return true;releaseMeshPreview(m);return false;});
  for(const badge of meshJobBadges.values())if(badge.front&&gl)gl.deleteTexture(badge.front);
- meshJobBadges.clear();meshPreviewFailures.clear();meshPreviewRetries.clear();meshNextAttemptAt.clear();selectedMesh=null;if(meshTools?.front&&gl)gl.deleteTexture(meshTools.front);meshTools=null;
+ meshJobBadges.clear();meshPreviewFailures.clear();meshPreviewRetries.clear();meshNextAttemptAt.clear();selectedMesh=null;meshGizmoMode="move";if(meshTools?.front&&gl)gl.deleteTexture(meshTools.front);meshTools=null;
 }
 function clearCards(){if(!gl)return;clearCollectionMeshes();closeImageMenu();for(const c of cards)for(const t of c.resources||[])gl.deleteTexture(t);cards=[];selected=null;}
 function rootPos(c){return cloud&&!['config','toolbar','status','captureeye','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics','description','labmenu','darkroom','darkroomexit','cinemaprev','cinemanext','cinema-floor','visitor','3dtools'].includes(c.kind)?vadd(c.pos,cloud.offset||[0,0,0]):c.pos;}
@@ -1142,7 +1146,7 @@ function ray(frame,src){try{const sp=src.targetRaySpace?frame.getPose(src.target
  if(src.hand){const a=frame.getJointPose(src.hand.get('index-finger-tip'),refSpace),b=frame.getJointPose(src.hand.get('wrist'),refSpace);if(a&&b){const o=[a.transform.position.x,a.transform.position.y,a.transform.position.z];const w=[b.transform.position.x,b.transform.position.y,b.transform.position.z];return {o,d:norm(vsub(o,w))};}}
  }catch{}return null;}
 function hitTest(r,c){if(!r||!c.visible||!c.front||c.animScale===0)return null;const m=cardModel(c),inv=inverse(m);if(!inv)return null;const o=point(inv,r.o),d=point(inv,r.d,0);if(Math.abs(d[2])<1e-6)return null;const k=-o[2]/d[2];if(k<=0||k>6)return null;const x=o[0]+d[0]*k,y=o[1]+d[1]*k;if(Math.abs(x)>.5||Math.abs(y)>.5)return null;const hitWorld=point(m,[x,y,0]);const dist=length(vsub(hitWorld,r.o));return {card:c,x,y,dist};}
-function pick(r){if(darkroom){const hits=[darkClose,darkPrevious,darkNext].filter(Boolean).map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return hits[0]||null;}const opts=[...cards.filter(c=>c.kind!=='galleryheader'),...meshJobBadges.values(),toolbar,...(voicePhase==='listening'||voicePhase==='processing'?[]:[captureEye]),...(voicePhase==='listening'||voicePhase==='processing'?[]:[extractButton]),...(uiSettings.voice===false?[]:[voiceButton]),voiceOk,voiceCancel,promptPanel,editbar,...(debugShowing?[debugPanel]:[]),descriptionPanel,...(configShowing?[configPanel]:[])].filter(Boolean),all=[...opts.map(c=>hitTest(r,c)).filter(Boolean),...meshPreviews.map(m=>meshHitTest(r,m)).filter(Boolean),...(meshTools?[hitTest(r,meshTools)].filter(Boolean):[])].sort((a,b)=>a.dist-b.dist);return all[0]||null;}
+function pick(r){if(darkroom){const hits=[darkClose,darkPrevious,darkNext].filter(Boolean).map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return hits[0]||null;}const opts=[...cards.filter(c=>c.kind!=='galleryheader'),...meshJobBadges.values(),toolbar,...(voicePhase==='listening'||voicePhase==='processing'?[]:[captureEye]),...(voicePhase==='listening'||voicePhase==='processing'?[]:[extractButton]),...(uiSettings.voice===false?[]:[voiceButton]),voiceOk,voiceCancel,promptPanel,editbar,...(debugShowing?[debugPanel]:[]),descriptionPanel,...(configShowing?[configPanel]:[])].filter(Boolean),all=[...opts.map(c=>hitTest(r,c)).filter(Boolean),...meshPreviews.map(m=>meshHitTest(r,m)).filter(Boolean),gizmoHitTest(r),...(meshTools?[hitTest(r,meshTools)].filter(Boolean):[])].filter(Boolean).sort((a,b)=>a.dist-b.dist);return all[0]||null;}
 function imageButtonAt(card,x,y){
  // Hit regions are in the SAME 600-pixel canvas coordinates as cardTexture.
  // Image aspect ratios change canvas height; fixed normalized-Y thresholds do not work.
@@ -1157,7 +1161,7 @@ function imageButtonAt(card,x,y){
 }
 function buttonFromHit(h){if(!h)return null;
  if(h.card.kind==='3djob')return '3djobdiagnostics';
- if(h.card.kind==='3dtools')return ['meshsmaller','meshturn','meshlarger'][clamp(Math.floor((h.x+.5)*3),0,2)];
+ if(h.card.kind==='3dtools')return ['meshgizmo-move','meshgizmo-rotate','meshgizmo-scale'][clamp(Math.floor((h.x+.5)*3),0,2)];
  if(h.card.kind==='3dmesh')return null;
  if(h.card.kind==='description'){
   if(h.x>.33&&h.y>.27)return 'descriptionclose';
@@ -1200,7 +1204,17 @@ function grabStart(frame,src,manual=false){const r=ray(frame,src);let h=pick(r);
   selectedMesh=h.card;selected=null;imageMenuOpen=false;updateEditbar();syncMeshTools();
   held.initialWorld=[...pose.pos];held.initialRot=[...(h.card.rotation||[0,0,0,1])];held.initialOffset=[...(h.card.offset||[0,0,0])];
   held.startWorldOrientation=[...pose.q];held.startRayHit=vadd(r.o,vmul(r.d,h.dist));
-  setStatus('3D MODEL · move with grip or pinch · twist to rotate · two hands to scale',10500);
+  if(h.kind==='gizmo'){
+   held.gizmoMode=h.mode;held.gizmoAxisIndex=h.axis;held.gizmoAxis=gizmoAxes(pose)[h.axis];held.gizmoStartScale=h.card.modelScale||1;held.gizmoStartAxisScale=[...(h.card.axisScale||[1,1,1])];
+   if(h.mode==='rotate'){
+    const firstPoint=planeRayPoint(r,pose.pos,held.gizmoAxis);
+    held.gizmoStartVector=firstPoint?norm(vsub(firstPoint,pose.pos)):null;
+   }else{
+    held.gizmoStartAxisT=closestRayAxis(r,pose.pos,held.gizmoAxis)?.axisT||0;
+   }
+   xr3D('MODEL_GIZMO_GRAB',{jobId:h.card.jobId,mode:h.mode,axis:['X','Y','Z'][h.axis]});
+  }
+  else setStatus('3D MODEL · grab to move · twist to rotate · two hands to scale · choose gizmo mode',8000);
  }
  if(['object','source'].includes(h.card.kind)){selected=h.card;updateEditbar();}cue('grab',src);}
 async function grabEnd(src,frame){if(held?.second?.src===src){held.second=null;return;}if(!held||held.src!==src)return;const h=held;held=null;cue('release',src);
@@ -1208,8 +1222,8 @@ async function grabEnd(src,frame){if(held?.second?.src===src){held.second=null;r
  // button was hit, release must ACTIVATE it and never be interpreted as a drag.
  if(h.id){window.FreeLab?.traceEvent?.('XR image action: '+h.id,'info');if(h.id==='3djobdiagnostics')return showMeshDiagnostics(h.card.jobId);return action(h.id);}
  if(h.card.kind==='3dmesh'){
-  selectedMesh=h.card;syncMeshTools();if(h.moved){await saveMeshTransform(h.card);setStatus('3D MODEL · position, rotation and scale saved',6500);}
-  else setStatus('3D MODEL SELECTED · grab to move/twist · two hands to scale · use − ↻ + below',9500);
+  selectedMesh=h.card;syncMeshTools();if(h.moved){await saveMeshTransform(h.card);xr3D('MODEL_GIZMO_TRANSFORM_SAVED',{jobId:h.card.jobId,mode:h.gizmoMode||'direct',offset:h.card.offset,rotation:h.card.rotation,scale:h.card.modelScale,axisScale:h.card.axisScale});setStatus('3D MODEL · transform saved',6000);}
+  else setStatus('3D MODEL SELECTED · MOVE / ROTATE / SCALE tabs below · drag a coloured X/Y/Z handle',9500);
   return;
  }
  if(h.moved){
@@ -1247,6 +1261,7 @@ function advanceGrab(frame){
  if(!held||held.id)return;const r=ray(frame,held.src);if(!r)return;
  const card=held.card;
  if(card.kind==='3dmesh'){
+  if(held.gizmoMode){updateGizmoDrag(frame,r,held);syncMeshTools();return;}
   const anchor=meshAnchor(card);if(!anchor)return;
   const hit=vadd(r.o,vmul(r.d,held.rayDist)),delta=vsub(hit,held.startRayHit);
   const target=vadd(held.initialWorld,delta);
@@ -1499,7 +1514,7 @@ function renderView(t,frame){if(!session||gl.isContextLost()){return;}const pose
   xr3D('XR_FRAMEBUFFER_STATUS',{status:'0x'+status.toString(16),complete:status===gl.FRAMEBUFFER_COMPLETE,framebufferWidth:session.renderState.baseLayer.framebufferWidth,framebufferHeight:session.renderState.baseLayer.framebufferHeight,gpu},!gpu.errors?.length&&status===gl.FRAMEBUFFER_COMPLETE?'info':'error');}
  gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
  for(const view of pose.views){const vp0=session.renderState.baseLayer.getViewport(view);gl.viewport(vp0.x,vp0.y,vp0.width,vp0.height);const vp=matmul(view.projectionMatrix,view.transform.inverse.matrix);
- decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(statusCard?.visible)drawCard(statusCard,vp);if(editbar)drawCard(editbar,vp);if(captureEye&&voicePhase!=='listening'&&voicePhase!=='processing')drawCard(captureEye,vp);if(cameraHint)drawCard(cameraHint,vp);if(voiceButton&&uiSettings.voice!==false)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(configShowing&&configPanel)drawCard(configPanel,vp);/* description is composited after mascot for legibility */for(const m of meshPreviews)drawMeshPreview(m,vp,t);if(selectedMesh&&meshPreviews.includes(selectedMesh)){syncMeshTools();if(meshTools)drawCard(meshTools,vp);}draw3DJobBadges(vp,t);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);drawStringLab(vp,t,pose);drawFingerLab(vp,t,pose);drawFramePhotos(vp);drawSpatialFrames(vp,t,pose);drawShapeTargets(vp,t,pose);drawFrameCubes(vp);if(labMenu?.visible)drawCard(labMenu,vp);for(const visitor of visitorBadges)drawCard(visitor,vp);depthCapability(frame,view);
+ decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(statusCard?.visible)drawCard(statusCard,vp);if(editbar)drawCard(editbar,vp);if(captureEye&&voicePhase!=='listening'&&voicePhase!=='processing')drawCard(captureEye,vp);if(cameraHint)drawCard(cameraHint,vp);if(voiceButton&&uiSettings.voice!==false)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(configShowing&&configPanel)drawCard(configPanel,vp);/* description is composited after mascot for legibility */for(const m of meshPreviews)drawMeshPreview(m,vp,t);if(selectedMesh&&meshPreviews.includes(selectedMesh)){drawMeshGizmo(vp);syncMeshTools();if(meshTools)drawCard(meshTools,vp);}draw3DJobBadges(vp,t);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);drawStringLab(vp,t,pose);drawFingerLab(vp,t,pose);drawFramePhotos(vp);drawSpatialFrames(vp,t,pose);drawShapeTargets(vp,t,pose);drawFrameCubes(vp);if(labMenu?.visible)drawCard(labMenu,vp);for(const visitor of visitorBadges)drawCard(visitor,vp);depthCapability(frame,view);
  for(const src of session.inputSources){const r=ray(frame,src);if(!r)continue;const h=pick(r),end=vadd(r.o,vmul(r.d,h?.dist||1.2));const colour=src.hand?[.72,1,.75,.7]:[.77,.88,1,.72];line(vp,[r.o,end],colour);line(vp,[end],colour,true,h?16:9);}
  if(mascotPointer?.visible){if(mascotMode()==='2d'){
    if(!mascotPointer.front){mascotTex=mascotTexture();mascotPointer.front=mascotTex;mascotPointer.back=mascotTex;}
@@ -1608,7 +1623,7 @@ async function openGallery(page=galleryPage){if(latestPose){root=viewerAnchor(la
  const available=clouds.filter(x=>!x.hidden).sort((a,b)=>b.id-a.id),pageCount=Math.max(1,Math.ceil(available.length/8));
  galleryPage=clamp(page,0,pageCount-1);const previews=available.slice(galleryPage*8,galleryPage*8+8),start=available.length?galleryPage*8+1:0,end=galleryPage*8+previews.length;
  const title=galleryHeadingTexture(available.length,galleryPage+1,start,end);
- cards.push({id:'gallery-heading',kind:'galleryheader',data:{},pos:[0,.67,-.04],q:[0,0,0,1],scale:1,size:[1.52,.20],visible:true,front:title,back:title,resources:[title]});
+ cards.push({id:'gallery-heading',kind:'galleryheader',data:{},pos:[0,.67,-.04],from:[0,.67,-.04],to:[0,.67,-.04],start:0,duration:0,q:[0,0,0,1],scale:1,size:[1.52,.20],visible:true,front:title,back:title,resources:[title]});
  for(let i=0;i<previews.length;i++){const c=previews[i],col=i%4,row=Math.floor(i/4);const date=String(c.created_at||'').slice(0,10),count=c.objects?.length||0;
   addCard('gallery'+c.id,'gallery',{id:c.id,image:c.image_url,label:c.legacy?'OLDER ARCHIVE':'SOURCE '+c.id,subtitle:`${date?date+' · ':''}${count} BRANCHES · OPEN`},[(col-1.5)*.38,.20-row*.43,-.05],[.31,.35]);}
  for(const direction of [-1,1]){if(direction<0&&galleryPage===0||direction>0&&galleryPage+1>=pageCount)continue;
@@ -1945,26 +1960,125 @@ function meshWorldPose(m){
 function meshHitTest(r,m){
  if(!r||!m.parts?.length||m.captureId!==cloud?.id||!meshOwnerCard(m))return null;
  const pose=meshWorldPose(m);if(!pose)return null;
- const radius=.19*pose.scale,oc=vsub(r.o,pose.pos),b=oc.reduce((sum,x,i)=>sum+x*r.d[i],0);
+ const radius=.19*pose.scale*Math.max(...(m.axisScale||[1,1,1])),oc=vsub(r.o,pose.pos),b=oc.reduce((sum,x,i)=>sum+x*r.d[i],0);
  const c=oc.reduce((sum,x)=>sum+x*x,0)-radius*radius;
  const disc=b*b-c;if(disc<0)return null;
  const d=-b-Math.sqrt(disc),dist=d>0?d:-b+Math.sqrt(disc);
  if(dist<0||dist>6)return null;
  return {card:m,x:0,y:0,dist};
 }
+// Native WebGL gizmos intentionally run in FREELAB's existing XR context.
+// Three.js TransformControls cannot be dropped into this renderer because it
+// owns a separate WebGL camera, scene and XR render loop. Axes are local to the
+// selected model, and remain spatially anchored to its source photograph.
+const GIZMO_AXES=[[1,0,0],[0,1,0],[0,0,1]];
+const GIZMO_COLORS=[[1,.30,.36,1],[.35,1,.51,1],[.40,.64,1,1]];
+function gizmoAxes(pose){return GIZMO_AXES.map(a=>norm(quatVec(pose.q,a)));}
+function gizmoRadius(pose){return clamp(.24*pose.scale*Math.min(1.8,Math.max(...(selectedMesh?.axisScale||[1,1,1]))),.11,.55);}
+function closestRayAxis(r,center,axis){
+ const w=vsub(r.o,center),b=axis.reduce((n,x,i)=>n+x*r.d[i],0),dw=w.reduce((n,x,i)=>n+x*r.d[i],0),aw=w.reduce((n,x,i)=>n+x*axis[i],0);
+ const den=1-b*b;if(den<.0001)return null;
+ const axisT=(aw-b*dw)/den,rayT=b*axisT-dw;
+ return {axisT,rayT,closest:vadd(center,vmul(axis,axisT))};
+}
+function planeRayPoint(r,center,normal){const den=normal.reduce((n,x,i)=>n+x*r.d[i],0);if(Math.abs(den)<.07)return null;
+ const t=normal.reduce((n,x,i)=>n+x*(center[i]-r.o[i]),0)/den;
+ return t>.03&&t<6?vadd(r.o,vmul(r.d,t)):null;
+}
+function gizmoHitTest(r){if(!r||!selectedMesh?.parts?.length||!meshOwnerCard(selectedMesh))return null;
+ const pose=meshWorldPose(selectedMesh);if(!pose)return null;
+ const axes=gizmoAxes(pose),radius=gizmoRadius(pose);let best=null;
+ for(let i=0;i<3;i++){
+  if(meshGizmoMode==='rotate'){
+   const hit=planeRayPoint(r,pose.pos,axes[i]);if(!hit)continue;
+   const radial=vsub(hit,pose.pos),error=Math.abs(length(radial)-radius);
+   if(error>.043)continue;const dist=length(vsub(hit,r.o));
+   if(!best||error<best.error)best={card:selectedMesh,kind:'gizmo',mode:meshGizmoMode,axis:i,dist,error};
+  }else{
+   const near=closestRayAxis(r,pose.pos,axes[i]);if(!near||near.rayT<=0||near.rayT>6)continue;
+   const nearT=clamp(near.axisT,meshGizmoMode==='scale'?radius*.67:radius*.12,radius*1.2);
+   const onAxis=vadd(pose.pos,vmul(axes[i],nearT));
+   // The nearest point must use the ray direction, not the axis position.
+   const rayAt=onAxis.reduce((n,x,j)=>n+(x-r.o[j])*r.d[j],0);
+   if(rayAt<=0||rayAt>6)continue;
+   const error=length(vsub(onAxis,vadd(r.o,vmul(r.d,rayAt))));
+   if(error>.047)continue;
+   if(!best||error<best.error)best={card:selectedMesh,kind:'gizmo',mode:meshGizmoMode,axis:i,dist:rayAt,error};
+  }
+ }
+ return best;
+}
+function drawMeshGizmo(vp){if(!selectedMesh?.parts?.length||!meshOwnerCard(selectedMesh))return;
+ const pose=meshWorldPose(selectedMesh);if(!pose)return;
+ const axes=gizmoAxes(pose),radius=gizmoRadius(pose),lines=[];
+ // World-space transform axes: red X, green Y, blue Z. The rotation rings
+ // remain circular in model-local space, even after the model is rotated.
+ for(let i=0;i<3;i++){
+  const axis=axes[i],color=GIZMO_COLORS[i];
+  if(meshGizmoMode==='rotate'){
+   const ref=Math.abs(axis[1])<.85?[0,1,0]:[1,0,0],u=norm(cross3(axis,ref)),v=norm(cross3(axis,u)),ring=[];
+   for(let step=0;step<48;step++){
+    const a=step*TAU/48,b=(step+1)*TAU/48;
+    for(const theta of [a,b])ring.push(vadd(pose.pos,vadd(vmul(u,Math.cos(theta)*radius),vmul(v,Math.sin(theta)*radius))));
+   }
+   line(vp,ring,color,false);continue;
+  }
+  const tip=vadd(pose.pos,vmul(axis,radius));line(vp,[pose.pos,tip],color,false);
+  if(meshGizmoMode==='scale'){
+   const gap=.021*pose.scale;
+   const up=norm(cross3(axis,Math.abs(axis[1])<.85?[0,1,0]:[1,0,0]));
+   const right=norm(cross3(axis,up));const edges=[];
+   for(const edge of [up,right])for(const sign of [-1,1])edges.push(vadd(tip,vmul(edge,-gap*sign)),vadd(tip,vmul(edge,gap*sign)));
+   line(vp,edges,color);line(vp,[tip],color,true,14);
+  }else{
+   const ref=Math.abs(axis[1])<.85?[0,1,0]:[1,0,0],side=norm(cross3(axis,ref));
+   line(vp,[vadd(tip,vmul(axis,-.045)),vadd(tip,vmul(side,.027)),vadd(tip,vmul(axis,-.045)),vadd(tip,vmul(side,-.027))],color);
+   line(vp,[tip],color,true,12);
+  }
+ }
+ line(vp,[pose.pos],[1,1,1,1],true,14);
+}
+function cross3(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+function updateGizmoDrag(frame,r,drag){const card=drag.card,anchor=meshAnchor(card);if(!anchor||!r)return;
+ const axis=drag.gizmoAxis,center=drag.initialWorld;
+ if(drag.gizmoMode==='rotate'){
+  const pointNow=planeRayPoint(r,center,axis);if(!pointNow||!drag.gizmoStartVector)return;
+  const nowVec=norm(vsub(pointNow,center)),start=drag.gizmoStartVector;
+  const sin=axis.reduce((n,x,i)=>n+x*cross3(start,nowVec)[i],0),cos=clamp(start.reduce((n,x,i)=>n+x*nowVec[i],0),-1,1);
+  const angle=Math.atan2(sin,cos);const half=angle/2,delta=[axis[0]*Math.sin(half),axis[1]*Math.sin(half),axis[2]*Math.sin(half),Math.cos(half)];
+  card.rotation=quatNorm(quatMul(quatInv(anchor.q),quatMul(delta,drag.startWorldOrientation)));
+  if(Math.abs(angle)>.015)drag.moved=true;
+  return;
+ }
+ const nearest=closestRayAxis(r,center,axis);if(!nearest)return;
+ const amount=clamp(nearest.axisT-drag.gizmoStartAxisT,-2.5,2.5);
+ if(drag.gizmoMode==='move'){
+  const target=vadd(drag.initialWorld,vmul(axis,amount));
+  card.offset=quatVec(quatInv(anchor.q),vsub(target,anchor.pos)).map(x=>clamp(x,-3,3));
+ }else if(drag.gizmoMode==='scale'){
+  // Independent XYZ dimensions; the separate two-hand grip still uniformly scales.
+  const updated=[...drag.gizmoStartAxisScale];updated[drag.gizmoAxisIndex]=clamp(updated[drag.gizmoAxisIndex]*Math.exp(amount*3),.2,4);card.axisScale=updated;
+ }
+ if(Math.abs(amount)>.008)drag.moved=true;
+}
 function meshToolTexture(){
- const [c,ctx]=canvas2d(420,110);rrect(ctx,0,0,420,110,55,'rgba(18,31,31,.94)');
- for(const [i,glyph] of ['−','↻','+'].entries())text(ctx,glyph,70+i*140,77,65,'#d6fff0',650,'center');
+ const [c,ctx]=canvas2d(660,134);rrect(ctx,0,0,660,134,54,'rgba(18,31,31,.96)');
+ for(const [i,mode] of ['move','rotate','scale'].entries()){
+  const x=i*220+9,active=meshGizmoMode===mode;
+  if(active)rrect(ctx,x,13,202,108,45,'rgba(155,247,201,.23)');
+  text(ctx,['↔','↻','⤢'][i],x+101,64,48,active?'#caffdf':'#d6eee7',700,'center');
+  text(ctx,mode.toUpperCase(),x+101,99,22,active?'#caffdf':'#e1f5ea',700,'center');
+ }
  return texture(c);
 }
 function syncMeshTools(){
  if(!selectedMesh||!meshPreviews.includes(selectedMesh)||!meshOwnerCard(selectedMesh))return;
  const pose=meshWorldPose(selectedMesh);if(!pose)return;
- if(!meshTools){const tex=meshToolTexture();meshTools={id:'mesh-transform-tools',kind:'3dtools',front:tex,back:tex,visible:true,pos:[0,0,0],q:[0,0,0,1],scale:1,size:[.29,.077],resources:[tex]};}
+ if(!meshTools){const tex=meshToolTexture();meshTools={id:'mesh-transform-tools',kind:'3dtools',front:tex,back:tex,visible:true,pos:[0,0,0],q:[0,0,0,1],scale:1,size:[.46,.094],resources:[tex]};}
  meshTools.pos=vadd(pose.pos,quatVec(pose.anchor.q,[0,-.25*pose.scale,0]));meshTools.q=pose.anchor.q;
 }
 function saveMeshTransform(m){if(!m||!Number.isInteger(m.jobId))return;
- return window.FreeLab?.save3DTransform?.(m.jobId,{offset:m.offset||[0,0,0],rotation:m.rotation||[0,0,0,1],scale:m.modelScale||1})
+ return window.FreeLab?.save3DTransform?.(m.jobId,{offset:m.offset||[0,0,0],rotation:m.rotation||[0,0,0,1],scale:m.modelScale||1,axis_scale:m.axisScale||[1,1,1]})
  .catch(e=>setStatus('3D transform could not be saved · '+String(e.message).slice(0,65),9000));
 }
 // 3D jobs are asynchronous branches. Their badges persist while the parent
@@ -2171,6 +2285,7 @@ async function spawnMeshPreview(job,origin=null){
    offset:validVec(xform.offset,3)?xform.offset:[0,0,0],
    rotation:validVec(xform.rotation,4)?quatNorm(xform.rotation):[0,0,0,1],
    modelScale:Number.isFinite(xform.scale)?clamp(xform.scale,.2,4):1,
+   axisScale:validVec(xform.axis_scale,3)&&xform.axis_scale.every(v=>v>=.2&&v<=4)?xform.axis_scale:[1,1,1],
    q:[0,0,0,1],created:performance.now()};
   if(!meshAnchor(model)){xr3D('MODEL_ANCHOR_MISSING',{jobId,captureId,objectId,cloudId:cloud?.id},'error');return;}
   meshPreviews.push(model);pieces.length=0;meshPreviewRetries.delete(jobId);meshNextAttemptAt.delete(jobId);
@@ -2199,7 +2314,7 @@ function drawMeshPreview(mesh,vp,t){
  const pose=meshWorldPose(mesh);if(!pose){xr3DThrottled('draw-anchor-'+mesh.jobId+'-'+meshGeneration,'MODEL_DRAW_NO_ANCHOR',{jobId:mesh.jobId},'error');return;}
  const k=clamp((t-mesh.created)/680,0,1),ease=Math.max(.08,k*k*(3-2*k));
  // Real-world longest axis is ~30 cm: no ceiling-filling fragment clouds.
- const model=matmul(translate(...pose.pos),matmul(quatMatrix(pose.q),scale(.30*pose.scale*ease,.30*pose.scale*ease,.30*pose.scale*ease)));
+ const axisScale=mesh.axisScale||[1,1,1];const model=matmul(translate(...pose.pos),matmul(quatMatrix(pose.q),scale(.30*pose.scale*ease*axisScale[0],.30*pose.scale*ease*axisScale[1],.30*pose.scale*ease*axisScale[2])));
  gl.useProgram(meshProgram);
  gl.uniformMatrix4fv(gl.getUniformLocation(meshProgram,'uMVP'),false,matmul(vp,model));
  gl.uniformMatrix4fv(gl.getUniformLocation(meshProgram,'uModel'),false,model);
@@ -2395,6 +2510,10 @@ async function action(id){const t=performance.now();if(t-lastAction<200)return;l
  case 'config-borders':case 'config-backgrounds':case 'config-mascot':case 'config-experimental':case 'config-masked':case 'config-voice':{
    const key=id.slice(7);return uiUpdate(key,uiSettings[key]===false);}
  case 'debugclose':debugShowing=false;return;case 'debuglarger':if(debugPanel)debugPanel.scale=clamp(debugPanel.scale+.2,.55,2.6);return;case 'debugsmaller':if(debugPanel)debugPanel.scale=clamp(debugPanel.scale-.2,.55,2.6);return;
+ case 'meshgizmo-move':case 'meshgizmo-rotate':case 'meshgizmo-scale':{
+  meshGizmoMode=id.slice(10);if(meshTools?.front&&gl){gl.deleteTexture(meshTools.front);const tex=meshToolTexture();meshTools.front=meshTools.back=tex;meshTools.resources=[tex];}
+  setStatus('3D MODEL · '+meshGizmoMode.toUpperCase()+' · grab and drag a coloured axis handle',6000);return;
+ }
  case 'meshsmaller':case 'meshlarger':case 'meshturn':{
   if(!selectedMesh||!meshPreviews.includes(selectedMesh))return;
   if(id==='meshturn')selectedMesh.rotation=quatNorm(quatMul(quatY(Math.PI/8),selectedMesh.rotation||[0,0,0,1]));

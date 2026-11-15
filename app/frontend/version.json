@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.38",
-  "description": "Fix XR model render-part ownership and simplify headset diagnostics and library browsing"
+  "version": "0.10.39",
+  "description": "Spatial XR model transform gizmos, persisted XYZ scale, library crash fix"
 }

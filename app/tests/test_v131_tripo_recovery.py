@@ -1,4 +1,4 @@
-"""v0.10.38 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
+"""v0.10.39 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -187,7 +187,7 @@ class Tripo31(unittest.TestCase):
 if __name__=='__main__':unittest.main()
 
 
-# v0.10.38: private Blender thumbnails and XR GPU lifecycle diagnostics.
+# v0.10.39: private Blender thumbnails and XR GPU lifecycle diagnostics.
 class ModelThumbnailTests(unittest.TestCase):
  def test_backend_exposes_thumbnail_and_source_fallback(self):
   self.assertIn('def _model_thumb_path(owner,jid):',APP)
@@ -234,7 +234,7 @@ class XR3DDiagnosticsTests(unittest.TestCase):
   self.assertIn("'Cache-Control'",source)
 
 class XRMeshOwnershipAndLibraryRegressionTests(unittest.TestCase):
- """v0.10.38 regression: GPU buffers must remain owned by the XR model."""
+ """v0.10.39 regression: GPU buffers must remain owned by the XR model."""
  def test_ownership_transfer_preserves_mesh_parts_during_finally_cleanup(self):
   xr=(ROOT/'frontend/assets/xr.js').read_text()
   self.assertIn("kind:'3dmesh',parts:pieces.slice()",xr)
@@ -263,3 +263,48 @@ class XRMeshOwnershipAndLibraryRegressionTests(unittest.TestCase):
   self.assertIn("label:direction>0?'OLDER  →':'←  NEWER'",xr)
   self.assertIn("c.kind==='gallery')&&c.captionNormal",xr)
   self.assertIn("cards.filter(c=>c.kind!=='galleryheader')",xr)
+
+# v0.10.39: Quest controllers, local axis gizmos and static library animation.
+class XRTransformAndLibraryTests(unittest.TestCase):
+ def test_library_header_is_static_and_tween_skips_unanimated_cards(self):
+  self.assertIn("kind:'galleryheader',data:{},pos:[0,.67,-.04],from:[0,.67,-.04],to:[0,.67,-.04],start:0,duration:0",XR)
+  self.assertIn("!Number.isFinite(c.duration)||c.duration<=0||!Array.isArray(c.from)",XR)
+  self.assertIn("!Array.isArray(c.to)",XR)
+  import shutil,subprocess
+  node=shutil.which('node')
+  if not node:self.skipTest('Node.js not installed')
+  begin=XR.index('function tween(t){')
+  # Isolate and execute the actual Bezier function, including the formerly
+  # crashing static card with no from/to/duration.
+  depth=0;end=begin
+  for j in range(XR.index('{',begin),len(XR)):
+   if XR[j]=='{':depth+=1
+   elif XR[j]=='}':
+    depth-=1
+    if not depth:end=j+1;break
+  code=XR[begin:end]
+  script=("'use strict';let cards=[{pos:[0,.67,-.04],visible:true},{pos:[0,0,0],from:[0,0,0],to:[1,2,3],start:0,duration:50,visible:true}];"
+          "const performance={now:()=>100};const clamp=(x,a,b)=>Math.max(a,Math.min(x,b));const easing=t=>t*t*(3-2*t);"
+          +code+";tween(0);if(cards[0].duration!==0||cards[1].pos[0]!==1||cards[1].pos[2]!==3)throw Error('Static gallery crash or bad tween');")
+  r=subprocess.run([node,'-e',script],capture_output=True,text=True,timeout=5)
+  self.assertEqual(r.returncode,0,r.stderr)
+ def test_xr_gizmos_are_real_ray_draggable_handles(self):
+  for func in ('function closestRayAxis(r,center,axis){','function planeRayPoint(r,center,normal){',
+               'function gizmoHitTest(r){','function drawMeshGizmo(vp){',
+               'function updateGizmoDrag(frame,r,drag){'):
+   self.assertIn(func,XR)
+  self.assertIn('gizmoHitTest(r)',XR)
+  self.assertIn("if(h.kind==='gizmo')",XR)
+  self.assertIn("if(held.gizmoMode){updateGizmoDrag(frame,r,held);",XR)
+  self.assertIn('MODEL_GIZMO_TRANSFORM_SAVED',XR)
+  self.assertIn("'meshgizmo-move','meshgizmo-rotate','meshgizmo-scale'",XR)
+  self.assertIn("for(const [i,mode] of ['move','rotate','scale'].entries())",XR)
+  self.assertIn('drawMeshGizmo(vp);syncMeshTools()',XR)
+ def test_xyz_axis_scale_persists_on_existing_model(self):
+  self.assertIn("axis_scale:m.axisScale||[1,1,1]",XR)
+  self.assertIn("axisScale:validVec(xform.axis_scale,3)",XR)
+  self.assertIn("card.axisScale=updated",XR)
+  self.assertIn('axis_scale=v.get(\'axis_scale\',[1,1,1])',APP)
+  self.assertIn("'axis_scale':[round(float(x),4) for x in axis_scale]",APP)
+  self.assertIn('mesh.parts',XR)
+  self.assertNotIn('THREE.TransformControls',XR)

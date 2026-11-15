@@ -1312,16 +1312,17 @@ def media_3d_status(jid):
 def update_3d_transform(jid):
     # Transform is relative to the image's spatial pose; moving the source
     # automatically moves its attached 3D object without another paid task.
-    v=body();offset=v.get('offset');rotation=v.get('rotation');size=v.get('scale')
+    v=body();offset=v.get('offset');rotation=v.get('rotation');size=v.get('scale');axis_scale=v.get('axis_scale',[1,1,1])
     def bounded(values,length,limit):
         return isinstance(values,list) and len(values)==length and all(
             type(x) in (int,float) and math.isfinite(x) and abs(x)<=limit for x in values)
-    if not bounded(offset,3,3) or not bounded(rotation,4,1.1) or not (type(size) in (int,float) and math.isfinite(size) and .2<=size<=4):
+    if not bounded(offset,3,3) or not bounded(rotation,4,1.1) or not (type(size) in (int,float) and math.isfinite(size) and .2<=size<=4) or not (bounded(axis_scale,3,4) and all(.2<=x<=4 for x in axis_scale)):
         return jsonify(error='Invalid 3D position, rotation or scale'),400
     norm=math.sqrt(sum(x*x for x in rotation))
     if norm<.2 or norm>1.8:return jsonify(error='Invalid 3D orientation'),400
     transform={'offset':[round(float(x),4) for x in offset],
-               'rotation':[round(float(x/norm),6) for x in rotation], 'scale':round(float(size),4)}
+               'rotation':[round(float(x/norm),6) for x in rotation], 'scale':round(float(size),4),
+               'axis_scale':[round(float(x),4) for x in axis_scale]}
     with g.con:
         changed=g.con.execute('UPDATE jobs_3d SET transform_json=? WHERE id=? AND owner_id=?',
                               (json.dumps(transform,separators=(',',':')),jid,g.user['id']))
