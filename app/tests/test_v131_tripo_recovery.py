@@ -1,4 +1,4 @@
-"""v0.10.37 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
+"""v0.10.38 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -187,7 +187,7 @@ class Tripo31(unittest.TestCase):
 if __name__=='__main__':unittest.main()
 
 
-# v0.10.37: private Blender thumbnails and XR GPU lifecycle diagnostics.
+# v0.10.38: private Blender thumbnails and XR GPU lifecycle diagnostics.
 class ModelThumbnailTests(unittest.TestCase):
  def test_backend_exposes_thumbnail_and_source_fallback(self):
   self.assertIn('def _model_thumb_path(owner,jid):',APP)
@@ -232,3 +232,34 @@ class XR3DDiagnosticsTests(unittest.TestCase):
   self.assertIn('IMAGE_DIR/origin',source)
   self.assertIn('_ensure_model_thumbnail',source)
   self.assertIn("'Cache-Control'",source)
+
+class XRMeshOwnershipAndLibraryRegressionTests(unittest.TestCase):
+ """v0.10.38 regression: GPU buffers must remain owned by the XR model."""
+ def test_ownership_transfer_preserves_mesh_parts_during_finally_cleanup(self):
+  xr=(ROOT/'frontend/assets/xr.js').read_text()
+  self.assertIn("kind:'3dmesh',parts:pieces.slice()",xr)
+  self.assertIn('meshPreviews.push(model);pieces.length=0;',xr)
+  self.assertIn("'MODEL_RENDER_PARTS_COMMITTED'",xr)
+  self.assertIn("'MODEL_FIRST_GPU_DRAW_SUBMITTED'",xr)
+  self.assertIn('for(const part of mesh.parts||[])',xr)
+  import subprocess
+  result=subprocess.run(['node','-e',
+      "const uploaded=[{count:9444,buffer:{}}];const model={parts:uploaded.slice()};uploaded.length=0;"
+      "if(model.parts.length!==1||model.parts[0].count!==9444||uploaded.length!==0)process.exit(1);"],
+      capture_output=True,text=True,timeout=5)
+  self.assertEqual(result.returncode,0,result.stderr)
+
+ def test_no_recurring_gpu_queries_unless_verbose(self):
+  xr=(ROOT/'frontend/assets/xr.js').read_text()
+  self.assertIn('let xr3DVerbose=false;',xr)
+  self.assertIn('if(xr3DVerbose&&t-(renderView.lastXRFramebufferCheck||0)>60000)',xr)
+  self.assertIn("if(level==='error'||xr3DVerbose)",xr)
+  self.assertIn('setVerbose:value=>',xr)
+
+ def test_library_is_clearly_paginated_and_newest_first(self):
+  xr=(ROOT/'frontend/assets/xr.js').read_text()
+  self.assertIn('function galleryHeadingTexture(total,page,start,end)',xr)
+  self.assertIn('sort((a,b)=>b.id-a.id)',xr)
+  self.assertIn("label:direction>0?'OLDER  →':'←  NEWER'",xr)
+  self.assertIn("c.kind==='gallery')&&c.captionNormal",xr)
+  self.assertIn("cards.filter(c=>c.kind!=='galleryheader')",xr)

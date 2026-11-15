@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.37",
-  "description": "XR 3D load/GPU console diagnostics and private Blender model thumbnails"
+  "version": "0.10.38",
+  "description": "Fix XR model render-part ownership and simplify headset diagnostics and library browsing"
 }

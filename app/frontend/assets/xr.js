@@ -25,13 +25,16 @@ const PW=600,PH=420,MAX_CLOUD=10,TAU=2*Math.PI;
 // 3D model lifecycle is observable in the Quest Browser console. This records
 // only job IDs, geometry counts, GPU status and placement -- never model URLs,
 // private images, credentials or GLB bytes. No paid provider calls.
-const xr3DLog=[];const xr3DOnce=new Set();
+const xr3DLog=[];const xr3DOnce=new Set();let xr3DVerbose=false;
 function xr3D(stage,details={},level='info'){
+ // Logging each headset frame or recurring framebuffer diagnostics is too costly
+ // on Quest. Only state transitions appear by default; opt in to verbose traces.
+ if(stage==='XR_FRAMEBUFFER_STATUS'&&!xr3DVerbose)return null;
  const entry={at:new Date().toISOString(),stage,...details};xr3DLog.push(entry);
- if(xr3DLog.length>240)xr3DLog.shift();
+ if(xr3DLog.length>160)xr3DLog.shift();
  const method=level==='error'?'error':level==='warn'?'warn':'info';
  console[method]('[FREELAB XR 3D] '+stage,entry);
- window.FreeLab?.traceEvent?.('XR 3D '+stage+' · '+JSON.stringify(details).slice(0,190),level);
+ if(level==='error'||xr3DVerbose)window.FreeLab?.traceEvent?.('XR 3D '+stage+' · '+JSON.stringify(details).slice(0,190),level);
  return entry;
 }
 function xr3DThrottled(key,stage,details={},level='warn'){
@@ -43,7 +46,7 @@ function xrGLErrors(){
  const values=[];for(let i=0;i<3;i++){const value=gl.getError();if(value===gl.NO_ERROR)break;values.push('0x'+value.toString(16));}
  return {context:'ok',errors:values};
 }
-window.FreeLabXR3DDiagnostics={getLog:()=>xr3DLog.slice(),clear:()=>{xr3DLog.length=0;xr3DOnce.clear();}};
+window.FreeLabXR3DDiagnostics={getLog:()=>xr3DLog.slice(),clear:()=>{xr3DLog.length=0;xr3DOnce.clear();},setVerbose:value=>{xr3DVerbose=Boolean(value);return xr3DVerbose;}};
 
 // One navigation pill. Image-specific actions belong only to the selected card.
 const tools=[['gallery','▣'],['createimage','✎'],['follow','◎'],['debug','≡'],['config','⚙'],['exit','×']];
@@ -239,14 +242,14 @@ function rebuildTheme(){if(!gl)return;
  if(toolbar)refreshToolbar();if(configPanel)refreshConfig();
  if(debugPanel){const old=debugPanel.front;debugPanel.front=debugTexture();debugPanel.back=debugPanel.front;if(old)gl.deleteTexture(old);}
  if(descriptionPanel&&descriptionContext){const old=descriptionPanel.front;descriptionPanel.front=descriptionTexture(descriptionPanel.message||'',descriptionContext.card?.data?.label||'IMAGE',descriptionPanel.retryable);descriptionPanel.back=descriptionPanel.front;if(old)gl.deleteTexture(old);}
- for(const c of cards){if(!c.data||!c.front)continue;
+ for(const c of cards){if(!c.data||!c.front||c.kind==='galleryheader')continue;
   const nav=c.kind==='branchpage';
   const a=nav?navigationTexture(c.data.label||'NEXT'):cardTexture(c.data.image||null,c.data.label||'',c.data.subtitle||'',false,
    (w,h)=>{c.canvasHeight=h;c.size=cardDimensions(w,h,c.kind);},c.kind==='source'&&c.data.saved!==false,
    c.data.decodedImage||null,String(c.data.provider||'').includes('sam-3.1-mask'));
   for(const t of new Set(c.resources||[]))gl.deleteTexture(t);
   c.front=a.tex;c.back=a.tex;c.resources=[a.tex];
-  if(c.kind==='source'||c.kind==='object'){
+  if(c.kind==='source'||c.kind==='object'||c.kind==='gallery'){
    c.captionNormal=spatialCaptionTexture(c.data.label,c.data.subtitle,false);
    c.captionActive=spatialCaptionTexture(c.data.label,c.data.subtitle,true);
    c.resources.push(c.captionNormal,c.captionActive);
@@ -547,7 +550,7 @@ function addCard(id,kind,data,loc,size){let c;
  const initialHeight=front.canvas?.height||420;
  c={id,kind,data,front:front.tex,back:back.tex,resources:[front.tex,back.tex],pos:[...loc],from:[...loc],to:[...loc],start:0,duration:0,scale:1,rot:0,q:[0,0,0,1],visible:true,
    size:cardDimensions(front.canvas?.width||600,initialHeight,kind),canvasHeight:initialHeight,buttonBand:.5-86/initialHeight,original:[...loc]};
- if(kind==='source'||kind==='object'){
+ if(kind==='source'||kind==='object'||kind==='gallery'){
    c.captionNormal=spatialCaptionTexture(data.label,data.subtitle,false);
    c.captionActive=spatialCaptionTexture(data.label,data.subtitle,true);
    c.resources.push(c.captionNormal,c.captionActive);
@@ -1049,7 +1052,7 @@ function drawCard(c,vp){if(!c.visible||!c.front||c.animScale===0)return;const te
  gl.uniformMatrix4fv(gl.getUniformLocation(program,'uMVP'),false,matmul(vp,cardModel(c)));gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,tex);gl.uniform1i(gl.getUniformLocation(program,'uTex'),0);gl.uniform1i(gl.getUniformLocation(program,'uFlip'),cardBack(c)?1:0);gl.uniform1f(gl.getUniformLocation(program,'uOpacity'),c.alpha===undefined?1:clamp(c.alpha,0,1));gl.drawArrays(gl.TRIANGLES,0,6);
  // Caption is independent of card image scale. A distance-compensated billboard
  // maintains nearly the same visual font size close to and far from the head.
- if((c.kind==='source'||c.kind==='object')&&c.captionNormal&&latestPose){
+ if((c.kind==='source'||c.kind==='object'||c.kind==='gallery')&&c.captionNormal&&latestPose){
   const parent=matmul(baseFor(c),matmul(translate(...rootPos(c)),quatMatrix(c.q||quatY(c.rot||0))));
   const h=latestPose.transform.matrix,eye=[h[12],h[13],h[14]];
   const dist=length(vsub(eye,[parent[12],parent[13],parent[14]]));
@@ -1139,7 +1142,7 @@ function ray(frame,src){try{const sp=src.targetRaySpace?frame.getPose(src.target
  if(src.hand){const a=frame.getJointPose(src.hand.get('index-finger-tip'),refSpace),b=frame.getJointPose(src.hand.get('wrist'),refSpace);if(a&&b){const o=[a.transform.position.x,a.transform.position.y,a.transform.position.z];const w=[b.transform.position.x,b.transform.position.y,b.transform.position.z];return {o,d:norm(vsub(o,w))};}}
  }catch{}return null;}
 function hitTest(r,c){if(!r||!c.visible||!c.front||c.animScale===0)return null;const m=cardModel(c),inv=inverse(m);if(!inv)return null;const o=point(inv,r.o),d=point(inv,r.d,0);if(Math.abs(d[2])<1e-6)return null;const k=-o[2]/d[2];if(k<=0||k>6)return null;const x=o[0]+d[0]*k,y=o[1]+d[1]*k;if(Math.abs(x)>.5||Math.abs(y)>.5)return null;const hitWorld=point(m,[x,y,0]);const dist=length(vsub(hitWorld,r.o));return {card:c,x,y,dist};}
-function pick(r){if(darkroom){const hits=[darkClose,darkPrevious,darkNext].filter(Boolean).map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return hits[0]||null;}const opts=[...cards,...meshJobBadges.values(),toolbar,...(voicePhase==='listening'||voicePhase==='processing'?[]:[captureEye]),...(voicePhase==='listening'||voicePhase==='processing'?[]:[extractButton]),...(uiSettings.voice===false?[]:[voiceButton]),voiceOk,voiceCancel,promptPanel,editbar,...(debugShowing?[debugPanel]:[]),descriptionPanel,...(configShowing?[configPanel]:[])].filter(Boolean),all=[...opts.map(c=>hitTest(r,c)).filter(Boolean),...meshPreviews.map(m=>meshHitTest(r,m)).filter(Boolean),...(meshTools?[hitTest(r,meshTools)].filter(Boolean):[])].sort((a,b)=>a.dist-b.dist);return all[0]||null;}
+function pick(r){if(darkroom){const hits=[darkClose,darkPrevious,darkNext].filter(Boolean).map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return hits[0]||null;}const opts=[...cards.filter(c=>c.kind!=='galleryheader'),...meshJobBadges.values(),toolbar,...(voicePhase==='listening'||voicePhase==='processing'?[]:[captureEye]),...(voicePhase==='listening'||voicePhase==='processing'?[]:[extractButton]),...(uiSettings.voice===false?[]:[voiceButton]),voiceOk,voiceCancel,promptPanel,editbar,...(debugShowing?[debugPanel]:[]),descriptionPanel,...(configShowing?[configPanel]:[])].filter(Boolean),all=[...opts.map(c=>hitTest(r,c)).filter(Boolean),...meshPreviews.map(m=>meshHitTest(r,m)).filter(Boolean),...(meshTools?[hitTest(r,meshTools)].filter(Boolean):[])].sort((a,b)=>a.dist-b.dist);return all[0]||null;}
 function imageButtonAt(card,x,y){
  // Hit regions are in the SAME 600-pixel canvas coordinates as cardTexture.
  // Image aspect ratios change canvas height; fixed normalized-Y thresholds do not work.
@@ -1491,7 +1494,7 @@ function renderView(t,frame){if(!session||gl.isContextLost()){return;}const pose
  }
  pollRoomVisitors(t);placeRoomVisitors(pose);poll3d(t);pollLabSelector(frame,t,pose);pollStringLab(frame,t);pollFingerLab(frame,t);pollFrameLab(frame,t);pollPlacedFrameTouch(frame,t);pollFrameGames(t,pose);advanceGrab(frame);for(const src of session.inputSources)pinchPoll(frame,src);pollGestures(frame,t);tween(t);faceCloudCards(pose,t);updateMascot(frame,t);tickMascotSpeech(t);tickVoiceIndicator(t,pose);typeStatus(t);updateMicVisual(t);updateDebugCard(t);if(captureEye&&t-lastEyeUpdate>67){if(eyeState!=='idle'&&t>eyeUntil)eyeState='idle';paintEye(t);lastEyeUpdate=t;}if(cameraHint&&t-lastHintCheck>180){lastHintCheck=t;const label=cameraHintMode();if(label!==cameraHintState){cameraHintState=label;cameraHintUntil=t+(label==='off'||label==='ready'?10000:7000);gl.deleteTexture(cameraHint.front);cameraHint.front=cameraHintTexture(label);cameraHint.back=cameraHint.front;cameraHint.resources=[cameraHint.front];}cameraHint.visible=t<cameraHintUntil&&voicePhase!=='listening'&&voicePhase!=='processing';}if(t-lastUi>150){updateHover(frame);lastUi=t;}
  gl.bindFramebuffer(gl.FRAMEBUFFER,session.renderState.baseLayer.framebuffer);
- if(t-(renderView.lastXRFramebufferCheck||0)>19000){renderView.lastXRFramebufferCheck=t;
+ if(xr3DVerbose&&t-(renderView.lastXRFramebufferCheck||0)>60000){renderView.lastXRFramebufferCheck=t;
   const status=gl.checkFramebufferStatus(gl.FRAMEBUFFER),gpu=xrGLErrors();
   xr3D('XR_FRAMEBUFFER_STATUS',{status:'0x'+status.toString(16),complete:status===gl.FRAMEBUFFER_COMPLETE,framebufferWidth:session.renderState.baseLayer.framebufferWidth,framebufferHeight:session.renderState.baseLayer.framebufferHeight,gpu},!gpu.errors?.length&&status===gl.FRAMEBUFFER_COMPLETE?'info':'error');}
  gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
@@ -1592,12 +1595,25 @@ async function flipBranchPage(direction){if(!cloud?.id)return;
 }
 
 function spatialLoc(o,i,n){const pos=ringPosition(i,n);if(o.spatial&&typeof o.spatial.x==='number')return [o.spatial.x,o.spatial.y,o.spatial.z];return pos;}
+function galleryHeadingTexture(total,page,start,end){
+ const [c,ctx]=canvas2d(1050,148);rrect(ctx,0,0,1050,148,30,'rgba(15,31,28,.94)');
+ text(ctx,'LIBRARY  /  SAVED SOURCES',40,49,33,'#e9fff2',720);
+ text(ctx,'NEWEST FIRST  ·  SELECT A PHOTO TO OPEN',40,104,23,'#c5dcd4',580);
+ text(ctx,`${start}–${end} / ${total}   ·   PAGE ${page}`,1011,55,29,'#a3ffe2',700,'right');
+ return texture(c);
+}
 async function openGallery(page=galleryPage){if(latestPose){root=viewerAnchor(latestPose,-.03,1.42);rootYaw=cameraYaw(latestPose);}mode='gallery';selected=null;updateEditbar();clearCards();cloud=null;branchFocusId=null;branchPage=0;
  try{clouds=await window.FreeLab.listXRClouds();refreshToolbar();}catch(e){setStatus(e.message);return;}
- const available=clouds.filter(x=>!x.hidden);galleryPage=clamp(page,0,Math.max(0,Math.ceil(available.length/8)-1));const previews=available.slice(galleryPage*8,galleryPage*8+8);for(let i=0;i<previews.length;i++){const c=previews[i],col=i%4,row=Math.floor(i/4);addCard('gallery'+c.id,'gallery',{id:c.id,image:c.image_url,label:'CAPTURE '+c.id,subtitle:c.objects.length+' OBJECT(S)'},[(col-1.5)*.38,.21-row*.43,-.05],[.31,.35]);}
- for(const direction of [-1,1]){if(direction<0&&galleryPage===0||direction>0&&(galleryPage+1)*8>=available.length)continue;
-  addCard('gallerynav'+direction,'gallerynav',{direction,label:direction>0?'NEXT  →':'←  PREVIOUS',subtitle:'PAGE '+(galleryPage+1)+' OF '+Math.ceil(available.length/8)},[direction*.53,-.64,0],[.28,.18]);}
- setStatus(available.length?`LIBRARY · ${available.length} saved captures · page ${galleryPage+1}/${Math.ceil(available.length/8)}`:'No saved captures yet · press capture');}
+ // Always begin at the most recent source; the legacy archive remains last.
+ const available=clouds.filter(x=>!x.hidden).sort((a,b)=>b.id-a.id),pageCount=Math.max(1,Math.ceil(available.length/8));
+ galleryPage=clamp(page,0,pageCount-1);const previews=available.slice(galleryPage*8,galleryPage*8+8),start=available.length?galleryPage*8+1:0,end=galleryPage*8+previews.length;
+ const title=galleryHeadingTexture(available.length,galleryPage+1,start,end);
+ cards.push({id:'gallery-heading',kind:'galleryheader',data:{},pos:[0,.67,-.04],q:[0,0,0,1],scale:1,size:[1.52,.20],visible:true,front:title,back:title,resources:[title]});
+ for(let i=0;i<previews.length;i++){const c=previews[i],col=i%4,row=Math.floor(i/4);const date=String(c.created_at||'').slice(0,10),count=c.objects?.length||0;
+  addCard('gallery'+c.id,'gallery',{id:c.id,image:c.image_url,label:c.legacy?'OLDER ARCHIVE':'SOURCE '+c.id,subtitle:`${date?date+' · ':''}${count} BRANCHES · OPEN`},[(col-1.5)*.38,.20-row*.43,-.05],[.31,.35]);}
+ for(const direction of [-1,1]){if(direction<0&&galleryPage===0||direction>0&&galleryPage+1>=pageCount)continue;
+  addCard('gallerynav'+direction,'gallerynav',{direction,label:direction>0?'OLDER  →':'←  NEWER',subtitle:`PAGE ${galleryPage+1+direction} / ${pageCount}`},[direction*.53,-.67,.02],[.28,.16]);}
+ setStatus(available.length?`LIBRARY · MOST RECENT FIRST · ${start}–${end} of ${available.length} · page ${galleryPage+1}/${pageCount}`:'LIBRARY EMPTY · press EYE to capture',9000);}
 async function binSource(){if(!selected||selected.kind!=='source'||!cloud?.id)return setStatus('Choose a source capture first');
  const id=cloud.id;try{await window.FreeLab.updateXRCloud(id,{hidden:true});cue('paper');
   setStatus('Capture stored in hidden Bin · reopen from BIN to restore',10000);
@@ -2149,13 +2165,16 @@ async function spawnMeshPreview(job,origin=null){
   }
   const xform=job?.transform||{};
   const validVec=(v,n)=>Array.isArray(v)&&v.length===n&&v.every(x=>Number.isFinite(x));
-  const model={jobId,captureId,objectId,kind:'3dmesh',parts:pieces,pos:origin||[0,0,-1],
+  // Ownership moves to the scene. Copy the array before clearing the temporary
+  // cleanup list; otherwise pieces.length=0 empties model.parts by reference.
+  const model={jobId,captureId,objectId,kind:'3dmesh',parts:pieces.slice(),pos:origin||[0,0,-1],
    offset:validVec(xform.offset,3)?xform.offset:[0,0,0],
    rotation:validVec(xform.rotation,4)?quatNorm(xform.rotation):[0,0,0,1],
    modelScale:Number.isFinite(xform.scale)?clamp(xform.scale,.2,4):1,
    q:[0,0,0,1],created:performance.now()};
   if(!meshAnchor(model)){xr3D('MODEL_ANCHOR_MISSING',{jobId,captureId,objectId,cloudId:cloud?.id},'error');return;}
   meshPreviews.push(model);pieces.length=0;meshPreviewRetries.delete(jobId);meshNextAttemptAt.delete(jobId);
+  xr3D('MODEL_RENDER_PARTS_COMMITTED',{jobId,partCount:model.parts.length,vertexCount:model.parts.reduce((n,p)=>n+p.count,0),gpuBufferCount:model.parts.filter(p=>Boolean(p.buffer)).length});
   {const pose=meshWorldPose(model);xr3D('MODEL_ATTACHED_TO_XR_SCENE',{jobId,worldPosition:pose?.pos,worldRotation:pose?.q,worldScale:pose?.scale,renderScaleMetres:.30,partCount:model.parts.length,vertexCount:model.parts.reduce((n,p)=>n+p.count,0),anchor:pose?.anchor,gpu:xrGLErrors()});}
   syncMeshJobBadge({...job,id:jobId,capture_id:captureId,object_id:objectId,
     provider:typeof job==='number'?'3D':job.provider,status:'SUCCEEDED',progress:100});
@@ -2178,7 +2197,7 @@ function drawMeshPreview(mesh,vp,t){
  }
  if(!mesh.parts?.length||!meshProgram||mesh.captureId!==cloud?.id){xr3DThrottled('drawskip-'+mesh.jobId+'-'+meshGeneration,'MODEL_DRAW_SKIPPED',{jobId:mesh.jobId,parts:mesh.parts?.length||0,shaderAvailable:Boolean(meshProgram),captureId:mesh.captureId,activeCaptureId:cloud?.id},'warn');return;}
  const pose=meshWorldPose(mesh);if(!pose){xr3DThrottled('draw-anchor-'+mesh.jobId+'-'+meshGeneration,'MODEL_DRAW_NO_ANCHOR',{jobId:mesh.jobId},'error');return;}
- const k=Math.min(1,(t-mesh.created)/680),ease=k*k*(3-2*k);
+ const k=clamp((t-mesh.created)/680,0,1),ease=Math.max(.08,k*k*(3-2*k));
  // Real-world longest axis is ~30 cm: no ceiling-filling fragment clouds.
  const model=matmul(translate(...pose.pos),matmul(quatMatrix(pose.q),scale(.30*pose.scale*ease,.30*pose.scale*ease,.30*pose.scale*ease)));
  gl.useProgram(meshProgram);
@@ -2194,7 +2213,7 @@ function drawMeshPreview(mesh,vp,t){
   gl.uniform4fv(gl.getUniformLocation(meshProgram,'uColor'),part.color);gl.drawArrays(gl.TRIANGLES,0,part.count);
  }
  if(!mesh.firstDrawLogged){mesh.firstDrawLogged=true;xr3D('MODEL_FIRST_GPU_DRAW_SUBMITTED',{jobId:mesh.jobId,worldPosition:pose.pos,worldScale:pose.scale,meshScaleMetres:.30*pose.scale*ease,vertexCount:mesh.parts.reduce((n,p)=>n+p.count,0),gpu:xrGLErrors()});}
- else if(t-(mesh.lastGpuCheck||0)>17000){mesh.lastGpuCheck=t;const gpu=xrGLErrors();if(gpu.errors?.length)xr3D('MODEL_GPU_DRAW_ERROR',{jobId:mesh.jobId,gpu},'error');}
+ else if(xr3DVerbose&&t-(mesh.lastGpuCheck||0)>60000){mesh.lastGpuCheck=t;const gpu=xrGLErrors();if(gpu.errors?.length)xr3D('MODEL_GPU_DRAW_ERROR',{jobId:mesh.jobId,gpu},'error');}
 }
 async function reopenCloudModels(captureId){
  const scope=meshGeneration;
@@ -2228,7 +2247,7 @@ async function reopenCloudModels(captureId){
  }catch(e){xr3D('SOURCE_MODEL_SCAN_FAILED',{captureId,error:String(e.message)},'error');window.FreeLab?.traceEvent?.('3D model reload: '+e.message,'warn');}
 }
 async function poll3d(t){
- if(cloud?.id&&t-meshSyncAt>17000&&!meshSyncBusy){
+ if(cloud?.id&&t-meshSyncAt>35000&&!meshSyncBusy){
   meshSyncAt=t;meshSyncBusy=true;
   void reopenCloudModels(cloud.id).catch(e=>window.FreeLab?.traceEvent?.('3D sync: '+e.message,'warn')).finally(()=>{meshSyncBusy=false;});
  }
