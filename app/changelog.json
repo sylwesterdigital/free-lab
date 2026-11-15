@@ -1,15 +1,27 @@
 {
-  "version": "0.10.32",
-  "title": "FREELAB v0.10.32 — Quest performance and 3D recovery",
+  "version": "0.10.33",
+  "title": "FREELAB v0.10.33 — XR 3D preparation recovery and theater transforms",
   "datetime": "2026-11-15",
   "changes": [
-    "Tripo/AHOLO/Meshy provider status checks are now scheduled in bounded background workers instead of holding XR API requests open.",
-    "Signed GLB retrieval, private caching, Quest geometry decoding, and optional Blender preparation are asynchronous, with a private cached geometry response and no second paid generation.",
-    "Quest 3D preview responds with preparing/waiting until model bytes are ready; a permanent failure is returned once, and the user can explicitly retry the original task.",
-    "XR shared-room publishing slows to a safe rate and backs off after gateway failures; unexpected HTML responses produce a clear connection status instead of a JSON parse exception.",
-    "The existing spatial source/3D attachment and quiet error badge are retained; no extra floating diagnostics window is introduced."
+    "Cinematic Previous, Next and Close now share the exact same world-space transform and follow the photograph’s rotation; one evenly spaced row sits below its bottom edge, outside the image.",
+    "Generated GLBs up to 64 MB can be cached privately; large and dense models are converted to a bounded Quest preview using Blender without altering the original or submitting a second paid task.",
+    "The Quest preview worker maintains a heartbeat so interrupted server workers no longer leave 3D generation permanently stuck on Preparing, and short preparation stages update the existing cube status.",
+    "XR image-to-model previews throttle their own retry requests while the server prepares a model; retry and failure recovery remain available without paid regeneration.",
+    "Tests cover the real theater coordinate-system bug, original vs preview size limits, bounded worker recovery, and source-linked model processing."
   ],
   "history": [
+    {
+      "version": "0.10.32",
+      "title": "FREELAB v0.10.32 — Quest performance and 3D recovery",
+      "datetime": "2026-11-15",
+      "changes": [
+        "Tripo/AHOLO/Meshy provider status checks are now scheduled in bounded background workers instead of holding XR API requests open.",
+        "Signed GLB retrieval, private caching, Quest geometry decoding, and optional Blender preparation are asynchronous, with a private cached geometry response and no second paid generation.",
+        "Quest 3D preview responds with preparing/waiting until model bytes are ready; a permanent failure is returned once, and the user can explicitly retry the original task.",
+        "XR shared-room publishing slows to a safe rate and backs off after gateway failures; unexpected HTML responses produce a clear connection status instead of a JSON parse exception.",
+        "The existing spatial source/3D attachment and quiet error badge are retained; no extra floating diagnostics window is introduced."
+      ]
+    },
     {
       "version": "0.10.31",
       "title": "FREELAB v0.10.31 — Tripo result recovery and uncluttered XR",

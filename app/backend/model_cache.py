@@ -5,7 +5,7 @@ from __future__ import annotations
 import os,urllib.request,urllib.error
 from pathlib import Path
 from . import meshy3d,aholo3d,tripo3d
-MAX_MODEL=32_000_000
+MAX_MODEL=64_000_000
 
 def store(url,provider,folder:Path,owner:int,jid:int):
     good=(aholo3d.safe_preview_url(url) if provider=='aholo' else tripo3d.safe_file_url(url,trusted_task=True) if provider=='tripo' else meshy3d.safe_file_url(url) if provider=='meshy' else None)
@@ -19,9 +19,9 @@ def store(url,provider,folder:Path,owner:int,jid:int):
     with (tripo3d.open_model_download(good,timeout=20) if provider=='tripo'
           else urllib.request.build_opener(meshy3d.NoRedirect).open(request,timeout=15)) as response:
         if response.headers.get('Content-Length') and int(response.headers['Content-Length'])>MAX_MODEL:
-            raise ValueError('Generated model exceeds private cache limit of 32 MB')
+            raise ValueError('Generated model exceeds private cache limit of 64 MB')
         raw=response.read(MAX_MODEL+1)
-    if len(raw)>MAX_MODEL:raise ValueError('Generated model exceeds 32 MB')
+    if len(raw)>MAX_MODEL:raise ValueError('Generated model exceeds 64 MB')
     if len(raw)<20 or raw[:4]!=b'glTF' or int.from_bytes(raw[4:8],'little')!=2 or int.from_bytes(raw[8:12],'little')!=len(raw):
         raise ValueError('Provider download is not a valid GLB 2.0 container')
     temporary=folder/(name+'.tmp-'+os.urandom(5).hex())

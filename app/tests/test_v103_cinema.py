@@ -28,10 +28,10 @@ class CinemaTests(unittest.TestCase):
   section=XR.split('function layoutCinemaControls(){',1)[1].split('function cinemaFloorTexture(',1)[0]
   self.assertIn('const center=darkroom.pos,orientation=darkroom.q;',section)
   self.assertIn('lowerEdge=-Math.abs(darkroom.size[1])*.5',section)
-  self.assertIn('rowY=lowerEdge+.17',section)
-  self.assertIn('[[darkPrevious,-.29],[darkNext,0],[darkClose,.29]]',section)
+  self.assertIn('rowY=lowerEdge-.16',section)
+  self.assertIn('[[darkPrevious,-.245],[darkNext,0],[darkClose,.245]]',section)
   self.assertIn('button.q=orientation',section)
-  self.assertIn('button.size=[.235,.235]',section)
+  self.assertIn('button.size=[.19,.19]',section)
   self.assertNotIn('poseForwardAnchor(',section)
   render=XR.split('function renderCinema(frame,pose){',1)[1].split('async function action(',1)[0]
   self.assertNotIn('button.pos=',render)
@@ -44,17 +44,49 @@ class CinemaTests(unittest.TestCase):
   self.assertIn("darkPrevious=arrow('‹','cinemaprev')",init)
   self.assertIn("darkNext=arrow('›','cinemanext')",init)
 
+ def test_runtime_theater_controls_share_image_world_space(self):
+  # This specifically catches v0.10.28's false positive: layout positions looked
+  # correct but arrow cardModel() inherited the collection root and X did not.
+  rootpos=XR.split('function rootPos(c){',1)[1].split('}\nfunction baseFor(c){',1)[0]
+  basefor=XR.split('function baseFor(c){',1)[1].split('}\nfunction cameraYaw(',1)[0]
+  layout=XR.split('function layoutCinemaControls(){',1)[1].split('}\nfunction cinemaFloorTexture(',1)[0]
+  program=r"""
+const root=[9,8,7],cloud={offset:[6,5,4]}, darkroom={pos:[1,2,-3],q:[0,0,0,1],size:[1.5,1.2]};
+let darkPrevious={kind:'cinemaprev',pos:[0,0,0]},darkNext={kind:'cinemanext',pos:[0,0,0]},darkClose={kind:'darkroomexit',pos:[0,0,0]};
+function translate(){return [0,0,0];}
+const vadd=(a,b)=>a.map((n,i)=>n+b[i]);
+const quatVec=(q,v)=>v;
+"""+'\nfunction rootPos(c){'+rootpos+'}\nfunction baseFor(c){'+basefor+'}\nfunction layoutCinemaControls(){'+layout+'}\n'+r"""
+layoutCinemaControls();
+const buttons=[darkPrevious,darkNext,darkClose];
+for(const btn of buttons){
+ if(JSON.stringify(baseFor(btn))!=='[0,0,0]')throw Error('Inherited collection root: '+btn.kind);
+ if(JSON.stringify(rootPos(btn))!==JSON.stringify(btn.pos))throw Error('Translated cinema position: '+btn.kind);
+ if(Math.abs(btn.pos[1]-(2-.6-.16))>1e-6)throw Error('Button is not below photo');
+ if(JSON.stringify(btn.q)!==JSON.stringify(darkroom.q))throw Error('Button not image-aligned');
+}
+if(Math.abs(darkPrevious.pos[0]-.755)>1e-6||Math.abs(darkNext.pos[0]-1)>1e-6||Math.abs(darkClose.pos[0]-1.245)>1e-6)
+ throw Error('Controls not evenly grouped');
+"""
+  import shutil
+  if shutil.which('node'):
+   result=subprocess.run(['node','-e',program],capture_output=True,text=True,timeout=6)
+   self.assertEqual(result.returncode,0,result.stderr)
+
  def test_world_space_cinema_objects_and_image_source(self):
   b=XR.split('function baseFor(c){',1)[1].split('function',1)[0]
-  for name in ('darkroom','darkroomexit','cinema-floor'):
+  for name in ('darkroom','darkroomexit','cinemaprev','cinemanext','cinema-floor'):
    self.assertIn("'"+name+"'",b)
+  root_section=XR.split('function rootPos(c){',1)[1].split('function baseFor(c){',1)[0]
+  for name in ('cinemaprev','cinemanext'):
+   self.assertIn("'"+name+"'",root_section)
   src=XR.split('function enterDarkroom(',1)[1].split('function renderCinema',1)[0]
   self.assertIn('target.data?.image',src)
   self.assertIn('img.onload',src)
   self.assertIn('gl.deleteTexture(reference.front)',src)
   self.assertIn('width*ratio',src)
   self.assertIn('Math.atan2(-headM[9]',src)
-  self.assertIn("size:[.235,.235]",src)
+  self.assertIn("size:[.19,.19]",src)
   self.assertNotIn('session.end()',src)
 
  def test_compact_voice_status_is_single_line(self):
@@ -76,8 +108,8 @@ class CinemaTests(unittest.TestCase):
   self.assertIn('mascotReactionTarget=handGesturePositions[side]',XR)
 
  def test_release_version(self):
-  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.32')
-  self.assertIn('xr.js?v=0.10.32',INDEX)
+  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.33')
+  self.assertIn('xr.js?v=0.10.33',INDEX)
 
 class VisionTests(unittest.TestCase):
  def test_explicit_description_refresh_instead_of_stale_dialogue(self):

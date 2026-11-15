@@ -17,7 +17,7 @@ let mascotSpeech=null,mascotSpeechUntil=0,gestureSpeechTimes=new Map(),mascotRea
 let pointerHover=null,lastFrame=0,lastUi=0,lastAction=0,latestPose=null,nextPaidAt=0,busy=false,mode='capture',statusText='Capture your space',statusUntil=0;
 let followMode=true,followBase=null,eyeBase=null,captureEye=null,voiceButton=null,extractButton=null,extractVisualActive=null,eyeResource=null,eyeState='idle',eyeUntil=0,rootYaw=0,menuYaw=0,promptPanel=null,promptContext=null,promptText='',xrDomOverlay=false;
 let cameraHint=null,cameraHintState='',lastHintCheck=0;
-let debugPanel=null,debugShowing=false,debugLast=0,serverPoll=0,serverDiagnostic=[],modelDiagnosticLines=[],modelDiagnosticJob=null,modelDiagnosticViewedAt=0,descriptionPanel=null,meshPreviews=[],meshLoadingJobs=new Set(),meshJobBadges=new Map(),meshPreviewFailures=new Set(),meshPreviewRetries=new Map(),mascotPointer=null,mascotTex=null,lastAvatar=0,mixBucket=[],xrKeyboard=null,visitorBadges=[],visitorPollAt=0;
+let debugPanel=null,debugShowing=false,debugLast=0,serverPoll=0,serverDiagnostic=[],modelDiagnosticLines=[],modelDiagnosticJob=null,modelDiagnosticViewedAt=0,descriptionPanel=null,meshPreviews=[],meshLoadingJobs=new Set(),meshJobBadges=new Map(),meshPreviewFailures=new Set(),meshPreviewRetries=new Map(),meshNextAttemptAt=new Map(),mascotPointer=null,mascotTex=null,lastAvatar=0,mixBucket=[],xrKeyboard=null,visitorBadges=[],visitorPollAt=0;
 let followOffset=[0,-.85,-1.16],followWorld=null,eyeWorld=null,depthState='unknown',depthChecked=false,depthFeature=false,depthBinding=null,meshyJob=null,meshyPollAt=0,meshConfirm=null;
 let voiceRecord=null,voiceRecordStarted=0,voiceMeterLast=0,cameraHintUntil=0,meshJobOrigin=null;
 let particles=[],handPinch=new WeakMap(),lastNative=new WeakMap(),clickState=new WeakMap(),lastEyeUpdate=0,lastMicUpdate=0,inferenceCard=null,inferenceStarted=0;
@@ -973,11 +973,11 @@ function clearCollectionMeshes(){
  meshGeneration++;
  meshPreviews=meshPreviews.filter(m=>{if(m.guestId)return true;releaseMeshPreview(m);return false;});
  for(const badge of meshJobBadges.values())if(badge.front&&gl)gl.deleteTexture(badge.front);
- meshJobBadges.clear();meshPreviewFailures.clear();meshPreviewRetries.clear();
+ meshJobBadges.clear();meshPreviewFailures.clear();meshPreviewRetries.clear();meshNextAttemptAt.clear();
 }
 function clearCards(){if(!gl)return;clearCollectionMeshes();closeImageMenu();for(const c of cards)for(const t of c.resources||[])gl.deleteTexture(t);cards=[];selected=null;}
-function rootPos(c){return cloud&&!['config','toolbar','status','captureeye','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics','description','labmenu','darkroom','darkroomexit','cinema-floor','visitor'].includes(c.kind)?vadd(c.pos,cloud.offset||[0,0,0]):c.pos;}
-function baseFor(c){if(c.kind==='pointer-mascot'||['config','toolbar','status','captureeye','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics','description','labmenu','darkroom','darkroomexit','cinema-floor','visitor'].includes(c.kind))return translate();return root;}
+function rootPos(c){return cloud&&!['config','toolbar','status','captureeye','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics','description','labmenu','darkroom','darkroomexit','cinemaprev','cinemanext','cinema-floor','visitor'].includes(c.kind)?vadd(c.pos,cloud.offset||[0,0,0]):c.pos;}
+function baseFor(c){if(c.kind==='pointer-mascot'||['config','toolbar','status','captureeye','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics','description','labmenu','darkroom','darkroomexit','cinemaprev','cinemanext','cinema-floor','visitor'].includes(c.kind))return translate();return root;}
 function cameraYaw(pose){return yawFromMatrix(pose.transform.matrix);}
 function syncTrackedUI(pose,t){
  const yaw=cameraYaw(pose),head=pose.transform.matrix;
@@ -1895,9 +1895,9 @@ function meshJobTexture(job){
  const accent=bad?'#ff9caa':'#bdfff1';
  text(ctx,meshJobCaption(job),22,65,43,accent,800);
  const detail=bad?(String(job.error||'3D model could not load').slice(0,46)):
-  `${String(job.provider||'3D').toUpperCase()}  ·  ${['PREPARING','WAITING','LOADING'].includes(job.status)?'PREPARING MODEL':Math.round(Number(job.progress)||0)+'%'} `;
+  `${String(job.provider||'3D').toUpperCase()} · ${['PREPARING','WAITING','LOADING'].includes(job.status)?String(job.stage||'PREPARING MODEL').slice(0,36):Math.round(Number(job.progress)||0)+'%'} `;
  text(ctx,detail,22,130,30,bad?'#ffc9cf':'#e5fff6',600);
- text(ctx,'TAP FOR STATUS / RETRY · JOB #'+job.jobId,22,194,25,'#e9f6ef',650);
+ text(ctx,'JOB #'+job.jobId+(bad?' · tap for recovery':' · source linked'),22,194,25,'#e9f6ef',650);
  return texture(c);
 }
 function drawMeshJobCube(badge,anchor,vp,t,owner){
@@ -1939,7 +1939,7 @@ function syncMeshJobBadge(job){
   meshJobBadges.set(job.id,badge);
  }
  const changed=badge.status!==status||Math.abs(badge.progress-progress)>=3||badge.error!==(job.error||'');
- badge.status=status;badge.progress=progress;badge.error=job.error||'';
+ badge.status=status;badge.progress=progress;badge.error=job.error||'';badge.stage=job.stage||'';
  if(status==='SUCCEEDED'&&!badge.completeAt)badge.completeAt=performance.now();
  if(!badge.front||changed){const tex=meshJobTexture(badge);if(badge.front&&gl)gl.deleteTexture(badge.front);badge.front=tex;badge.back=tex;badge.lastChange=performance.now();}
 }
@@ -2003,7 +2003,7 @@ function createMeshPart(raw){
 }
 async function spawnMeshPreview(job,origin=null){
  const jobId=typeof job==='number'?job:job.id;
- if(meshPreviews.some(m=>m.jobId===jobId)||meshPreviewFailures.has(jobId)||meshLoadingJobs.has(jobId)||meshLoadingJobs.size>=2||!session)return;
+ if(meshPreviews.some(m=>m.jobId===jobId)||meshPreviewFailures.has(jobId)||meshLoadingJobs.has(jobId)||meshLoadingJobs.size>=2||!session||performance.now()<(meshNextAttemptAt.get(jobId)||0))return;
  const captureId=typeof job==='number'?cloud?.id:job.capture_id;
  const objectId=typeof job==='number'?null:(job.object_id||null);
  if(!captureId||!cloud||cloud.id!==captureId)return;
@@ -2015,10 +2015,11 @@ async function spawnMeshPreview(job,origin=null){
   if(!previous||!['PREPARING','WAITING','LOADING'].includes(previous.status))syncMeshJobBadge({...job,id:jobId,capture_id:captureId,object_id:objectId,provider:job.provider||'3D',status:'LOADING',progress:100});
   const result=await window.FreeLab.modelXRPreview(jobId);
   if(['PREPARING','WAITING'].includes(result?.status)){
-   syncMeshJobBadge({...job,id:jobId,capture_id:captureId,object_id:objectId,provider:job.provider||'3D',status:result.status,progress:100});
+   syncMeshJobBadge({...job,id:jobId,capture_id:captureId,object_id:objectId,provider:job.provider||'3D',status:result.status,stage:result.stage,progress:100});
    const counter=(meshPreviewRetries.get(jobId)||0)+1;meshPreviewRetries.set(jobId,counter);
    if(counter>75)throw Error('Quest model preparation timed out; reopen the source to retry');
-   setTimeout(()=>{if(scope===meshGeneration&&cloud?.id===captureId&&session)void spawnMeshPreview(job,origin);},7500);
+   const delay=result.status==='WAITING'?12000:8500;meshNextAttemptAt.set(jobId,performance.now()+delay-200);
+   setTimeout(()=>{if(scope===meshGeneration&&cloud?.id===captureId&&session)void spawnMeshPreview(job,origin);},delay);
    return;
   }
   if(!Array.isArray(result.parts)||!result.parts.length||result.parts.length>12)throw Error('3D preview does not contain coherent surfaces');
@@ -2030,13 +2031,13 @@ async function spawnMeshPreview(job,origin=null){
   }
   const model={jobId,captureId,objectId,parts:pieces,pos:origin||[0,0,-1],q:[0,0,0,1],created:performance.now()};
   if(!meshAnchor(model))return;
-  meshPreviews.push(model);pieces.length=0;meshPreviewRetries.delete(jobId);
+  meshPreviews.push(model);pieces.length=0;meshPreviewRetries.delete(jobId);meshNextAttemptAt.delete(jobId);
   syncMeshJobBadge({...job,id:jobId,capture_id:captureId,object_id:objectId,
     provider:typeof job==='number'?'3D':job.provider,status:'SUCCEEDED',progress:100});
   const a=meshAnchor(model);if(a)launchParticles(a.pos);
   setStatus('3D POPPED INTO XR · '+(result.texture_omitted?'solid mesh':'textured mesh')+' · attached to source',10500);
   cue('bloom');
- }catch(e){if(scope===meshGeneration){meshPreviewFailures.add(jobId);markMeshPreviewError(jobId,e.message);setStatus('3D MODEL NOT READY · tap red cube for status or retry',12000);}}
+ }catch(e){if(scope===meshGeneration){meshNextAttemptAt.delete(jobId);meshPreviewFailures.add(jobId);markMeshPreviewError(jobId,e.message);setStatus('3D MODEL FAILED · '+String(e.message).slice(0,70),12000);}}
  finally{for(const part of pieces){if(part.buffer)gl.deleteBuffer(part.buffer);if(part.texture)gl.deleteTexture(part.texture);}meshLoadingJobs.delete(jobId);}
 }
 function drawMeshPreview(mesh,vp,t){
@@ -2143,12 +2144,12 @@ function layoutCinemaControls(){
  if(!darkroom)return;
  const center=darkroom.pos,orientation=darkroom.q;
  const lowerEdge=-Math.abs(darkroom.size[1])*.5;
- const rowY=lowerEdge+.17; // visible inside the image, never floating at eye level
- for(const [button,x] of [[darkPrevious,-.29],[darkNext,0],[darkClose,.29]]){
+ const rowY=lowerEdge-.16; // outside the image; button centres remain below its lower edge
+ for(const [button,x] of [[darkPrevious,-.245],[darkNext,0],[darkClose,.245]]){
   if(!button)continue;
   button.pos=vadd(center,quatVec(orientation,[x,rowY,.065]));
   button.q=orientation;
-  button.size=[.235,.235];
+  button.size=[.19,.19];
  }
 }
 function cinemaFloorTexture(image){const [c,ctx]=canvas2d(600,480);
@@ -2175,8 +2176,8 @@ function enterDarkroom(targetCard=null){
  darkroom={id:'cinema-photo',kind:'darkroom',front:tex,back:tex,visible:true,pos,q:facing,size:[width,width*ratio],scale:1,ownedTexture:true,resources:[tex]};
  const close=cinemaExitTexture();
  darkClose={id:'cinema-exit',kind:'darkroomexit',front:close,back:close,visible:true,
-   pos,q:facing,size:[.235,.235],scale:1,resources:[close]};
- const arrow=(symbol,kind)=>{const [c,ctx]=canvas2d(196,196);rrect(ctx,8,8,180,180,90,'rgba(246,249,247,.98)');text(ctx,symbol,98,140,104,'#18211d',580,'center');const tex=texture(c);return {id:'cinema-'+kind,kind,front:tex,back:tex,visible:true,pos,q:facing,size:[.235,.235],scale:1,resources:[tex]};};
+   pos,q:facing,size:[.19,.19],scale:1,resources:[close]};
+ const arrow=(symbol,kind)=>{const [c,ctx]=canvas2d(196,196);rrect(ctx,8,8,180,180,90,'rgba(246,249,247,.98)');text(ctx,symbol,98,140,104,'#18211d',580,'center');const tex=texture(c);return {id:'cinema-'+kind,kind,front:tex,back:tex,visible:true,pos,q:facing,size:[.19,.19],scale:1,resources:[tex]};};
  darkPrevious=arrow('‹','cinemaprev');darkNext=arrow('›','cinemanext');
  layoutCinemaControls();
  const floorSource=target.data?.image||null;

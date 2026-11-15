@@ -1,4 +1,4 @@
-"""v0.10.32 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
+"""v0.10.33 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -67,6 +67,58 @@ class Tripo31(unittest.TestCase):
   self.assertIn('retryAfter=Date.now()',room)
   self.assertIn('body=await r.text()',room)
   self.assertIn("Room server unavailable (HTTP ",room)
+
+ def test_quest_recovery_worker_heartbeats_and_restarts_after_crash(self):
+  self.assertIn('def _xr_preview_heartbeat(pending,stop):',APP)
+  self.assertIn('if time.time()-pending.stat().st_mtime<45:',APP)
+  self.assertIn('stop.set();beat.join(timeout=1)',APP)
+  self.assertIn("_xr_preview_stage(owner,jid,'Downloading generated GLB')",APP)
+  self.assertIn("_xr_preview_stage(owner,jid,'Optimizing GLB for Quest')",APP)
+  self.assertIn("stage=progress_label.read_text()[:60]",APP)
+  self.assertIn('use_blender=len(raw)>10_000_000',APP)
+  self.assertIn('MAX_MODEL=64_000_000',CACHE)
+  self.assertIn('marker.read_text().strip()!=VERSION',APP)
+  self.assertIn('_xr_preview_error_version_path(owner,jid).write_text(VERSION)',APP)
+  from backend import avatar_optimizer
+  self.assertIn('input_limit=MAX_MODEL',__import__('inspect').getsource(avatar_optimizer.optimize_xr_preview))
+
+ def test_completed_model_worker_publishes_quest_geometry_and_cleans_pending(self):
+  # Exercise the actual worker without Flask, network or billable provider calls.
+  import ast, json, os, re, sqlite3, tempfile, threading, time, secrets
+  from backend import db, glb_xr, model_cache
+  from test_v124_textured_xr import glb_fixture
+  from types import SimpleNamespace
+  source=ast.parse(APP)
+  names=('_xr_preview_json_path','_xr_preview_stage_path','_xr_preview_error_version_path','_xr_preview_stage',
+         '_xr_preview_heartbeat','_xr_preview_paths','_xr_existing_job_worker')
+  functions=[n for n in source.body if isinstance(n,ast.FunctionDef) and n.name in names]
+  with tempfile.TemporaryDirectory() as tmp:
+   directory=Path(tmp);database=directory/'a.db';uid,jid=2,3
+   with db.connect(database) as con:
+    con.execute('CREATE TABLE jobs_3d (id INTEGER PRIMARY KEY, owner_id INT, status TEXT, model_path TEXT, provider TEXT, glb_url TEXT, provider_task TEXT, thumbnail_url TEXT, cache_error TEXT)')
+    con.execute("INSERT INTO jobs_3d VALUES(?,?,?,?,?,?,?,?,?)",(jid,uid,'SUCCEEDED',f'{uid}_{jid}.glb','tripo','','test-task','', ''))
+   fixture=glb_fixture()
+   environment={'MODEL_DIR':directory,'DB':database,'db':db,'glb_xr':glb_xr,'model_cache':model_cache,
+                'avatar_optimizer':SimpleNamespace(blender_command=lambda:'/fake/blender',optimize_xr_preview=lambda raw:fixture),
+                'threading':threading,'time':time,'os':os,'re':re,'json':json,'sqlite3':sqlite3,'secrets':secrets,
+                '_xr_preview_guard':threading.Lock(),'_xr_preview_active':{(uid,jid)}}
+   exec(compile(ast.Module(body=functions,type_ignores=[]),'<xr-worker>','exec'),environment)
+   pending=directory/f'{uid}_{jid}.xr.pending'
+   for large in (False,True):
+    raw=fixture if not large else fixture+b'\x00'*10_000_001
+    (directory/f'{uid}_{jid}.glb').write_bytes(raw)
+    pending.touch()
+    environment['_xr_preview_active'].add((uid,jid))
+    environment['_xr_existing_job_worker'](uid,jid,'')
+    ready=directory/f'{uid}_{jid}.xr.json'
+    self.assertTrue(ready.is_file())
+    mesh=json.loads(ready.read_text())
+    self.assertEqual(mesh['triangles'],2)
+    self.assertFalse(pending.exists())
+    self.assertFalse((directory/f'{uid}_{jid}.xr.stage').exists())
+    self.assertFalse((directory/f'{uid}_{jid}.xr.error').exists())
+    ready.unlink()
+    (directory/f'{uid}_{jid}.xr.glb').unlink(missing_ok=True)
 
  def test_no_auto_debug_pane(self):
   self.assertIn('async function showMeshDiagnostics(jobId){',XR)

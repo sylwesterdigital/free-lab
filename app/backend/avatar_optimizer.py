@@ -62,8 +62,8 @@ def optimize(raw, blender=None):
 
 def optimize_xr_preview(raw, blender=None):
     """Read-only Quest preview prep from a previously paid 3D job; original is preserved."""
-    from .glb_preview import MAX_FILE
-    return _convert_glb(raw,blender,input_limit=MAX_FILE,output_limit=8_000_000,xr_mode=True)
+    from .model_cache import MAX_MODEL
+    return _convert_glb(raw,blender,input_limit=MAX_MODEL,output_limit=8_000_000,xr_mode=True)
 
 
 def _worker(path,job_id,validate):

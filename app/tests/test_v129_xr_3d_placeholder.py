@@ -1,4 +1,4 @@
-"""v0.10.32: offline XR 3D job cubes and private GLB preview preparation."""
+"""v0.10.33: offline XR 3D job cubes and private GLB preview preparation."""
 import struct, unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -25,7 +25,7 @@ class Cube129(unittest.TestCase):
   self.assertIn("@app.get('/api/media/3d/<int:jid>/preview')",BACK)
   self.assertIn('glb_xr.decode_visual(raw)',BACK)
   self.assertIn('avatar_optimizer.optimize_xr_preview(raw)',BACK)
-  self.assertIn("return jsonify(status=state,stage='Private model download / Quest conversion'",BACK)
+  self.assertIn("return jsonify(status=state,stage=stage",BACK)
   self.assertIn('threading.Thread(target=_xr_existing_job_worker',BACK)
   self.assertIn('raw=(MODEL_DIR/row[\'model_path\']).read_bytes()',BACK)
   self.assertIn('owner_id=?',BACK)
@@ -47,7 +47,7 @@ class Cube129(unittest.TestCase):
    self.assertIn('--factory-startup',run.call_args.args[0])
    self.assertIn('XR',run.call_args.args[0])
   self.assertEqual(raw[:4],b'glTF')
-  with self.assertRaises(ValueError):avatar_optimizer.optimize_xr_preview(b'\0'*33_000_000,blender='/fake/blender')
+  with self.assertRaises(ValueError):avatar_optimizer.optimize_xr_preview(b'\0'*65_000_000,blender='/fake/blender')
  def test_private_model_diagnostics_and_retry_are_read_only(self):
   self.assertIn("@app.get('/api/media/3d/<int:jid>/diagnostics')",BACK)
   self.assertIn("@app.post('/api/media/3d/<int:jid>/preview/retry')",BACK)

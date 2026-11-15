@@ -1,4 +1,4 @@
-"""v0.10.32: offline tests for real Tripo v3 and Draco GLB loading."""
+"""v0.10.33: offline tests for real Tripo v3 and Draco GLB loading."""
 from __future__ import annotations
 import json, tempfile, unittest
 from pathlib import Path
@@ -95,7 +95,7 @@ class TripoUI(unittest.TestCase):
   self.assertIn('model_cache.store(',APP)
 
  def test_new_version(self):
-  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.32')
-  self.assertEqual(json.loads((ROOT/'frontend/version.json').read_text())['version'],'0.10.32')
+  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.33')
+  self.assertEqual(json.loads((ROOT/'frontend/version.json').read_text())['version'],'0.10.33')
 
 if __name__=='__main__':unittest.main()
