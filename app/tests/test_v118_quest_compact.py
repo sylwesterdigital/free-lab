@@ -1,4 +1,4 @@
-"""Regression guards for v0.10.33. No network, headset, camera, or paid API calls."""
+"""Regression guards for v0.10.34. No network, headset, camera, or paid API calls."""
 import json
 import re
 import unittest
@@ -84,8 +84,8 @@ class QuestCompact118(unittest.TestCase):
 
  def test_release_versions(self):
   for name in ('version.json','frontend/version.json','changelog.json','frontend/changelog.json'):
-   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.33')
-  self.assertIn('room-viewer.mjs?v=0.10.33',ROOMS)
-  self.assertIn('xr.js?v=0.10.33',HTML)
+   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.34')
+  self.assertIn('room-viewer.mjs?v=0.10.34',ROOMS)
+  self.assertIn('xr.js?v=0.10.34',HTML)
 
 if __name__=='__main__': unittest.main()

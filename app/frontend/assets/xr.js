@@ -8,7 +8,7 @@ let gl,canvas,program,lineProgram,quad,rayBuffer,refSpace,session,root,poseReady
 let pending3dJobs=[],galleryPage=0,darkroom=null,darkBackdrop=null,darkClose=null,darkFloor=null,descriptionContext=null,descriptionQuestionMode=false,frameTouch=null,frameErase=null,lastMascotQuip=0,statusBorn=0,jobProvider='auto';
 let meshUniforms=null,meshProgram=null,meshJobProgram=null,meshWhite=null,meshGeneration=0,meshSyncAt=0,meshSyncBusy=false;
 let configPanel=null,configShowing=false,config3DChoice='aholo',config3DAvailable=false,uiSettings=window.FreeLabXRUI?.read?.()||{},lastConfigTick=0,mascotTrailAt=0;
-let toolbar=null,editbar=null,statusCard=null,cloud=null,clouds=[],cards=[],zones=[],selected=null,held=null;
+let toolbar=null,editbar=null,statusCard=null,cloud=null,clouds=[],cards=[],zones=[],selected=null,held=null,selectedMesh=null,meshTools=null;
 let branchFocusId=null,branchPage=0; // Parent-based tree browsing, no fixed generation/depth limit.
 let imageMenuOpen=false,voiceBadge=null,voicePhase='idle',voiceMessage='',voiceUntil=0,voicePending=null,voiceOk=null,voiceCancel=null,voiceResultStamp=0;
 let mascotProgram=null,mascotBuffer=null,mascotVertexCount=0,mascotMood='curious',mascotMoodUntil=0,mascotVelocity=[.25,.22,.19],lastMascotTick=0,mascotSpeechBorn=0;
@@ -40,7 +40,7 @@ function cue(name,src){window.FreeLabSound?.play(name);if(src)haptic(src,name===
 function haptic(src,strength=.25,ms=35){try{const gamepad=src?.gamepad;const a=gamepad?.hapticActuators?.[0];if(a?.pulse){a.pulse(strength,ms).catch?.(()=>{});}else gamepad?.vibrationActuator?.playEffect?.('dual-rumble',{duration:ms,strongMagnitude:strength,weakMagnitude:strength*.7})?.catch?.(()=>{});}catch{}}
 
 const promptTools=[['voice','◎'],['apply','↗'],['cancel','×']];
-const threeDTools=[['submit3d','⬡'],['cancel3d','×']];
+const threeDTools=[['submit3d','⬡'],['quality3d','◈'],['cancel3d','×']];
 const V=`attribute vec3 aPos;attribute vec2 aUV;uniform mat4 uMVP;varying vec2 vUV;void main(){vUV=aUV;gl_Position=uMVP*vec4(aPos,1.);}`;
 const F=`precision mediump float;varying vec2 vUV;uniform sampler2D uTex;uniform bool uFlip;uniform float uOpacity;void main(){vec2 uv=vec2(uFlip?1.-vUV.x:vUV.x,vUV.y);vec4 color=texture2D(uTex,uv);if(color.a<.012)discard;gl_FragColor=color*uOpacity;}`;
 const LV=`attribute vec3 aPos;uniform mat4 uVP;uniform float uSize;void main(){gl_Position=uVP*vec4(aPos,1.);gl_PointSize=uSize;}`;
@@ -260,11 +260,11 @@ function cardDimensions(width,height,kind){const aspect=height/Math.max(1,width)
  const limit=kind==='source'?.95:kind==='object'?.60:.54;const widthMetres=Math.min(base,limit/aspect);
  return [widthMetres,widthMetres*aspect];}
 function toolbarTexture(kind){
- const context=kind==='context',names=context?(meshConfirm?[['submit3d','⬡'],['cancel3d','×']]:imageTools()):tools;
+ const context=kind==='context',names=context?(meshConfirm?[['submit3d','⬡'],['quality3d','◈'],['cancel3d','×']]:imageTools()):tools;
  const w=context?300:620,h=context?names.length*70+24:112,p=uiPalette(),[c,ctx]=canvas2d(w,h);
  panelSkin(ctx,w,h,context?27:47);
  const labels={createimage:'CREATE',gallery:'LIB',follow:followMode?'PIN':'FOLLOW',debug:'LOG',config:'CONFIG',exit:'EXIT',
- segment:'EXTRACT',describe:'DESCRIBE',refine:'REFINE',prompt:'PROMPT',voice:'VOICE','3d':'3D',branch:'OPEN BRANCH',parent:'PARENT',closemenu:'CLOSE',submit3d:'CONFIRM 3D',cancel3d:'CANCEL'};
+ segment:'EXTRACT',describe:'DESCRIBE',refine:'REFINE',prompt:'PROMPT',voice:'VOICE','3d':'3D',branch:'OPEN BRANCH',parent:'PARENT',closemenu:'CLOSE',submit3d:'CONFIRM 3D',quality3d:meshConfirm?.quality?.toUpperCase()||'XR-READY',cancel3d:'CANCEL'};
  if(context){names.forEach(([id,glyph],idx)=>{const y=16+idx*70,active=pointerHover===id;
    text(ctx,glyph,42,y+40,32,active?p.accent:p.text,640,'center');
    text(ctx,labels[id]||id,82,y+40,25,active?p.accent:p.text,675);
@@ -973,11 +973,11 @@ function clearCollectionMeshes(){
  meshGeneration++;
  meshPreviews=meshPreviews.filter(m=>{if(m.guestId)return true;releaseMeshPreview(m);return false;});
  for(const badge of meshJobBadges.values())if(badge.front&&gl)gl.deleteTexture(badge.front);
- meshJobBadges.clear();meshPreviewFailures.clear();meshPreviewRetries.clear();meshNextAttemptAt.clear();
+ meshJobBadges.clear();meshPreviewFailures.clear();meshPreviewRetries.clear();meshNextAttemptAt.clear();selectedMesh=null;if(meshTools?.front&&gl)gl.deleteTexture(meshTools.front);meshTools=null;
 }
 function clearCards(){if(!gl)return;clearCollectionMeshes();closeImageMenu();for(const c of cards)for(const t of c.resources||[])gl.deleteTexture(t);cards=[];selected=null;}
-function rootPos(c){return cloud&&!['config','toolbar','status','captureeye','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics','description','labmenu','darkroom','darkroomexit','cinemaprev','cinemanext','cinema-floor','visitor'].includes(c.kind)?vadd(c.pos,cloud.offset||[0,0,0]):c.pos;}
-function baseFor(c){if(c.kind==='pointer-mascot'||['config','toolbar','status','captureeye','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics','description','labmenu','darkroom','darkroomexit','cinemaprev','cinemanext','cinema-floor','visitor'].includes(c.kind))return translate();return root;}
+function rootPos(c){return cloud&&!['config','toolbar','status','captureeye','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics','description','labmenu','darkroom','darkroomexit','cinemaprev','cinemanext','cinema-floor','visitor','3dtools'].includes(c.kind)?vadd(c.pos,cloud.offset||[0,0,0]):c.pos;}
+function baseFor(c){if(c.kind==='pointer-mascot'||['config','toolbar','status','captureeye','voiceroundel','extractroundel','voiceok','voicecancel','diagnostics','description','labmenu','darkroom','darkroomexit','cinemaprev','cinemanext','cinema-floor','visitor','3dtools'].includes(c.kind))return translate();return root;}
 function cameraYaw(pose){return yawFromMatrix(pose.transform.matrix);}
 function syncTrackedUI(pose,t){
  const yaw=cameraYaw(pose),head=pose.transform.matrix;
@@ -1115,7 +1115,7 @@ function ray(frame,src){try{const sp=src.targetRaySpace?frame.getPose(src.target
  if(src.hand){const a=frame.getJointPose(src.hand.get('index-finger-tip'),refSpace),b=frame.getJointPose(src.hand.get('wrist'),refSpace);if(a&&b){const o=[a.transform.position.x,a.transform.position.y,a.transform.position.z];const w=[b.transform.position.x,b.transform.position.y,b.transform.position.z];return {o,d:norm(vsub(o,w))};}}
  }catch{}return null;}
 function hitTest(r,c){if(!r||!c.visible||!c.front||c.animScale===0)return null;const m=cardModel(c),inv=inverse(m);if(!inv)return null;const o=point(inv,r.o),d=point(inv,r.d,0);if(Math.abs(d[2])<1e-6)return null;const k=-o[2]/d[2];if(k<=0||k>6)return null;const x=o[0]+d[0]*k,y=o[1]+d[1]*k;if(Math.abs(x)>.5||Math.abs(y)>.5)return null;const hitWorld=point(m,[x,y,0]);const dist=length(vsub(hitWorld,r.o));return {card:c,x,y,dist};}
-function pick(r){if(darkroom){const hits=[darkClose,darkPrevious,darkNext].filter(Boolean).map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return hits[0]||null;}const opts=[...cards,...meshJobBadges.values(),toolbar,...(voicePhase==='listening'||voicePhase==='processing'?[]:[captureEye]),...(voicePhase==='listening'||voicePhase==='processing'?[]:[extractButton]),...(uiSettings.voice===false?[]:[voiceButton]),voiceOk,voiceCancel,promptPanel,editbar,...(debugShowing?[debugPanel]:[]),descriptionPanel,...(configShowing?[configPanel]:[])].filter(Boolean),all=opts.map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return all[0]||null;}
+function pick(r){if(darkroom){const hits=[darkClose,darkPrevious,darkNext].filter(Boolean).map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return hits[0]||null;}const opts=[...cards,...meshJobBadges.values(),toolbar,...(voicePhase==='listening'||voicePhase==='processing'?[]:[captureEye]),...(voicePhase==='listening'||voicePhase==='processing'?[]:[extractButton]),...(uiSettings.voice===false?[]:[voiceButton]),voiceOk,voiceCancel,promptPanel,editbar,...(debugShowing?[debugPanel]:[]),descriptionPanel,...(configShowing?[configPanel]:[])].filter(Boolean),all=[...opts.map(c=>hitTest(r,c)).filter(Boolean),...meshPreviews.map(m=>meshHitTest(r,m)).filter(Boolean),...(meshTools?[hitTest(r,meshTools)].filter(Boolean):[])].sort((a,b)=>a.dist-b.dist);return all[0]||null;}
 function imageButtonAt(card,x,y){
  // Hit regions are in the SAME 600-pixel canvas coordinates as cardTexture.
  // Image aspect ratios change canvas height; fixed normalized-Y thresholds do not work.
@@ -1130,6 +1130,8 @@ function imageButtonAt(card,x,y){
 }
 function buttonFromHit(h){if(!h)return null;
  if(h.card.kind==='3djob')return '3djobdiagnostics';
+ if(h.card.kind==='3dtools')return ['meshsmaller','meshturn','meshlarger'][clamp(Math.floor((h.x+.5)*3),0,2)];
+ if(h.card.kind==='3dmesh')return null;
  if(h.card.kind==='description'){
   if(h.x>.33&&h.y>.27)return 'descriptionclose';
   if(h.y<-.26&&h.x<-.19)return h.card.retryable?'descriptionretry':'descriptionask';
@@ -1145,16 +1147,20 @@ function buttonFromHit(h){if(!h)return null;
  if(h.card.kind==='voicecancel')return 'cancelvoice';
  if(h.card.kind==='config')return configHit(h);
  if(h.card.kind==='toolbar'&&h.y>.37)return null; // blank top strip can still be grabbed
- if(h.card.kind==='contextbar'){const list=meshConfirm?[['submit3d'],['cancel3d']]:imageTools();
+ if(h.card.kind==='contextbar'){const list=meshConfirm?[['submit3d'],['quality3d'],['cancel3d']]:imageTools();
   return list[clamp(Math.floor((.5-h.y)*list.length),0,list.length-1)][0];}
  if(h.card.kind==='toolbar'){const idx=clamp(Math.floor((h.x+.5)*tools.length),0,tools.length-1);return tools[idx][0];}
  return imageButtonAt(h.card,h.x,h.y);
 }
 
-function grabStart(frame,src,manual=false){const r=ray(frame,src),h=pick(r);if(!h)return;
- if(held){if(!held.second&&held.card===h.card&&held.card.kind==='object'&&held.src!==src){
+function grabStart(frame,src,manual=false){const r=ray(frame,src);let h=pick(r);
+ if(!h&&src.hand&&manual){const finger=posePosition(frame,src);if(finger){
+  const near=meshPreviews.filter(m=>m.kind==='3dmesh').map(m=>({m,p:meshWorldPose(m)})).filter(x=>x.p).sort((a,b)=>length(vsub(finger,a.p.pos))-length(vsub(finger,b.p.pos)))[0];
+  if(near&&length(vsub(finger,near.p.pos))<.23*near.p.scale)h={card:near.m,x:0,y:0,dist:r?length(vsub(near.p.pos,r.o)):1};
+ }}if(!h||!r)return;
+ if(held){if(!held.second&&held.card===h.card&&['object','3dmesh'].includes(held.card.kind)&&held.src!==src){
   const a=posePosition(frame,held.src),b=posePosition(frame,src);
-  if(a&&b)held.second={src,firstDist:length(vsub(a,b)),startScale:held.card.scale};}
+  if(a&&b)held.second={src,firstDist:length(vsub(a,b)),startScale:held.card.kind==='3dmesh'?(held.card.modelScale||1):held.card.scale};}
   return;
  }
  const id=buttonFromHit(h);held={src,hit:h,rayDist:h.dist,start:performance.now(),last:r?.o,card:h.card,
@@ -1162,11 +1168,23 @@ function grabStart(frame,src,manual=false){const r=ray(frame,src),h=pick(r);if(!
  startQuat:poseQuat(frame,src),initialQuat:[...(h.card.q||[0,0,0,1])],
  worldStart:!id&&['source','object'].includes(h.card.kind)?point(root,rootPos(h.card)):null,
  attach:!id&&['source','object'].includes(h.card.kind)?attachGrab(frame,src,h.card,h):null};
+ if(h.card.kind==='3dmesh'){
+  const pose=meshWorldPose(h.card);if(!pose){held=null;return;}
+  selectedMesh=h.card;selected=null;imageMenuOpen=false;updateEditbar();syncMeshTools();
+  held.initialWorld=[...pose.pos];held.initialRot=[...(h.card.rotation||[0,0,0,1])];held.initialOffset=[...(h.card.offset||[0,0,0])];
+  held.startWorldOrientation=[...pose.q];held.startRayHit=vadd(r.o,vmul(r.d,h.dist));
+  setStatus('3D MODEL · move with grip or pinch · twist to rotate · two hands to scale',10500);
+ }
  if(['object','source'].includes(h.card.kind)){selected=h.card;updateEditbar();}cue('grab',src);}
 async function grabEnd(src,frame){if(held?.second?.src===src){held.second=null;return;}if(!held||held.src!==src)return;const h=held;held=null;cue('release',src);
  // XR controllers rotate slightly between trigger-down and trigger-up. Once a
  // button was hit, release must ACTIVATE it and never be interpreted as a drag.
  if(h.id){window.FreeLab?.traceEvent?.('XR image action: '+h.id,'info');if(h.id==='3djobdiagnostics')return showMeshDiagnostics(h.card.jobId);return action(h.id);}
+ if(h.card.kind==='3dmesh'){
+  selectedMesh=h.card;syncMeshTools();if(h.moved){await saveMeshTransform(h.card);setStatus('3D MODEL · position, rotation and scale saved',6500);}
+  else setStatus('3D MODEL SELECTED · grab to move/twist · two hands to scale · use − ↻ + below',9500);
+  return;
+ }
  if(h.moved){
  if(h.card.kind==='source'&&cloud?.id){
      try{const [x,y,z]=(cloud.offset||[0,0,0]);const [qx,qy,qz,qw]=h.card.q||[0,0,0,1];await window.FreeLab.updateXRCloud(cloud.id,{spatial:{x,y,z,qx,qy,qz,qw}});}catch(e){setStatus('Source position not saved: '+e.message);}
@@ -1191,7 +1209,7 @@ function updateEditbar(){
  if(editbar?.front&&gl)gl.deleteTexture(editbar.front);
  editbar=null;
  if(imageMenuOpen&&selected&&['object','source'].includes(selected.kind)&&gl){const tex=toolbarTexture('context');
-  const rows=meshConfirm?2:imageTools().length;
+  const rows=meshConfirm?3:imageTools().length;
   editbar={id:'context-actions',kind:'contextbar',parentCard:selected,size:[.2925,rows*.068],pos:[0,0,0],scale:1,q:[0,0,0,1],visible:true,front:tex,back:tex,resources:[tex]};}
  refreshToolbar();}
 function closeImageMenu(){imageMenuOpen=false;meshConfirm=null;updateEditbar();}
@@ -1201,6 +1219,24 @@ function toggleImageMenu(card){if(selected===card&&imageMenuOpen){closeImageMenu
 function advanceGrab(frame){
  if(!held||held.id)return;const r=ray(frame,held.src);if(!r)return;
  const card=held.card;
+ if(card.kind==='3dmesh'){
+  const anchor=meshAnchor(card);if(!anchor)return;
+  const hit=vadd(r.o,vmul(r.d,held.rayDist)),delta=vsub(hit,held.startRayHit);
+  const target=vadd(held.initialWorld,delta);
+  const off=quatVec(quatInv(anchor.q),vsub(target,anchor.pos));
+  card.offset=off.map(x=>clamp(x,-3,3));
+  const nowQuat=poseQuat(frame,held.src);
+  if(nowQuat&&held.startQuat){
+   const d=quatMul(nowQuat,quatInv(held.startQuat));
+   const newWorld=quatMul(d,held.startWorldOrientation);
+   card.rotation=quatNorm(quatMul(quatInv(anchor.q),newWorld));
+  }
+  if(held.second){const a=posePosition(frame,held.src),b=posePosition(frame,held.second.src);
+   if(a&&b&&held.second.firstDist>.04)card.modelScale=clamp(held.second.startScale*length(vsub(a,b))/held.second.firstDist,.2,4);
+  }
+  if(length(delta)>.008||held.second||nowQuat&&held.startQuat&&Math.abs(nowQuat.reduce((sum,x,i)=>sum+x*held.startQuat[i],0))<.999)held.moved=true;
+  syncMeshTools();return;
+ }
  if(['source','object'].includes(card.kind)&&held.attach){
   // Keep the original ray contact point fixed while moving; the image itself
   // remains upright and perpendicular to the user's view, like Quest windows.
@@ -1432,7 +1468,7 @@ function renderView(t,frame){if(!session||gl.isContextLost()){return;}const pose
  pollRoomVisitors(t);placeRoomVisitors(pose);poll3d(t);pollLabSelector(frame,t,pose);pollStringLab(frame,t);pollFingerLab(frame,t);pollFrameLab(frame,t);pollPlacedFrameTouch(frame,t);pollFrameGames(t,pose);advanceGrab(frame);for(const src of session.inputSources)pinchPoll(frame,src);pollGestures(frame,t);tween(t);faceCloudCards(pose,t);updateMascot(frame,t);tickMascotSpeech(t);tickVoiceIndicator(t,pose);typeStatus(t);updateMicVisual(t);updateDebugCard(t);if(captureEye&&t-lastEyeUpdate>67){if(eyeState!=='idle'&&t>eyeUntil)eyeState='idle';paintEye(t);lastEyeUpdate=t;}if(cameraHint&&t-lastHintCheck>180){lastHintCheck=t;const label=cameraHintMode();if(label!==cameraHintState){cameraHintState=label;cameraHintUntil=t+(label==='off'||label==='ready'?10000:7000);gl.deleteTexture(cameraHint.front);cameraHint.front=cameraHintTexture(label);cameraHint.back=cameraHint.front;cameraHint.resources=[cameraHint.front];}cameraHint.visible=t<cameraHintUntil&&voicePhase!=='listening'&&voicePhase!=='processing';}if(t-lastUi>150){updateHover(frame);lastUi=t;}
  gl.bindFramebuffer(gl.FRAMEBUFFER,session.renderState.baseLayer.framebuffer);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
  for(const view of pose.views){const vp0=session.renderState.baseLayer.getViewport(view);gl.viewport(vp0.x,vp0.y,vp0.width,vp0.height);const vp=matmul(view.projectionMatrix,view.transform.inverse.matrix);
- decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(statusCard?.visible)drawCard(statusCard,vp);if(editbar)drawCard(editbar,vp);if(captureEye&&voicePhase!=='listening'&&voicePhase!=='processing')drawCard(captureEye,vp);if(cameraHint)drawCard(cameraHint,vp);if(voiceButton&&uiSettings.voice!==false)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(configShowing&&configPanel)drawCard(configPanel,vp);/* description is composited after mascot for legibility */for(const m of meshPreviews)drawMeshPreview(m,vp,t);draw3DJobBadges(vp,t);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);drawStringLab(vp,t,pose);drawFingerLab(vp,t,pose);drawFramePhotos(vp);drawSpatialFrames(vp,t,pose);drawShapeTargets(vp,t,pose);drawFrameCubes(vp);if(labMenu?.visible)drawCard(labMenu,vp);for(const visitor of visitorBadges)drawCard(visitor,vp);depthCapability(frame,view);
+ decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(statusCard?.visible)drawCard(statusCard,vp);if(editbar)drawCard(editbar,vp);if(captureEye&&voicePhase!=='listening'&&voicePhase!=='processing')drawCard(captureEye,vp);if(cameraHint)drawCard(cameraHint,vp);if(voiceButton&&uiSettings.voice!==false)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(configShowing&&configPanel)drawCard(configPanel,vp);/* description is composited after mascot for legibility */for(const m of meshPreviews)drawMeshPreview(m,vp,t);if(selectedMesh&&meshPreviews.includes(selectedMesh)){syncMeshTools();if(meshTools)drawCard(meshTools,vp);}draw3DJobBadges(vp,t);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);drawStringLab(vp,t,pose);drawFingerLab(vp,t,pose);drawFramePhotos(vp);drawSpatialFrames(vp,t,pose);drawShapeTargets(vp,t,pose);drawFrameCubes(vp);if(labMenu?.visible)drawCard(labMenu,vp);for(const visitor of visitorBadges)drawCard(visitor,vp);depthCapability(frame,view);
  for(const src of session.inputSources){const r=ray(frame,src);if(!r)continue;const h=pick(r),end=vadd(r.o,vmul(r.d,h?.dist||1.2));const colour=src.hand?[.72,1,.75,.7]:[.77,.88,1,.72];line(vp,[r.o,end],colour);line(vp,[end],colour,true,h?16:9);}
  if(mascotPointer?.visible){if(mascotMode()==='2d'){
    if(!mascotPointer.front){mascotTex=mascotTexture();mascotPointer.front=mascotTex;mascotPointer.back=mascotTex;}
@@ -1817,7 +1853,7 @@ async function collapse(){if(!cloud)return openGallery();if(cloud.collapsed){awa
  setTimeout(()=>{if(cloud?.collapsed){clearCards();cloud=null;branchFocusId=null;branchPage=0;selected=null;updateEditbar();}},1350);}
 async function submit3d(){if(!meshConfirm||busy)return;const target=meshConfirm;
  meshJobOrigin=target.origin;closeImageMenu();busy=true;setStatus('3D SUBMITTING · selected provider · one confirmed billable job',11000);
- try{const job=await window.FreeLab.createXR3D(target.captureId,target.objectId);meshyJob=job.id;
+ try{const job=await window.FreeLab.createXR3D(target.captureId,target.objectId,'',target.quality||'xr');meshyJob=job.id;
   pending3dJobs.push({id:job.id,provider:job.provider,captureId:target.captureId,objectId:target.objectId});meshyPollAt=0;
   syncMeshJobBadge({...job,capture_id:target.captureId,object_id:target.objectId,progress:0});
   const anchor=meshAnchor({captureId:target.captureId,objectId:target.objectId});if(anchor)launchParticles(anchor.pos);
@@ -1825,9 +1861,12 @@ async function submit3d(){if(!meshConfirm||busy)return;const target=meshConfirm;
  }catch(e){setStatus('3D generation failed · '+e.message,16000);}finally{busy=false;}}
 function close3d(){meshConfirm=null;updateEditbar();}
 function open3d(){if(!selected||!['source','object'].includes(selected.kind)||!cloud?.id)return setStatus('Select an image to generate a 3D model');
- closePrompt();meshConfirm={captureId:cloud.id,objectId:selected.kind==='object'?selected.data.id:null,label:selected.data.label,origin:point(root,rootPos(selected))};
+ closePrompt();meshConfirm={captureId:cloud.id,objectId:selected.kind==='object'?selected.data.id:null,label:selected.data.label,origin:point(root,rootPos(selected)),quality:'xr'};
  imageMenuOpen=true;updateEditbar();
- window.FreeLab?.get3DPreference?.().then(p=>{jobProvider=p.provider;setStatus('3D PROVIDER · '+p.provider.toUpperCase()+(p.available[p.provider]?' READY':' API NOT CONFIGURED')+' · confirm paid job or cancel',13000);}).catch(e=>setStatus('3D PROVIDER ERROR: '+e.message,13000));}
+ Promise.all([window.FreeLab?.get3DPreference?.(),window.FreeLab?.get3DQuality?.()]).then(([p,q])=>{
+  if(!meshConfirm)return;jobProvider=p.provider;meshConfirm.quality=q?.preset||'xr';updateEditbar();
+  setStatus('3D · '+p.provider.toUpperCase()+' · '+meshConfirm.quality.toUpperCase()+' · confirm paid job',11000);
+ }).catch(e=>setStatus('3D SETTINGS · '+e.message,9500));}
 
 
 function meshNormals(a,b,c){const u=vsub(b,a),v=vsub(c,a);return norm([u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]]);}
@@ -1846,6 +1885,39 @@ function meshAnchor(model){
  const card=meshOwnerCard(model);if(!card||!root)return null;
  const anchor=point(root,rootPos(card)),q=worldCardQuat(card);
  return {pos:vadd(anchor,quatVec(q,[card.size[0]*.58+.16,-.022,.045])),q};
+}
+function meshWorldPose(m){
+ const anchor=meshAnchor(m);if(!anchor)return null;
+ const q=quatNorm(quatMul(anchor.q,m.rotation||[0,0,0,1]));
+ const pos=vadd(anchor.pos,quatVec(anchor.q,m.offset||[0,0,0]));
+ return {pos,q,scale:clamp(m.modelScale||1,.2,4),anchor};
+}
+// A simple bounded sphere hit target works with Quest controllers and hand rays.
+// It is independent of glTF triangles, so the user can grab a model reliably.
+function meshHitTest(r,m){
+ if(!r||!m.parts?.length||m.captureId!==cloud?.id||!meshOwnerCard(m))return null;
+ const pose=meshWorldPose(m);if(!pose)return null;
+ const radius=.19*pose.scale,oc=vsub(r.o,pose.pos),b=oc.reduce((sum,x,i)=>sum+x*r.d[i],0);
+ const c=oc.reduce((sum,x)=>sum+x*x,0)-radius*radius;
+ const disc=b*b-c;if(disc<0)return null;
+ const d=-b-Math.sqrt(disc),dist=d>0?d:-b+Math.sqrt(disc);
+ if(dist<0||dist>6)return null;
+ return {card:m,x:0,y:0,dist};
+}
+function meshToolTexture(){
+ const [c,ctx]=canvas2d(420,110);rrect(ctx,0,0,420,110,55,'rgba(18,31,31,.94)');
+ for(const [i,glyph] of ['−','↻','+'].entries())text(ctx,glyph,70+i*140,77,65,'#d6fff0',650,'center');
+ return texture(c);
+}
+function syncMeshTools(){
+ if(!selectedMesh||!meshPreviews.includes(selectedMesh)||!meshOwnerCard(selectedMesh))return;
+ const pose=meshWorldPose(selectedMesh);if(!pose)return;
+ if(!meshTools){const tex=meshToolTexture();meshTools={id:'mesh-transform-tools',kind:'3dtools',front:tex,back:tex,visible:true,pos:[0,0,0],q:[0,0,0,1],scale:1,size:[.29,.077],resources:[tex]};}
+ meshTools.pos=vadd(pose.pos,quatVec(pose.anchor.q,[0,-.25*pose.scale,0]));meshTools.q=pose.anchor.q;
+}
+function saveMeshTransform(m){if(!m||!Number.isInteger(m.jobId))return;
+ return window.FreeLab?.save3DTransform?.(m.jobId,{offset:m.offset||[0,0,0],rotation:m.rotation||[0,0,0,1],scale:m.modelScale||1})
+ .catch(e=>setStatus('3D transform could not be saved · '+String(e.message).slice(0,65),9000));
 }
 // 3D jobs are asynchronous branches. Their badges persist while the parent
 // image is visible, follow that image's spatial transform, and make failures
@@ -1883,7 +1955,10 @@ function meshJobCaption(job){
  const status=String(job.status||'PENDING').toUpperCase();
  if(['FAILED','CANCELED'].includes(status))return '3D FAILED';
  if(status==='PREVIEW_ERROR')return 'XR MODEL ERROR';
- if(status==='PREPARING'||status==='WAITING')return 'PREPARING 3D';
+ if(status==='PREPARING'||status==='WAITING'){
+  const stage=String(job.stage||'').toLowerCase();
+  return /downloading/.test(stage)?'DOWNLOADING GLB':/optimizing/.test(stage)?'OPTIMIZING 3D':/decoding|loading/.test(stage)?'DECODING 3D':/saving/.test(stage)?'ATTACHING 3D':'PREPARING 3D';
+ }
  if(status==='SUCCEEDED')return '3D READY';
  if(status==='LOADING')return 'LOADING 3D';
  return 'GENERATING 3D';
@@ -1894,7 +1969,7 @@ function meshJobTexture(job){
  rrect(ctx,0,0,900,230,25,bad?'rgba(48,14,25,.94)':'rgba(13,28,29,.91)');
  const accent=bad?'#ff9caa':'#bdfff1';
  text(ctx,meshJobCaption(job),22,65,43,accent,800);
- const detail=bad?(String(job.error||'3D model could not load').slice(0,46)):
+ const detail=bad?(String(job.error||'3D model could not load').slice(0,60)):
   `${String(job.provider||'3D').toUpperCase()} · ${['PREPARING','WAITING','LOADING'].includes(job.status)?String(job.stage||'PREPARING MODEL').slice(0,36):Math.round(Number(job.progress)||0)+'%'} `;
  text(ctx,detail,22,130,30,bad?'#ffc9cf':'#e5fff6',600);
  text(ctx,'JOB #'+job.jobId+(bad?' · tap for recovery':' · source linked'),22,194,25,'#e9f6ef',650);
@@ -1938,7 +2013,7 @@ function syncMeshJobBadge(job){
     pos:[0,0,-1],q:[0,0,0,1],lastChange:0,completeAt:0};
   meshJobBadges.set(job.id,badge);
  }
- const changed=badge.status!==status||Math.abs(badge.progress-progress)>=3||badge.error!==(job.error||'');
+ const changed=badge.status!==status||Math.abs(badge.progress-progress)>=3||badge.error!==(job.error||'')||badge.stage!==(job.stage||'');
  badge.status=status;badge.progress=progress;badge.error=job.error||'';badge.stage=job.stage||'';
  if(status==='SUCCEEDED'&&!badge.completeAt)badge.completeAt=performance.now();
  if(!badge.front||changed){const tex=meshJobTexture(badge);if(badge.front&&gl)gl.deleteTexture(badge.front);badge.front=tex;badge.back=tex;badge.lastChange=performance.now();}
@@ -2029,7 +2104,13 @@ async function spawnMeshPreview(job,origin=null){
    if(raw.texture)part.texture=await xrEmbeddedTexture(raw.texture);
    if(scope!==meshGeneration||cloud?.id!==captureId||!session)return;
   }
-  const model={jobId,captureId,objectId,parts:pieces,pos:origin||[0,0,-1],q:[0,0,0,1],created:performance.now()};
+  const xform=job?.transform||{};
+  const validVec=(v,n)=>Array.isArray(v)&&v.length===n&&v.every(x=>Number.isFinite(x));
+  const model={jobId,captureId,objectId,kind:'3dmesh',parts:pieces,pos:origin||[0,0,-1],
+   offset:validVec(xform.offset,3)?xform.offset:[0,0,0],
+   rotation:validVec(xform.rotation,4)?quatNorm(xform.rotation):[0,0,0,1],
+   modelScale:Number.isFinite(xform.scale)?clamp(xform.scale,.2,4):1,
+   q:[0,0,0,1],created:performance.now()};
   if(!meshAnchor(model))return;
   meshPreviews.push(model);pieces.length=0;meshPreviewRetries.delete(jobId);meshNextAttemptAt.delete(jobId);
   syncMeshJobBadge({...job,id:jobId,capture_id:captureId,object_id:objectId,
@@ -2052,10 +2133,10 @@ function drawMeshPreview(mesh,vp,t){
   gl.uniform4fv(gl.getUniformLocation(mascotProgram,'uColor'),[.48,.92,.69,1]);gl.drawArrays(gl.TRIANGLES,0,mesh.count);return;
  }
  if(!mesh.parts?.length||!meshProgram||mesh.captureId!==cloud?.id)return;
- const anchor=meshAnchor(mesh);if(!anchor)return;
+ const pose=meshWorldPose(mesh);if(!pose)return;
  const k=Math.min(1,(t-mesh.created)/680),ease=k*k*(3-2*k);
  // Real-world longest axis is ~30 cm: no ceiling-filling fragment clouds.
- const model=matmul(translate(...anchor.pos),matmul(quatMatrix(anchor.q),scale(.30*ease,.30*ease,.30*ease)));
+ const model=matmul(translate(...pose.pos),matmul(quatMatrix(pose.q),scale(.30*pose.scale*ease,.30*pose.scale*ease,.30*pose.scale*ease)));
  gl.useProgram(meshProgram);
  gl.uniformMatrix4fv(gl.getUniformLocation(meshProgram,'uMVP'),false,matmul(vp,model));
  gl.uniformMatrix4fv(gl.getUniformLocation(meshProgram,'uModel'),false,model);
@@ -2122,7 +2203,7 @@ async function poll3d(t){
  }catch(e){window.FreeLab?.traceEvent?.('3D JOB '+item.id+': '+e.message,'warn');}}
 }
 function closeSelectedCard(){if(!selected)return;const c=selected;closeImageMenu();if(c.kind==='source')return collapse();
- animate(c,c.pos,0,320,true);for(const m of meshPreviews.filter(m=>m.objectId===c.data?.id&&m.captureId===cloud?.id))releaseMeshPreview(m);meshPreviews=meshPreviews.filter(m=>m.objectId!==c.data?.id||m.captureId!==cloud?.id);selected=null;setStatus('Card and linked 3D models hidden in XR · still saved privately');}
+ animate(c,c.pos,0,320,true);for(const m of meshPreviews.filter(m=>m.objectId===c.data?.id&&m.captureId===cloud?.id)){if(selectedMesh===m)selectedMesh=null;releaseMeshPreview(m);}meshPreviews=meshPreviews.filter(m=>m.objectId!==c.data?.id||m.captureId!==cloud?.id);selected=null;setStatus('Card and linked 3D models hidden in XR · still saved privately');}
 async function restoreSelected(){const target=currentPromptTarget();if(!target)return setStatus('Select an image first');
  promptContext=target;promptText='Restore this image with more detail and a higher resolution. Preserve the original subject, composition and identity; do not invent new objects.';
  closeImageMenu();setStatus('RESTORE · sending one paid image edit · original remains in the room',14000);
@@ -2244,7 +2325,13 @@ async function action(id){const t=performance.now();if(t-lastAction<200)return;l
  case 'config-borders':case 'config-backgrounds':case 'config-mascot':case 'config-experimental':case 'config-masked':case 'config-voice':{
    const key=id.slice(7);return uiUpdate(key,uiSettings[key]===false);}
  case 'debugclose':debugShowing=false;return;case 'debuglarger':if(debugPanel)debugPanel.scale=clamp(debugPanel.scale+.2,.55,2.6);return;case 'debugsmaller':if(debugPanel)debugPanel.scale=clamp(debugPanel.scale-.2,.55,2.6);return;
- case '3d':return open3d();case 'submit3d':return submit3d();case 'cancel3d':return close3d();
+ case 'meshsmaller':case 'meshlarger':case 'meshturn':{
+  if(!selectedMesh||!meshPreviews.includes(selectedMesh))return;
+  if(id==='meshturn')selectedMesh.rotation=quatNorm(quatMul(quatY(Math.PI/8),selectedMesh.rotation||[0,0,0,1]));
+  else selectedMesh.modelScale=clamp((selectedMesh.modelScale||1)*(id==='meshlarger'?1.2:1/1.2),.2,4);
+  syncMeshTools();void saveMeshTransform(selectedMesh);setStatus('3D MODEL · transform saved',5000);return;
+ }case '3d':return open3d();case 'submit3d':return submit3d();case 'cancel3d':return close3d();
+ case 'quality3d':{if(!meshConfirm)return;const presets=['xr','balanced','studio'];meshConfirm.quality=presets[(presets.indexOf(meshConfirm.quality)+1)%3];updateEditbar();setStatus('3D QUALITY · '+meshConfirm.quality.toUpperCase()+' · next paid Tripo job only',8500);return;}
  case 'voice':return uiSettings.voice!==false?voicePrompt():null;case 'confirmvoice':return confirmVoice();case 'cancelvoice':dismissVoice();descriptionQuestionMode=false;return setStatus('Voice cancelled · tap microphone to record again',7000);case 'closemenu':return closeImageMenu();
  case 'darkroom':return enterDarkroom();case 'darkroomexit':return closeDarkroom();case 'cinemaprev':return navigateCinema(-1);case 'cinemanext':return navigateCinema(1);
  case 'imagemenu':return toggleImageMenu(selected);case 'imageclose':return selected?.kind==='source'?collapse():closeSelectedCard();

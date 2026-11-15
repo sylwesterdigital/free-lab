@@ -11,6 +11,18 @@ from urllib.parse import urlsplit
 
 BASE='https://openapi.tripo3d.ai/v3'
 MODEL='v3.1-20260211'
+# Explicit, bounded model choices. Tripo's texture_quality is independent of topology.
+PRESETS={
+ 'xr':{'model':'P2-20260801','face_limit':12000},
+ 'balanced':{'model':'P2-20260801','face_limit':30000},
+ 'studio':{'model':'v3.1-20260211','face_limit':120000},
+}
+TEXTURE_LEVELS=('standard','detailed','extreme')
+def generation_options(preset='xr',texture_quality='standard'):
+    if preset not in PRESETS or texture_quality not in TEXTURE_LEVELS:
+        raise ValueError('Invalid 3D geometry or texture quality setting')
+    return dict(PRESETS[preset],texture=True,pbr=True,texture_quality=texture_quality)
+
 TASK_RE=re.compile(r'^[A-Za-z0-9_-]{8,96}$')
 FILE_RE=re.compile(r'^[A-Za-z0-9_-]{8,160}$')
 MAX_RESPONSE=160_000
@@ -31,7 +43,7 @@ def request_api(method,path,key,payload=None,raw=None,content_type='application/
     if data is not None and len(data)>2_500_000:raise ValueError('Tripo request exceeds safe size limit')
     req=urllib.request.Request(BASE+path,data=data,method=method,headers={
         'Authorization':'Bearer '+key,'Accept':'application/json',
-        'Content-Type':content_type,'User-Agent':'FREELAB-Tripo/0.10.33'})
+        'Content-Type':content_type,'User-Agent':'FREELAB-Tripo/0.10.34'})
     try:
         with urllib.request.build_opener(NoRedirect).open(req,timeout=35) as res:
             raw_response=res.read(MAX_RESPONSE+1)
@@ -71,16 +83,15 @@ def upload_image(jpeg,key):
         raise RuntimeError('Tripo did not return a valid upload token')
     return token
 
-def submit(jpeg,key,prompt=''):
+def submit(jpeg,key,prompt='',preset='xr',texture_quality='standard'):
     if prompt and not isinstance(prompt,str):raise ValueError('Invalid Tripo prompt')
     # With an image, use image-to-model; a textual instruction never vanishes
     # silently. Tripo's image-to-model endpoint does not support guidance text.
     if str(prompt or '').strip():
         raise ValueError('Tripo image-to-model does not accept a text prompt. Clear guidance or choose AHOLO.')
+    generation=generation_options(preset,texture_quality)
     token=upload_image(jpeg,key)
-    result=request_api('POST','/generation/image-to-model',key,{
-        'input':token,'model':MODEL,'texture':True,'pbr':True,
-        'face_limit':30000,'texture_quality':'standard'})
+    result=request_api('POST','/generation/image-to-model',key,{'input':token,**generation})
     task=result.get('task_id')
     if not isinstance(task,str) or not TASK_RE.fullmatch(task):
         raise RuntimeError('Tripo did not return a valid 3D task ID')

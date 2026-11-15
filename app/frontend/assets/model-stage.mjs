@@ -25,10 +25,41 @@ function clearRoot(){if(!root)return;scene?.remove(root);root.traverse?.(o=>{o.g
 function fit(obj){clearRoot();root=obj;scene.add(root);const box=new THREE.Box3().setFromObject(root);if(box.isEmpty())throw Error('3D model has no visible geometry');
  const size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());root.position.sub(center);const max=Math.max(size.x,size.y,size.z)||1;const scale=1.4/max;root.scale.multiplyScalar(scale);dist=2.6;yaw=.48;pitch=.18;
 }
-async function geometryFallback(url){const res=await fetch(url,{credentials:'same-origin'});let data={};try{data=await res.json();}catch{}if(!res.ok)throw Error(data.error||'Preview HTTP '+res.status);
- const pos=data.positions||[];if(!Array.isArray(pos)||!pos.length||pos.length>35000||pos.length%9)throw Error('No bounded geometry preview available');
- const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geometry.computeVertexNormals();
- return new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0x9ce4ba,roughness:.74,metalness:.08,side:THREE.DoubleSide}));
+async function geometryFallback(url){const res=await fetch(url,{credentials:'same-origin'});let data={};try{data=await res.json();}catch{}
+ if(res.status===202||res.status===409&&data.code==='JOB_NOT_FINISHED'){const e=Error(String(data.stage||data.error||'Waiting for the provider model'));e.retryable=true;throw e;}
+ if(!res.ok)throw Error(String(data.error||'Preview HTTP '+res.status));
+ // Server now provides material-aware GLB geometry as parts, not the obsolete
+ // flat `positions` array. Render the same bounded textured surfaces as XR.
+ const parts=Array.isArray(data.parts)?data.parts:[];
+ if(!parts.length||parts.length>12)throw Error('No decoded GLB surfaces available');
+ const group=new THREE.Group();let vertices=0;
+ for(const part of parts){const pos=part.positions||[],uv=part.uvs||[];
+  if(!Array.isArray(pos)||!pos.length||pos.length%9||!Array.isArray(uv)||uv.length!==pos.length/3*2||vertices+pos.length/3>40000)throw Error('Unexpected 3D geometry size');
+  vertices+=pos.length/3;
+  const geom=new THREE.BufferGeometry();geom.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  geom.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geom.computeVertexNormals();
+  const tint=Array.isArray(part.color)?part.color:[1,1,1,1];
+  const material=new THREE.MeshStandardMaterial({color:new THREE.Color(tint[0],tint[1],tint[2]),roughness:.75,metalness:.05,side:THREE.DoubleSide,transparent:tint[3]<.99,opacity:tint[3]??1});
+  if(typeof part.texture==='string'&&part.texture.startsWith('data:image/')&&part.texture.length<7_000_000){
+   try{const map=await new THREE.TextureLoader().loadAsync(part.texture);map.flipY=false;map.colorSpace=THREE.SRGBColorSpace;material.map=map;material.needsUpdate=true;}catch{}
+  }
+  group.add(new THREE.Mesh(geom,material));
+ }
+ return group;
+}
+function delay(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+async function awaitPreparedPreview(jobId,token){
+ const preview='/api/media/3d/'+jobId+'/preview';
+ for(let attempt=0;attempt<28&&token===loadingToken;attempt++){
+  try{
+   const object=await geometryFallback(preview);
+   state('Quest-compatible model loaded · textured preview ready');return object;
+  }catch(e){if(!e.retryable)throw e;state('3D · '+e.message+' · keep this viewer open',true);}
+  if(token!==loadingToken)return null;
+  await delay(4500);
+ }
+ if(token===loadingToken)throw Error('3D preparation is still pending. Reopen the viewer after the server finishes; no new generation needed.');
+ return null;
 }
 async function open(id,avatar=false,localFile=null){const token=++loadingToken;const stage=$('modelStage');stage.classList.remove('hidden');active=true;
  $('modelStageTitle').textContent=localFile?'Local avatar preview · '+(localFile.size/1_000_000).toFixed(2)+' MB':avatar?'My 3D avatar':'3D model #'+id;
@@ -50,8 +81,9 @@ async function open(id,avatar=false,localFile=null){const token=++loadingToken;c
    if(!localFile){dl.href=rawUrl;dl.download=avatar?'freelab-avatar.glb':'freelab-model-'+id+'.glb';dl.classList.remove('hidden');}
    state(localFile?(localFile.size>4_000_000?'Local preview only · '+(localFile.size/1_000_000).toFixed(2)+' MB · reduce by '+((localFile.size-4_000_000)/1_000_000).toFixed(2)+' MB before XR use':'Local 3D preview · ready for upload'):'Full 3D model loaded · drag to rotate');}
   catch(e){if(localFile)throw e;
-   try{object=await geometryFallback(fallbackUrl);state('Lightweight geometry preview · textures/animation omitted. '+e.message);}
-   catch(fallbackError){throw Error('GLB loader: '+e.message+' · Preview: '+fallbackError.message);}
+   try{object=avatar?await geometryFallback(fallbackUrl):await awaitPreparedPreview(id,token);
+    if(object)state('Model loaded · '+(avatar?'avatar mesh':'textured Quest preview')+' · original GLB is preserved');}
+   catch(fallbackError){throw Error('GLB loader: '+e.message+' · XR preview: '+fallbackError.message);}
   }
   if(token!==loadingToken)return;fit(object);
  }catch(e){if(token===loadingToken)state('3D preview unavailable: '+e.message);}

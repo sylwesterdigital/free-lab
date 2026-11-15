@@ -1,4 +1,4 @@
-"""v0.10.33 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
+"""v0.10.34 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
 import unittest
 from pathlib import Path
 from unittest.mock import patch

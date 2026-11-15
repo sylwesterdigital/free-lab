@@ -190,6 +190,10 @@ async function refresh3DProviderUI(){
  try{const data=await get3DPreference();control.value=data.selected||data.provider;
   $('profile3DProviderStatus').textContent='Using '+data.provider.toUpperCase()+' · '+(data.available?.[data.provider]?'key available':'API key not available to this profile')+' · paid 3D jobs require separate consent.';
   const other=$('capture3DProvider');if(other){other.value=data.provider;}
+  const q=await get3DQuality();$('profile3DQuality').value=q.preset;$('profile3DTexture').value=q.texture_quality;
+  $('profile3DXRTexture').value=String(q.xr_texture_edge);
+  $('profile3DQualityStatus').textContent='New Tripo jobs: '+q.choices[q.preset].model+' · '+q.choices[q.preset].face_limit.toLocaleString()+' triangles · '+q.texture_quality+' textures. XR preview cap: '+q.xr_texture_edge+' px.';
+  const inStudio=$('capture3DQuality');if(inStudio)inStudio.value=q.preset;
  }catch(e){$('profile3DProviderStatus').textContent='Could not load provider preference: '+e.message;}
 }
 function apiRowMessage(id,message,fail=false){const status=providerRows.get(id)?.querySelector('.api-result');if(status){status.textContent=message;status.classList.toggle('error',fail);}else $('apiListStatus').textContent=message;}
@@ -352,7 +356,10 @@ async function init(){
  $('profile3DAvatarRemove').onclick=async()=>{if(!await window.FreeLabDialog.confirm('Remove your 3D avatar?'))return;
    try{await api('/me/avatar-3d',{method:'DELETE'});$('profile3DAvatarStatus').textContent='3D avatar removed.';}
    catch(err){$('profile3DAvatarStatus').textContent=err.message;}};
- $('profileButton').onclick=()=>{$('profilePanel').classList.remove('hidden');profileTab(state.user?.role==='admin'?'apis':'experience');void refresh3DProviderUI();};$('profile3DProvider').onchange=async()=>{const chosen=$('profile3DProvider').value;try{await save3DPreference(chosen);await refresh3DProviderUI();notify('3D provider changed to '+chosen.toUpperCase());}catch(e){notify(e.message);await refresh3DProviderUI();}};$('closeProfile').onclick=()=>$('profilePanel').classList.add('hidden');
+ $('profileButton').onclick=()=>{$('profilePanel').classList.remove('hidden');profileTab(state.user?.role==='admin'?'apis':'experience');void refresh3DProviderUI();};$('profile3DProvider').onchange=async()=>{const chosen=$('profile3DProvider').value;try{await save3DPreference(chosen);await refresh3DProviderUI();notify('3D provider changed to '+chosen.toUpperCase());}catch(e){notify(e.message);await refresh3DProviderUI();}};for(const field of ['profile3DQuality','profile3DTexture','profile3DXRTexture'])$(field).onchange=async()=>{
+  const prefs={preset:$('profile3DQuality').value,texture_quality:$('profile3DTexture').value,xr_texture_edge:Number($('profile3DXRTexture').value)};
+  try{await save3DQuality(prefs);await refresh3DProviderUI();notify('3D quality saved for new jobs');}catch(e){notify(e.message);}
+ };$('closeProfile').onclick=()=>$('profilePanel').classList.add('hidden');
  $('logout').onclick=async()=>{state.sessionKeys.clear();stopScan();closeCamera();await api('/logout',{method:'POST'});location.reload()};
  $('createProfile').onsubmit=async e=>{e.preventDefault();try{await api('/admin/profiles',{method:'POST',body:JSON.stringify({username:$('newUsername').value,display_name:$('newDisplayName').value,password:$('newPassword').value})});e.target.reset();notify('New private profile created');await loadAdminProfiles();}catch(error){notify(error.message)}};
  $('logLatest').onclick=()=>logTab('latest');$('logHistory').onclick=()=>logTab('history');$('showChangelog').onclick=()=>presentLog(true);$('dismissChangelog').onclick=dismissLog;$('continueChangelog').onclick=dismissLog;
@@ -387,8 +394,8 @@ async function saveXRFrame(options=null){
  const r=await api('/captures',{method:'POST',body:JSON.stringify({image})});
  return {...r,image};
 }
-async function createXR3D(cid,oid,prompt=''){
- const payload={capture_id:cid,object_id:oid??null,confirm_paid:true};if(prompt.trim())payload.prompt=prompt.trim();
+async function createXR3D(cid,oid,prompt='',preset=null){
+ const payload={capture_id:cid,object_id:oid??null,confirm_paid:true};if(prompt.trim())payload.prompt=prompt.trim();if(preset)payload.quality_preset=preset;
  return api('/media/3d',{method:'POST',body:JSON.stringify(payload)});
 }
 async function checkXR3D(id,refresh=false){return api('/media/3d/'+id+(refresh?'?refresh=1':''));}
@@ -566,7 +573,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.33');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.34');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{
@@ -585,6 +592,9 @@ async function describeXR(cid,oid=null,question='',refresh=false){const payload=
 async function modelXRPreview(id){return api('/media/3d/'+id+'/preview');}
 async function modelXRDiagnostics(id){return api('/media/3d/'+id+'/diagnostics');}
 async function retryXRPreview(id){return api('/media/3d/'+id+'/preview/retry',{method:'POST',body:'{}'});}
+async function get3DQuality(){return api('/preferences/3d/quality');}
+async function save3DQuality(prefs){return api('/preferences/3d/quality',{method:'PUT',body:JSON.stringify(prefs)});}
+async function save3DTransform(id,transform){return api('/media/3d/'+id+'/transform',{method:'PATCH',body:JSON.stringify(transform)});}
 async function get3DPreference(){return api('/preferences/3d');}
 async function save3DPreference(provider){return api('/preferences/3d',{method:'PUT',body:JSON.stringify({provider})});}
 
@@ -624,6 +634,6 @@ function wirePromptEditor(){
  };
 }
 
-window.FreeLab={generateXRImage,cameraFrameReady,downloadImage,openGallery,silenceXRVoice,api,startWavPrompt,currentRecording,describeXR,modelXRPreview,get3DPreference,save3DPreference,list3DJobs,modelXRDiagnostics,retryXRPreview,loadElevenVoices,createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,resumeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
+window.FreeLab={generateXRImage,cameraFrameReady,downloadImage,openGallery,silenceXRVoice,api,startWavPrompt,currentRecording,describeXR,modelXRPreview,get3DPreference,save3DPreference,get3DQuality,save3DQuality,save3DTransform,list3DJobs,modelXRDiagnostics,retryXRPreview,loadElevenVoices,createXR3D,checkXR3D,refresh3DJobs,enableXRCamera,serverDiagnostics,armMicrophone,micReady,speakUpdate,pref,setPref,traceEvent,getTrace,promptXR,transcribeXR,recordWavPrompt,openPromptEditor,closePrompt,useXRFrame,saveXRFrame,recognizeXR,segmentXR,listXRClouds,updateXRObject,updateXRCloud,openCamera,closeCamera,resumeCamera,snapshot,submitCapture,segmentSnapshot,notify,loadObjects,cameraReport,getState:()=>state};
 document.addEventListener('DOMContentLoaded',()=>{window.FreeLabRooms?.init?.();init().catch(e=>notify('Initialization failed: '+e.message));const bloom=$('featureBloom');if(bloom){setTimeout(()=>window.FreeLabSound?.play('arrival'),3000);bloom.querySelectorAll('.feature-seed').forEach(button=>{button.addEventListener('mouseenter',()=>window.FreeLabSound?.hover());button.addEventListener('focus',()=>window.FreeLabSound?.hover());});}});
 })();

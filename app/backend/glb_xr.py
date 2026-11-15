@@ -149,7 +149,7 @@ def triangle_cluster(triangles, span, budget):
     raise ValueError('3D mesh too complex for a coherent Quest preview; use the full textured model in Collection')
 
 
-def image_data(doc, binary, image_index, cache):
+def image_data(doc, binary, image_index, cache, texture_edge=640):
     if image_index in cache:return cache[image_index]
     if len(cache) >= MAX_TEXTURES:return None
     try:
@@ -169,7 +169,7 @@ def image_data(doc, binary, image_index, cache):
         with Image.open(io.BytesIO(raw)) as source:
             if source.width*source.height>6_000_000:return None
             pic = ImageOps.exif_transpose(source).convert('RGB')
-            pic.thumbnail((MAX_TEXTURE_EDGE, MAX_TEXTURE_EDGE), Image.Resampling.LANCZOS)
+            pic.thumbnail((texture_edge, texture_edge), Image.Resampling.LANCZOS)
             out = io.BytesIO()
             pic.save(out, format='JPEG', quality=76, optimize=True)
         value = 'data:image/jpeg;base64,'+base64.b64encode(out.getvalue()).decode('ascii')
@@ -179,7 +179,8 @@ def image_data(doc, binary, image_index, cache):
         return None
 
 
-def decode_visual(data):
+def decode_visual(data, texture_edge=640):
+    if texture_edge not in (512, 640, 1024, 2048):raise ValueError("Unsupported XR texture size")
     doc, binary = chunks(data)
     read = accessor_reader(doc, binary)
     materials = doc.get('materials', [])
@@ -241,7 +242,7 @@ def decode_visual(data):
             info=pbr['baseColorTexture'];n=info.get('index',-1)
             if type(n) is int and 0<=n<len(textures):
                 source=textures[n].get('source')
-                if type(source) is int:tex=image_data(doc,binary,source,cache)
+                if type(source) is int:tex=image_data(doc,binary,source,cache,texture_edge)
         positions_out=[];uvs_out=[]
         for tri in surface:
             for p, u in tri:

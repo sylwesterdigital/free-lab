@@ -1,4 +1,4 @@
-"""v0.10.33: models remain attached to saved sources; bounded textured GLB previews.
+"""v0.10.34: models remain attached to saved sources; bounded textured GLB previews.
 No AI requests, no provider costs and no remote network.
 """
 import io,json,math,struct,unittest
@@ -77,12 +77,12 @@ class TexturedXR124(unittest.TestCase):
         self.assertIn('const XMF=',XR)
         self.assertIn('attribute vec2 aUV',XR)
         self.assertIn('gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false)',XR)
-        self.assertIn('meshAnchor(mesh)',XR)
+        self.assertIn('meshWorldPose(mesh)',XR)
         self.assertIn('clearCollectionMeshes();closeImageMenu()',XR)
         self.assertIn('void reopenCloudModels(id)',XR)
-        self.assertIn('captureId,objectId,parts:pieces',XR)
+        self.assertIn("captureId,objectId,kind:'3dmesh',parts:pieces",XR)
         self.assertIn('gl.drawArrays(gl.TRIANGLES,0,part.count)',XR)
-        self.assertIn('glb_xr.decode_visual(raw)',B)
+        self.assertIn('glb_xr.decode_visual(raw,texture_edge=texture_edge)',B)
         self.assertIn('FROM jobs_3d WHERE id=? AND owner_id=?',B)
 
 if __name__=='__main__':unittest.main()

@@ -50,7 +50,7 @@ class SpatialWorkbench(unittest.TestCase):
         self.assertIn('model_cache.store(',SERVER)
         self.assertIn('18_000_000',SERVER)
         self.assertIn('void spawnMeshPreview(job)',XR)
-        self.assertIn('createXR3D(target.captureId,target.objectId)',XR)
+        self.assertIn("createXR3D(target.captureId,target.objectId,'',target.quality||'xr')",XR)
         self.assertEqual(glb_preview.MAX_TRIANGLES,3600)
     def test_non_xr_upload_and_elevenlabs_opt_in(self):
         self.assertIn('id="saveUploadCloud"',INDEX)

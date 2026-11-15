@@ -1,6 +1,6 @@
 """Flask API: identity-scoped private object collection with optional Meta inference."""
 from __future__ import annotations
-import base64,hashlib,hmac,io,json,os,re,secrets,sqlite3,threading,time,urllib.request,urllib.error
+import base64,hashlib,hmac,io,json,math,os,re,secrets,sqlite3,threading,time,urllib.request,urllib.error
 from pathlib import Path
 from functools import wraps
 from flask import Flask,abort,g,jsonify,request,send_file,session
@@ -71,6 +71,7 @@ def _xr_existing_job_worker(owner,jid,key):
         con=db.connect(DB)
         row=con.execute('SELECT * FROM jobs_3d WHERE id=? AND owner_id=?',(jid,owner)).fetchone()
         if not row or row['status']!='SUCCEEDED':raise ValueError('3D job is not completed')
+        texture_edge=(row['xr_texture_edge'] if 'xr_texture_edge' in row.keys() and row['xr_texture_edge'] in (512,640,1024,2048) else 640)
         if output.is_file():raw=output.read_bytes()
         elif row['model_path'] and (MODEL_DIR/row['model_path']).is_file():
             raw=(MODEL_DIR/row['model_path']).read_bytes()
@@ -97,7 +98,7 @@ def _xr_existing_job_worker(owner,jid,key):
         # prefer the bounded, separate Blender conversion if available.
         use_blender=len(raw)>10_000_000 and bool(avatar_optimizer.blender_command())
         if not use_blender:
-            try:result=glb_xr.decode_visual(raw)
+            try:result=glb_xr.decode_visual(raw,texture_edge=texture_edge)
             except (ValueError,TypeError,KeyError,IndexError):use_blender=True
         if use_blender:
             if not avatar_optimizer.blender_command():
@@ -105,7 +106,7 @@ def _xr_existing_job_worker(owner,jid,key):
             _xr_preview_stage(owner,jid,'Optimizing GLB for Quest')
             optimized=avatar_optimizer.optimize_xr_preview(raw)
             _xr_preview_stage(owner,jid,'Decoding optimized mesh')
-            result=glb_xr.decode_visual(optimized)
+            result=glb_xr.decode_visual(optimized,texture_edge=texture_edge)
             temp=MODEL_DIR/(f'{owner}_{jid}.xr.glb.tmp-'+secrets.token_hex(4))
             try:
                 with temp.open('xb') as f:os.fchmod(f.fileno(),0o600);f.write(optimized)
@@ -550,6 +551,29 @@ def preferred_3d_provider():
     value=selected_3d_provider()
     if value=='auto':return next((p for p in ('aholo','meshy','tripo') if provider_key(p)), 'aholo')
     return value
+
+def quality_3d_selection(owner, preset=None, texture_quality=None):
+    row=g.con.execute('SELECT preset,texture_quality,xr_texture_edge FROM profile_3d_quality WHERE user_id=?',(owner,)).fetchone()
+    return {'preset':preset or (row['preset'] if row else 'xr'),
+            'texture_quality':texture_quality or (row['texture_quality'] if row else 'standard'),
+            'xr_texture_edge':row['xr_texture_edge'] if row else 1024}
+
+@app.route('/api/preferences/3d/quality', methods=['GET','PUT'])
+@require_user
+def quality_3d_preference():
+    if request.method=='GET':
+        prefs=quality_3d_selection(g.user['id'])
+        return jsonify(**prefs,choices={k:{**v} for k,v in tripo3d.PRESETS.items()},
+                       texture_levels=list(tripo3d.TEXTURE_LEVELS))
+    v=body()
+    if v.get('preset') not in tripo3d.PRESETS or v.get('texture_quality') not in tripo3d.TEXTURE_LEVELS or v.get('xr_texture_edge') not in (512,1024,2048):
+        return jsonify(error='Choose a valid 3D preset, texture detail and XR texture limit'),400
+    with g.con:
+        g.con.execute('''INSERT INTO profile_3d_quality(user_id,preset,texture_quality,xr_texture_edge)
+        VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET preset=excluded.preset,
+        texture_quality=excluded.texture_quality,xr_texture_edge=excluded.xr_texture_edge''',
+        (g.user['id'],v['preset'],v['texture_quality'],v['xr_texture_edge']))
+    return jsonify(**quality_3d_selection(g.user['id']))
 
 @app.route('/api/preferences/3d',methods=['GET','PUT'])
 @require_user
@@ -998,7 +1022,10 @@ def media_capabilities():
 
 def job_3d_dict(row):
     return {'id':row['id'],'capture_id':row['capture_id'],'object_id':row['object_id'],
-            'provider':row['provider'],'model_id':row['model_id'] or None,'status':row['status'],'progress':row['progress'],
+            'provider':row['provider'],'model_id':row['model_id'] or None,
+            'quality_preset':row['quality_preset'],'texture_quality':row['texture_quality'],
+            'face_limit':row['face_limit'],'xr_texture_edge':row['xr_texture_edge'],
+            'transform':json.loads(row['transform_json'] or '{}'), 'status':row['status'],'progress':row['progress'],
             'credits':row['credits'],'thumbnail_url':row['thumbnail_url'],
             'error':row['error'],'created_at':row['created_at'],
             'cached':bool(row['model_path']),'cache_error':row['cache_error'],
@@ -1077,10 +1104,18 @@ def media_3d_start():
         if provider=='aholo':
             task=aholo3d.submit_image(raw,key,prompt.strip())
         elif provider=='meshy':task=meshy3d.submit(raw,key)
-        elif provider=='tripo':task=tripo3d.submit(raw,key,prompt.strip())
+        elif provider=='tripo':
+            setting=quality_3d_selection(g.user['id'],preset=v.get('quality_preset'))
+            setting['texture_quality']=v.get('texture_quality') or setting['texture_quality']
+            options=tripo3d.generation_options(setting['preset'],setting['texture_quality'])
+            task=tripo3d.submit(raw,key,prompt.strip(),setting['preset'],setting['texture_quality'])
         else:raise ValueError('Unsupported 3D provider')
         with g.con:
-            job=g.con.execute("INSERT INTO jobs_3d(owner_id,capture_id,object_id,provider,provider_task,model_id) VALUES(?,?,?,?,?,?)",(g.user['id'],cid,oid,provider,task,tripo3d.MODEL if provider=='tripo' else '')).lastrowid
+            job=g.con.execute('''INSERT INTO jobs_3d(owner_id,capture_id,object_id,provider,provider_task,model_id,
+              quality_preset,face_limit,texture_quality,xr_texture_edge) VALUES(?,?,?,?,?,?,?,?,?,?)''',
+              (g.user['id'],cid,oid,provider,task,options['model'] if provider=='tripo' else '',
+               setting['preset'] if provider=='tripo' else '',options['face_limit'] if provider=='tripo' else 0,
+               setting['texture_quality'] if provider=='tripo' else '',setting['xr_texture_edge'] if provider=='tripo' else 640)).lastrowid
         db.finish_inference(g.con,call,'ok')
         return jsonify(id=job,status='PENDING',provider=provider,paid_task_submitted=True),202
     except (ValueError,RuntimeError,OSError) as e:
@@ -1101,6 +1136,27 @@ def media_3d_status(jid):
             _xr_ensure_preview_worker(owner,jid,key)
     return jsonify(job_3d_dict(row))
 
+
+@app.patch('/api/media/3d/<int:jid>/transform')
+@require_user
+def update_3d_transform(jid):
+    # Transform is relative to the image's spatial pose; moving the source
+    # automatically moves its attached 3D object without another paid task.
+    v=body();offset=v.get('offset');rotation=v.get('rotation');size=v.get('scale')
+    def bounded(values,length,limit):
+        return isinstance(values,list) and len(values)==length and all(
+            type(x) in (int,float) and math.isfinite(x) and abs(x)<=limit for x in values)
+    if not bounded(offset,3,3) or not bounded(rotation,4,1.1) or not (type(size) in (int,float) and math.isfinite(size) and .2<=size<=4):
+        return jsonify(error='Invalid 3D position, rotation or scale'),400
+    norm=math.sqrt(sum(x*x for x in rotation))
+    if norm<.2 or norm>1.8:return jsonify(error='Invalid 3D orientation'),400
+    transform={'offset':[round(float(x),4) for x in offset],
+               'rotation':[round(float(x/norm),6) for x in rotation], 'scale':round(float(size),4)}
+    with g.con:
+        changed=g.con.execute('UPDATE jobs_3d SET transform_json=? WHERE id=? AND owner_id=?',
+                              (json.dumps(transform,separators=(',',':')),jid,g.user['id']))
+    if not changed.rowcount:abort(404)
+    return jsonify(job_id=jid,transform=transform,saved=True)
 
 @app.get('/api/media/3d/<int:jid>/asset')
 @require_user

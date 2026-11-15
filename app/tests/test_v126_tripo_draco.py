@@ -1,4 +1,4 @@
-"""v0.10.33: offline tests for real Tripo v3 and Draco GLB loading."""
+"""v0.10.34: offline tests for real Tripo v3 and Draco GLB loading."""
 from __future__ import annotations
 import json, tempfile, unittest
 from pathlib import Path
@@ -32,9 +32,46 @@ class TripoV3(unittest.TestCase):
    self.assertIn(jpg,first.kwargs['raw'])
    second=mock.call_args_list[1]
    self.assertEqual(second.args[:2],('POST','/generation/image-to-model'))
-   self.assertEqual(second.args[3]['model'],tripo3d.MODEL)
+   self.assertEqual(second.args[3]['model'],tripo3d.PRESETS['xr']['model'])
    self.assertTrue(second.args[3]['texture'])
   with self.assertRaises(ValueError):tripo3d.submit(jpg,'key','ignored instructions')
+ def test_quality_presets_independent_of_texture(self):
+  from backend import db
+  from tempfile import TemporaryDirectory
+  from pathlib import Path
+  for preset,model,limit in [('xr','P2-20260801',12000),('balanced','P2-20260801',30000),('studio','v3.1-20260211',120000)]:
+   for texture in ('standard','detailed','extreme'):
+    cfg=tripo3d.generation_options(preset,texture)
+    self.assertEqual((cfg['model'],cfg['face_limit'],cfg['texture_quality']),(model,limit,texture))
+    self.assertTrue(cfg['pbr'])
+  for bad in ('arbitrary','xyz',''):
+   with self.assertRaises(ValueError):tripo3d.generation_options(bad,'standard')
+   with self.assertRaises(ValueError):tripo3d.generation_options('xr',bad)
+  with TemporaryDirectory() as tmp:
+   db.init(Path(tmp)/'test.sqlite3')
+   with db.connect(Path(tmp)/'test.sqlite3') as con:
+    row=con.execute('SELECT sql FROM sqlite_master WHERE name=?',('profile_3d_quality',)).fetchone()
+    self.assertIn('xr_texture_edge',row['sql'])
+    cols=[r['name'] for r in con.execute('PRAGMA table_info(jobs_3d)')]
+    for name in ('model_id','quality_preset','face_limit','texture_quality','xr_texture_edge','transform_json'):
+     self.assertIn(name,cols)
+
+ def test_generation_quality_job_recording_and_transform_security(self):
+  appsrc=(ROOT/'backend/app.py').read_text()
+  xr=(ROOT/'frontend/assets/xr.js').read_text()
+  stage=(ROOT/'frontend/assets/model-stage.mjs').read_text()
+  self.assertIn("options['model'] if provider=='tripo'",appsrc)
+  self.assertIn("tripo3d.submit(raw,key,prompt.strip(),setting['preset'],setting['texture_quality'])",appsrc)
+  self.assertIn("@app.patch('/api/media/3d/<int:jid>/transform')",appsrc)
+  self.assertIn("g.con.execute('UPDATE jobs_3d SET transform_json=? WHERE id=? AND owner_id=?'",appsrc)
+  self.assertIn('meshHitTest(r,m)',xr)
+  self.assertIn('save3DTransform',xr)
+  self.assertIn('meshWorldPose(mesh)',xr)
+  self.assertIn('geometryFallback(url)',stage)
+  self.assertIn('data.parts',stage)
+  self.assertIn('awaitPreparedPreview(jobId,token)',stage)
+  self.assertIn('face_limit',appsrc)
+
  def test_normalize_task_status_and_url_allowlist(self):
   states={'queued':'PENDING','running':'IN_PROGRESS','success':'SUCCEEDED','failed':'FAILED','cancelled':'CANCELED'}
   for raw,expected in states.items():
@@ -95,7 +132,7 @@ class TripoUI(unittest.TestCase):
   self.assertIn('model_cache.store(',APP)
 
  def test_new_version(self):
-  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.33')
-  self.assertEqual(json.loads((ROOT/'frontend/version.json').read_text())['version'],'0.10.33')
+  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.34')
+  self.assertEqual(json.loads((ROOT/'frontend/version.json').read_text())['version'],'0.10.34')
 
 if __name__=='__main__':unittest.main()

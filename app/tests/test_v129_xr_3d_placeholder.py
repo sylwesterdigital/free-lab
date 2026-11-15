@@ -1,4 +1,4 @@
-"""v0.10.33: offline XR 3D job cubes and private GLB preview preparation."""
+"""v0.10.34: offline XR 3D job cubes and private GLB preview preparation."""
 import struct, unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -20,7 +20,7 @@ class Cube129(unittest.TestCase):
   self.assertIn("return 'XR MODEL ERROR'",XR)
   self.assertIn('gl.drawArrays(gl.TRIANGLES,0,36)',XR)
   self.assertIn('if(badge.status===\'SUCCEEDED\'&&modelVisible',XR)
-  self.assertIn('meshAnchor(mesh)',XR)
+  self.assertIn('meshWorldPose(mesh)',XR)
  def test_explicit_quest_conversion_lifecycle(self):
   self.assertIn("@app.get('/api/media/3d/<int:jid>/preview')",BACK)
   self.assertIn('glb_xr.decode_visual(raw)',BACK)
@@ -79,7 +79,7 @@ class Cube129(unittest.TestCase):
     cols={r['name'] for r in conn.execute('PRAGMA table_info(jobs_3d)')}
     self.assertIn('model_id',cols)
    db.init(dbfile)
-  self.assertIn("tripo3d.MODEL if provider=='tripo'",BACK)
+  self.assertIn("options['model'] if provider=='tripo'",BACK)
  def test_desktop_readable_diagnostics_from_current_job_without_generation(self):
   app=(ROOT/'frontend/assets/app.js').read_text()
   self.assertIn("async function modelXRDiagnostics(id){return api('/media/3d/'+id+'/diagnostics');}",app)

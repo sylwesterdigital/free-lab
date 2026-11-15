@@ -1,15 +1,28 @@
 {
-  "version": "0.10.33",
-  "title": "FREELAB v0.10.33 — XR 3D preparation recovery and theater transforms",
+  "version": "0.10.34",
+  "title": "FREELAB v0.10.34 — 3D presets, model transforms and textured preview recovery",
   "datetime": "2026-11-15",
   "changes": [
-    "Cinematic Previous, Next and Close now share the exact same world-space transform and follow the photograph’s rotation; one evenly spaced row sits below its bottom edge, outside the image.",
-    "Generated GLBs up to 64 MB can be cached privately; large and dense models are converted to a bounded Quest preview using Blender without altering the original or submitting a second paid task.",
-    "The Quest preview worker maintains a heartbeat so interrupted server workers no longer leave 3D generation permanently stuck on Preparing, and short preparation stages update the existing cube status.",
-    "XR image-to-model previews throttle their own retry requests while the server prepares a model; retry and failure recovery remain available without paid regeneration.",
-    "Tests cover the real theater coordinate-system bug, original vs preview size limits, bounded worker recovery, and source-linked model processing."
+    "XR-ready, Balanced and High-detail Tripo image-to-3D presets select a real P2 or H3.1 model version and triangle limit before submitting a paid task.",
+    "Tripo texture fidelity (Standard, Detailed, Extreme/8K) is independently selectable, with a separate 512/1024/2048-pixel Quest preview texture cap; generation parameters are preserved per model job.",
+    "Quest 3D meshes have spatial hit targets and can be grabbed with controllers or tracked-hand pinches, moved, rotated with wrist/controller twist and scaled with two hands; a compact minus/rotate/plus toolbar provides alternative controls.",
+    "Model transforms are validated and stored privately relative to their source photograph; reopening the collection restores placement without another paid model generation.",
+    "XR 3D progress badges now distinguish download, optimization, decoding and attachment stages; completed textured geometry replaces the source-linked cube.",
+    "Desktop/mobile 3D viewer now reads the actual textured parts response, waits through asynchronous server preparation and accepts the same source-linked models, without another generation request."
   ],
   "history": [
+    {
+      "version": "0.10.33",
+      "title": "FREELAB v0.10.33 — XR 3D preparation recovery and theater transforms",
+      "datetime": "2026-11-15",
+      "changes": [
+        "Cinematic Previous, Next and Close now share the exact same world-space transform and follow the photograph’s rotation; one evenly spaced row sits below its bottom edge, outside the image.",
+        "Generated GLBs up to 64 MB can be cached privately; large and dense models are converted to a bounded Quest preview using Blender without altering the original or submitting a second paid task.",
+        "The Quest preview worker maintains a heartbeat so interrupted server workers no longer leave 3D generation permanently stuck on Preparing, and short preparation stages update the existing cube status.",
+        "XR image-to-model previews throttle their own retry requests while the server prepares a model; retry and failure recovery remain available without paid regeneration.",
+        "Tests cover the real theater coordinate-system bug, original vs preview size limits, bounded worker recovery, and source-linked model processing."
+      ]
+    },
     {
       "version": "0.10.32",
       "title": "FREELAB v0.10.32 — Quest performance and 3D recovery",

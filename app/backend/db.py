@@ -56,6 +56,12 @@ CREATE TABLE IF NOT EXISTS profile_settings (
  model_3d TEXT NOT NULL DEFAULT 'auto' CHECK(model_3d IN ('auto','aholo','meshy'))
 );
 -- Backward-compatible Tripo choice: original profile_settings CHECK excludes tripo.
+CREATE TABLE IF NOT EXISTS profile_3d_quality (
+ user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+ preset TEXT NOT NULL DEFAULT 'xr' CHECK(preset IN ('xr','balanced','studio')),
+ texture_quality TEXT NOT NULL DEFAULT 'standard' CHECK(texture_quality IN ('standard','detailed','extreme')),
+ xr_texture_edge INTEGER NOT NULL DEFAULT 1024 CHECK(xr_texture_edge IN (512,1024,2048))
+);
 CREATE TABLE IF NOT EXISTS profile_3d_provider_override (
  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
  provider TEXT NOT NULL CHECK(provider IN ('tripo'))
@@ -130,8 +136,15 @@ def init(path):
         fields={row['name'] for row in con.execute('PRAGMA table_info(jobs_3d)')}
         if 'model_path' not in fields:con.execute("ALTER TABLE jobs_3d ADD COLUMN model_path TEXT NOT NULL DEFAULT ''")
         if 'cache_error' not in fields:con.execute("ALTER TABLE jobs_3d ADD COLUMN cache_error TEXT NOT NULL DEFAULT ''")
-        # v0.10.33: exact generation model pinned per job; historical jobs remain unknown.
+        # v0.10.34: exact generation model pinned per job; historical jobs remain unknown.
         if 'model_id' not in fields:con.execute("ALTER TABLE jobs_3d ADD COLUMN model_id TEXT NOT NULL DEFAULT ''")
+        for column,definition in (
+            ('quality_preset',"TEXT NOT NULL DEFAULT ''"),
+            ('texture_quality',"TEXT NOT NULL DEFAULT ''"),
+            ('face_limit','INTEGER NOT NULL DEFAULT 0'),
+            ('xr_texture_edge','INTEGER NOT NULL DEFAULT 640'),
+            ('transform_json',"TEXT NOT NULL DEFAULT '{}'")):
+            if column not in fields:con.execute('ALTER TABLE jobs_3d ADD COLUMN '+column+' '+definition)
         con.execute('''CREATE TABLE IF NOT EXISTS user_avatar_models (
            user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
            glb BLOB NOT NULL, updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))

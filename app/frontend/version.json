@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.33",
-  "description": "World-space theater controls and resilient Quest 3D preparation"
+  "version": "0.10.34",
+  "description": "Quest-ready Tripo presets, editable 3D transforms and asynchronous textured model preview"
 }

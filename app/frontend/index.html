@@ -1,13 +1,13 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.33">
+<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.34">
 <title>FREELAB — Step into the spatial world</title>
-<link rel="stylesheet" href="/assets/style.css?v=0.10.33">
+<link rel="stylesheet" href="/assets/style.css?v=0.10.34">
 </head><body>
 <div id="app" class="app-shell">
 <header class="header" aria-label="Site navigation">
-  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.33</span></a>
+  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.34</span></a>
   <nav class="header-right" aria-label="Workspace">
     <span class="live-pill"><span class="server-dot" id="connectionDot"></span><span id="healthStatus">Connecting</span></span>
     <button id="roomButton" class="nav-pill" type="button">Rooms</button>
@@ -89,7 +89,7 @@
    </div></div></details>
   </div>
   <div id="captureResult" class="capture-result hidden" role="status" aria-live="polite"></div>
-  <div class="capture-chat" id="captureChat"><form id="captureCommandForm"><button type="button" id="captureModeButton" title="Choose AI action" aria-label="Choose AI action">＋</button><select id="captureCommandMode" aria-label="AI action"><option value="prompt">Edit image</option><option value="describe">Describe</option><option value="extract">Extract</option><option value="segment">Extract named object</option><option value="refine">Refine image</option><option value="3d">Generate 3D</option></select><select id="capture3DProvider" class="hidden" aria-label="3D generation provider"><option value="aholo">AHOLO</option><option value="meshy">Meshy</option><option value="tripo">Tripo</option></select><textarea rows="3" id="captureCommandText" placeholder="Ask about this image or tell AI what to change…" maxlength="1500" aria-label="Image instruction"></textarea><button type="button" id="captureChatVoice" title="Voice instruction" aria-label="Voice instruction"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg></button><button type="submit" id="captureChatSend" title="Send image instruction" aria-label="Send instruction">↑</button></form></div>
+  <div class="capture-chat" id="captureChat"><form id="captureCommandForm"><button type="button" id="captureModeButton" title="Choose AI action" aria-label="Choose AI action">＋</button><select id="captureCommandMode" aria-label="AI action"><option value="prompt">Edit image</option><option value="describe">Describe</option><option value="extract">Extract</option><option value="segment">Extract named object</option><option value="refine">Refine image</option><option value="3d">Generate 3D</option></select><select id="capture3DProvider" class="hidden" aria-label="3D generation provider"><option value="aholo">AHOLO</option><option value="meshy">Meshy</option><option value="tripo">Tripo</option></select><select id="capture3DQuality" class="hidden" aria-label="3D asset type"><option value="xr">XR-ready</option><option value="balanced">Balanced</option><option value="studio">High detail</option></select><textarea rows="3" id="captureCommandText" placeholder="Ask about this image or tell AI what to change…" maxlength="1500" aria-label="Image instruction"></textarea><button type="button" id="captureChatVoice" title="Voice instruction" aria-label="Voice instruction"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg></button><button type="submit" id="captureChatSend" title="Send image instruction" aria-label="Send instruction">↑</button></form></div>
   <div class="capture-rail"><button id="captureNewSource" type="button" aria-label="Start another source">↻<span>New source</span></button><button type="button" id="captureShutter" class="capture-shutter" aria-label="Take photograph"><span></span></button><button type="button" id="captureUpload" aria-label="Upload a photo">↥<span>Import</span></button></div>
   <div class="capture-workbench" id="captureWorkbench"><div class="capture-workbench-head"><div><p class="eyebrow">SOURCE → BRANCHES</p><h2>Spatial collection</h2></div><button type="button" id="captureReload">Refresh</button></div>
    <div id="captureTree" class="capture-tree" role="list" aria-label="Source and segment images"></div>
@@ -115,7 +115,11 @@
   <div class="profile-scroll" id="profileScroll">
    <section id="profileExperience" role="tabpanel" data-profile-view="experience">
     <p class="profile-account" id="profileSummary"></p><div class="profile-photo-setting"><span>PROFILE PICTURE</span><label for="profileAvatarInput" class="profile-avatar-round" title="Upload or take a profile photo" aria-label="Upload or take profile photo"><img id="settingsAvatar" class="hidden" alt="Current profile picture"><span id="settingsAvatarInitials">+</span></label><input type="file" id="profileAvatarInput" accept="image/png,image/jpeg" class="visually-hidden"><span class="small-muted">Tap the circle to upload or take a photograph</span></div><section class="avatar3d-section"><strong>3D AVATAR</strong><p>Upload a self-contained GLB up to 4 MB for XR. Preview larger GLBs locally up to 16 MB, then optionally optimize on the server with Blender. Room guests see a static preview; animation is not synced.</p><input type="file" id="profile3DAvatarInput" accept=".glb,model/gltf-binary" aria-label="Upload 3D avatar GLB"><div class="avatar3d-actions"><button type="button" id="profile3DAvatarPreview">Preview avatar</button><button type="button" id="profile3DAvatarOptimize" class="hidden">Optimize for XR (Blender)</button><button type="button" id="profile3DAvatarRemove">Remove 3D avatar</button></div><p id="profile3DAvatarStatus" role="status">No 3D avatar selected.</p></section>
-    <section class="model-provider-settings"><strong>3D GENERATION PROVIDER</strong><p>Choose which configured service creates 3D models in Quest XR, desktop and mobile. Test connections separately from paid generation.</p><label for="profile3DProvider">Provider<select id="profile3DProvider"><option value="auto">Auto (configured service)</option><option value="aholo">AHOLO Lux3D</option><option value="meshy">Meshy 3D</option><option value="tripo">Tripo 3D (v3)</option></select></label><p id="profile3DProviderStatus" role="status">Provider choice applies across devices.</p></section><div class="experience-preferences"><p class="eyebrow">XR / PERSONALIZATION</p>
+    <section class="model-provider-settings"><strong>3D GENERATION PROVIDER</strong><p>Choose which configured service creates 3D models in Quest XR, desktop and mobile. Test connections separately from paid generation.</p><label for="profile3DProvider">Provider<select id="profile3DProvider"><option value="auto">Auto (configured service)</option><option value="aholo">AHOLO Lux3D</option><option value="meshy">Meshy 3D</option><option value="tripo">Tripo 3D (v3)</option></select></label><p id="profile3DProviderStatus" role="status">Provider choice applies across devices.</p>
+      <label for="profile3DQuality">Asset type<select id="profile3DQuality"><option value="xr">XR-ready · low-poly (P2 · 12k triangles)</option><option value="balanced">Balanced · textured (P2 · 30k triangles)</option><option value="studio">High-detail original (H3.1 · 120k triangles)</option></select></label>
+      <label for="profile3DTexture">Original texture quality<select id="profile3DTexture"><option value="standard">Standard · efficient</option><option value="detailed">Detailed · higher fidelity</option><option value="extreme">Extreme · 8K (higher Tripo cost)</option></select></label>
+      <label for="profile3DXRTexture">Quest preview texture cap<select id="profile3DXRTexture"><option value="512">512 px · lightest</option><option value="1024">1024 px · recommended</option><option value="2048">2048 px · high memory use</option></select></label>
+      <p id="profile3DQualityStatus" class="small-muted" role="status">New generations use these settings; originals are preserved.</p></section><div class="experience-preferences"><p class="eyebrow">XR / PERSONALIZATION</p>
      <label for="pref-mascotMode">MASCOT IN XR<select id="pref-mascotMode"><option value="3d">3D character</option><option value="2d">2D character</option><option value="none">Off</option></select></label>
      <label for="pref-frameHoldSeconds">FRAME DETACH TIMER<select id="pref-frameHoldSeconds"><option value="1.5">1.5 seconds</option><option value="3" selected>3 seconds</option><option value="5">5 seconds</option></select></label>
      <p class="small-muted">X opens experimental modes in XR. Left joystick selects; left trigger confirms.</p>
@@ -161,22 +165,22 @@
 <div id="modelStage" class="model-stage hidden" role="dialog" aria-label="Interactive 3D model viewer" aria-modal="true"><header><div><span class="eyebrow">FREELAB / MODEL VIEWER</span><h2 id="modelStageTitle">3D model</h2></div><div class="model-stage-tools"><a id="modelStageDownload" class="secondary-btn hidden" download>Download GLB</a><button id="modelStageClose" type="button" aria-label="Close 3D model viewer">×</button></div></header><canvas id="modelStageCanvas" aria-label="Interactive 3D model. Drag to rotate, scroll to zoom."></canvas><p id="modelStageStatus" role="status">Preparing 3D scene…</p><p class="model-stage-hint">Drag to rotate · scroll or pinch to zoom · model loads privately</p></div>
 <div id="toast" class="toast hidden" role="status"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.module.js"}}</script>
-<script type="module" src="/assets/model-stage.mjs?v=0.10.33"></script>
-<script src="/assets/sound.js?v=0.10.33" defer></script>
-<script src="/assets/gestures.js?v=0.10.33" defer></script>
-<script src="/assets/strand-geometry.js?v=0.10.33" defer></script>
-<script src="/assets/string-lab.js?v=0.10.33" defer></script>
-<script src="/assets/finger-lab.js?v=0.10.33" defer></script>
-<script src="/assets/frame-lab.js?v=0.10.33" defer></script>
-<script src="/assets/frame-photo.js?v=0.10.33" defer></script>
-<script src="/assets/lab-selector.js?v=0.10.33" defer></script>
-<script src="/assets/frame-games.js?v=0.10.33" defer></script>
-<script src="/assets/shape-sort.js?v=0.10.33" defer></script>
-<script src="/assets/rooms.js?v=0.10.33" defer></script>
-<script src="/assets/cloud-tree.js?v=0.10.33" defer></script>
-<script src="/assets/xr-ui.js?v=0.10.33" defer></script>
-<script src="/assets/dialog.js?v=0.10.33" defer></script>
-<script src="/assets/app.js?v=0.10.33" defer></script><script src="/assets/xr.js?v=0.10.33" defer></script>
-<script src="/assets/capture-studio.js?v=0.10.33" defer></script>
-<script src="/assets/scene.mjs?v=0.10.33" type="module"></script>
+<script type="module" src="/assets/model-stage.mjs?v=0.10.34"></script>
+<script src="/assets/sound.js?v=0.10.34" defer></script>
+<script src="/assets/gestures.js?v=0.10.34" defer></script>
+<script src="/assets/strand-geometry.js?v=0.10.34" defer></script>
+<script src="/assets/string-lab.js?v=0.10.34" defer></script>
+<script src="/assets/finger-lab.js?v=0.10.34" defer></script>
+<script src="/assets/frame-lab.js?v=0.10.34" defer></script>
+<script src="/assets/frame-photo.js?v=0.10.34" defer></script>
+<script src="/assets/lab-selector.js?v=0.10.34" defer></script>
+<script src="/assets/frame-games.js?v=0.10.34" defer></script>
+<script src="/assets/shape-sort.js?v=0.10.34" defer></script>
+<script src="/assets/rooms.js?v=0.10.34" defer></script>
+<script src="/assets/cloud-tree.js?v=0.10.34" defer></script>
+<script src="/assets/xr-ui.js?v=0.10.34" defer></script>
+<script src="/assets/dialog.js?v=0.10.34" defer></script>
+<script src="/assets/app.js?v=0.10.34" defer></script><script src="/assets/xr.js?v=0.10.34" defer></script>
+<script src="/assets/capture-studio.js?v=0.10.34" defer></script>
+<script src="/assets/scene.mjs?v=0.10.34" type="module"></script>
 </body></html>

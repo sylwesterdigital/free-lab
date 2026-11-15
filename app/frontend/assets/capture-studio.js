@@ -1,4 +1,4 @@
-/* FREELAB v0.10.33. Capture is independent from the live camera preview.
+/* FREELAB v0.10.34. Capture is independent from the live camera preview.
  * Source/branch actions call the same authenticated XR API functions. */
 (()=>{'use strict';
 const $=id=>document.getElementById(id),FL=()=>window.FreeLab;
@@ -153,7 +153,7 @@ async function generate3D(instruction=''){
  if(!check.configured){resultPanel('3D unavailable',check.provider+' has no API key configured for this profile. Check Settings → APIs.');return;}
  if(!await paid('GENERATE 3D',`Provider: ${check.provider.toUpperCase()} · ${prompt?'Text-guided model + reference image':'Image-to-3D model'} · Each submission is a separate paid task.`))return;
  await execute(async()=>{
-  const result=await FL().createXR3D(item.cid,item.oid||null,prompt);
+  const result=await FL().createXR3D(item.cid,item.oid||null,prompt,$('capture3DQuality').value);
   resultPanel('3D QUEUED · '+result.provider.toUpperCase(),`Task ${result.id} started on the provider. Keep working while it generates; status continues updating.`,null,result.id,'running');
   monitorJob(result.id,chosen);inform('3D task '+result.id+' queued in the background. You can keep using the studio while it runs.');
  },'Submitting 3D task…');
@@ -187,9 +187,11 @@ function setup(){if(!$('captureShutter'))return;
  $('captureCommandText').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();$('captureCommandForm').requestSubmit();}});
  document.querySelectorAll('[data-capture-tool]').forEach(btn=>btn.onclick=()=>{$('captureMore').open=false;void activate(btn.dataset.captureTool);});
  $('captureModeButton').onclick=()=>{$('captureCommandMode').focus();$('captureCommandMode').click();};
- $('captureCommandMode').onchange=()=>{$('capture3DProvider').classList.toggle('hidden',$('captureCommandMode').value!=='3d');$('captureRefineRow').classList.add('hidden');$('captureCommandText').placeholder=({prompt:'Ask AI to change this image…',describe:'Ask a question about the image…',extract:'Extract all obvious objects from this source',segment:'Name one object to extract, e.g. chair',refine:'Describe how the image quality should be improved', '3d':'Generate a 3D model of the selected image'})[$('captureCommandMode').value];};
+ $('captureCommandMode').onchange=()=>{$('capture3DProvider').classList.toggle('hidden',$('captureCommandMode').value!=='3d');$('capture3DQuality').classList.toggle('hidden',$('captureCommandMode').value!=='3d');$('captureRefineRow').classList.add('hidden');$('captureCommandText').placeholder=({prompt:'Ask AI to change this image…',describe:'Ask a question about the image…',extract:'Extract all obvious objects from this source',segment:'Name one object to extract, e.g. chair',refine:'Describe how the image quality should be improved', '3d':'Generate a 3D model of the selected image'})[$('captureCommandMode').value];};
  $('capture3DProvider').onchange=()=>void FL().save3DPreference($('capture3DProvider').value).catch(e=>inform(e.message));
+ $('capture3DQuality').onchange=()=>void FL().get3DQuality().then(p=>FL().save3DQuality({preset:$('capture3DQuality').value,texture_quality:p.texture_quality,xr_texture_edge:p.xr_texture_edge})).then(()=>inform('3D preset updated.')).catch(e=>inform(e.message));
  void FL().get3DPreference().then(p=>{$('capture3DProvider').value=p.provider;}).catch(()=>{});
+ void FL().get3DQuality().then(p=>{$('capture3DQuality').value=p.preset;}).catch(()=>{});
  $('captureViewportHint').textContent='LIVE CAMERA · READY TO CAPTURE';
  window.addEventListener('freelab-photo-ready',()=>{requestedCapture=null;inspecting=false;expanded=false;render();$('previewImage').classList.remove('hidden');$('cameraVideo').classList.add('hidden');$('captureViewportHint').textContent='PHOTO IMPORTED · PRESS SHUTTER TO SAVE';});
  $('cameraButton')?.addEventListener('click',()=>load().catch(e=>inform(e.message)));
