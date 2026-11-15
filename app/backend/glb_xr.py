@@ -136,14 +136,18 @@ def triangle_cluster(triangles, span, budget):
         for tri in triangles:
             keys = [tuple(math.floor(v[0][i]/cell) for i in range(3)) for v in tri]
             if len(set(keys)) < 3:continue
-            # Geometric duplicates vanish, preserving adjacent surface continuity.
+            # Simplify shared *positions*, never texture coordinates. A GLB
+            # seam can use the same XYZ vertex with a different UV in each
+            # triangle. Copying one cell's first (XYZ, UV) pair onto all its
+            # triangles destroys the atlas and scatters print across wrappers.
             key = tuple(sorted(keys))
             if key in used:continue
             used.add(key)
-            for k, v in zip(keys, tri):representatives.setdefault(k, v)
+            for k, v in zip(keys, tri):representatives.setdefault(k, v[0])
             result.append((keys, tri))
         if len(result) <= budget:
-            return [tuple(representatives[k] for k in keys) for keys, _ in result], True
+            return [tuple((representatives[k],corner[1]) for k,corner in zip(keys,tri))
+                    for keys,tri in result], True
     # If the model is an enormous set of disconnected parts there may be no safe
     # contiguous low-poly mesh. Report it instead of drawing a starfield.
     raise ValueError('3D mesh too complex for a coherent Quest preview; use the full textured model in Collection')
@@ -168,7 +172,9 @@ def image_data(doc, binary, image_index, cache, texture_edge=640):
             source.verify()
         with Image.open(io.BytesIO(raw)) as source:
             if source.width*source.height>6_000_000:return None
-            pic = ImageOps.exif_transpose(source).convert('RGB')
+            # Embedded GLB textures are UV-addressed pixels; do not alter
+            # their orientation using photo EXIF correction.
+            pic = source.convert('RGB')
             pic.thumbnail((texture_edge, texture_edge), Image.Resampling.LANCZOS)
             out = io.BytesIO()
             pic.save(out, format='JPEG', quality=76, optimize=True)
@@ -177,6 +183,32 @@ def image_data(doc, binary, image_index, cache, texture_edge=640):
         return value
     except (IndexError, KeyError, TypeError, ValueError, UnidentifiedImageError, OSError):
         return None
+
+
+def texture_coordinates(info, attributes, read, count):
+    """Apply glTF baseColorTexture UV selection and KHR_texture_transform.
+
+    Returns None if the referenced UV set is missing. Texture transforms apply
+    to face-corner UVs, not to shared geometry coordinates.
+    """
+    if not isinstance(info, dict):return None
+    transform_info=(info.get('extensions') or {}).get('KHR_texture_transform') or {}
+    selected=transform_info.get('texCoord',info.get('texCoord',0))
+    if type(selected) is not int or selected not in (0,1):return None
+    accessor=attributes.get('TEXCOORD_'+str(selected))
+    if type(accessor) is not int:return None
+    uv=read(accessor,2,{5126,5121,5123})
+    if len(uv)!=count:return None
+    if not transform_info:return uv
+    offset=transform_info.get('offset',[0,0]);scale=transform_info.get('scale',[1,1])
+    angle=transform_info.get('rotation',0)
+    if (not isinstance(offset,list) or len(offset)!=2 or
+        not isinstance(scale,list) or len(scale)!=2 or
+        any(not isinstance(v,(float,int)) or not math.isfinite(v) for v in [*offset,*scale,angle])):
+        raise ValueError('Invalid GLB texture transform')
+    co=math.cos(angle);si=math.sin(angle)
+    return [(offset[0]+co*scale[0]*u-si*scale[1]*v,
+             offset[1]+si*scale[0]*u+co*scale[1]*v) for u,v in uv]
 
 
 def decode_visual(data, texture_edge=640):
@@ -198,7 +230,14 @@ def decode_visual(data, texture_edge=640):
             attrib = prim['attributes']
             positions = read(attrib['POSITION'],3,{5126})
             if len(positions) < 3:continue
-            uv = read(attrib['TEXCOORD_0'],2,{5126,5121,5123}) if 'TEXCOORD_0' in attrib else None
+            material_idx = prim.get('material',-1)
+            if not isinstance(material_idx, int) or not (0<=material_idx<len(materials)):
+                material_idx = -1
+            material=materials[material_idx] if material_idx>=0 else {}
+            pbr=material.get('pbrMetallicRoughness') or {}
+            base= pbr.get('baseColorTexture')
+            uv=texture_coordinates(base,attrib,read,len(positions)) if base else (
+                read(attrib['TEXCOORD_0'],2,{5126,5121,5123}) if 'TEXCOORD_0' in attrib else None)
             if uv is not None and len(uv)!=len(positions):uv=None
             positions = [transform(matrix,p) for p in positions]
             if any(not all(math.isfinite(x) and abs(x)<1e7 for x in p) for p in positions):
@@ -211,22 +250,22 @@ def decode_visual(data, texture_edge=640):
                 indices = [x[0] for x in read(prim['indices'],1,{5121,5123,5125})]
             else:indices = list(range(len(positions)))
             if total + len(indices)//3 > MAX_INPUT_FACES:raise ValueError('GLB exceeds safe XR geometry budget')
-            material_idx = prim.get('material',-1)
-            if not isinstance(material_idx, int) or not (0<=material_idx<len(materials)):
-                material_idx = -1
+            # A texture with missing UVs must not sample one pixel for an
+            # entire object. Keep its base colour instead of a scrambled map.
+            group=(material_idx, bool(uv))
             for i in range(0,len(indices)-2,3):
                 indices_tri = indices[i:i+3]
                 if any(k>=len(positions) or k<0 for k in indices_tri):continue
                 tri = tuple((positions[k], (float(uv[k][0]),float(uv[k][1])) if uv else (0.,0.)) for k in indices_tri)
                 if any(not all(math.isfinite(x) for x in v[1]) for v in tri):continue
-                collected[material_idx].append(tri)
+                collected[group].append(tri)
                 total += 1
     if not total:raise ValueError('No supported uncompressed GLB triangles for XR')
     mid=[(a+b)/2 for a,b in zip(*coords_bounds)]
     span=max(b-a for a,b in zip(*coords_bounds)) or 1
     parts=[];cache={};remaining=MAX_TRIANGLES
     # Largest material surface first. Reserve a minimum for other material groups.
-    for k, tris in sorted(collected.items(), key=lambda kv:-len(kv[1]))[:12]:
+    for (k,has_uv), tris in sorted(collected.items(), key=lambda kv:-len(kv[1]))[:12]:
         left=max(1,len(collected)-len(parts)-1)
         budget=min(len(tris),max(200,round(MAX_TRIANGLES*len(tris)/total)),remaining-(left*100))
         if budget<1:continue
@@ -238,7 +277,7 @@ def decode_visual(data, texture_edge=640):
         if len(factor)!=4 or not all(math.isfinite(float(v)) for v in factor):factor=[1.,1.,1.,1.]
         color=[max(0.,min(1.,float(v))) for v in factor]
         tex=None
-        if pbr.get('baseColorTexture'):
+        if has_uv and pbr.get('baseColorTexture'):
             info=pbr['baseColorTexture'];n=info.get('index',-1)
             if type(n) is int and 0<=n<len(textures):
                 source=textures[n].get('source')

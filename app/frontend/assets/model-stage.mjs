@@ -22,8 +22,26 @@ function frame(){if(!active)return;raf=requestAnimationFrame(frame);if(!renderer
  camera.position.set(Math.sin(yaw)*Math.cos(pitch)*dist,Math.sin(pitch)*dist+.08,Math.cos(yaw)*Math.cos(pitch)*dist);camera.lookAt(0,0,0);renderer.render(scene,camera);
 }
 function clearRoot(){if(!root)return;scene?.remove(root);root.traverse?.(o=>{o.geometry?.dispose?.();const mats=Array.isArray(o.material)?o.material:[o.material];for(const m of mats){m?.map?.dispose?.();m?.dispose?.();}});root=null;}
-function fit(obj){clearRoot();root=obj;scene.add(root);const box=new THREE.Box3().setFromObject(root);if(box.isEmpty())throw Error('3D model has no visible geometry');
- const size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());root.position.sub(center);const max=Math.max(size.x,size.y,size.z)||1;const scale=1.4/max;root.scale.multiplyScalar(scale);dist=2.6;yaw=.48;pitch=.18;
+function fit(obj){
+ clearRoot();
+ // A separate parent pivot preserves all original GLTF node transforms and
+ // avoids translating by the *unscaled* world center after scaling the object.
+ root=new THREE.Group();root.add(obj);scene.add(root);
+ const box=new THREE.Box3().setFromObject(root);
+ if(box.isEmpty())throw Error('3D model has no visible geometry');
+ const size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());
+ const longest=Math.max(size.x,size.y,size.z)||1;
+ const uniform=1.45/longest;
+ root.scale.setScalar(uniform);
+ root.position.copy(center).multiplyScalar(-uniform);
+ // Flat packs, cards and thin products should be seen from their broad face,
+ // not nearly edge-on. Never stretch one axis to compensate for perspective.
+ const shortest=Math.min(size.x,size.y,size.z),thin=shortest/longest<.48;
+ yaw=.48;pitch=.20;
+ if(thin&&size.y===shortest){yaw=.18;pitch=1.18;}
+ else if(thin&&size.x===shortest){yaw=1.22;pitch=.20;}
+ else if(thin&&size.z===shortest){yaw=.18;pitch=.20;}
+ dist=2.65;
 }
 async function geometryFallback(url){const res=await fetch(url,{credentials:'same-origin'});let data={};try{data=await res.json();}catch{}
  if(res.status===202||res.status===409&&data.code==='JOB_NOT_FINISHED'){const e=Error(String(data.stage||data.error||'Waiting for the provider model'));e.retryable=true;throw e;}

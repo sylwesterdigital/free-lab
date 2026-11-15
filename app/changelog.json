@@ -1,13 +1,13 @@
 {
-  "version": "0.10.40",
-  "title": "FREELAB v0.10.40 — Independent XR transform controls and proportional scaling",
+  "version": "0.10.41",
+  "title": "FREELAB v0.10.41 — texture seam and desktop model framing fixes",
   "datetime": "2026-11-15",
   "changes": [
-    "Move the Quest Move / Rotate / Scale control strip into an independent headset-relative position; it no longer follows the selected 3D model when the model moves or changes size.",
-    "Add RESET as the fourth control. It restores the selected 3D asset to its initial source-relative position, identity orientation and original uniform size, then saves the transform.",
-    "Scaling from any X/Y/Z gizmo handle now resizes the whole model uniformly, preserving its original aspect ratio; two-hand grip scaling also remains proportional.",
-    "Older saved unequal X/Y/Z scales are converted to one proportional scale when a model is reopened. The backend canonicalizes transform updates to uniform XYZ scale for new and legacy clients.",
-    "No existing 3D provider task is resubmitted. Original GLBs, textures, scene attachments and account data are unchanged."
+    "Protect per-triangle GLB UV coordinates when simplifying dense Quest geometry: welding positions no longer overwrites UV seams and texture-atlas mappings.",
+    "Respect glTF base-colour texture coordinate set and KHR_texture_transform, with safe solid-material fallback when the selected UV channel is unavailable.",
+    "Previously cached XR geometry made with the old texture-mapping logic is rebuilt once from the saved private GLB; this is not another paid Tripo generation.",
+    "Desktop 3D viewer now centres GLB scenes with a separate uniform-scale pivot and uses the broad face for thin/flat objects, avoiding apparently squashed edge-on previews.",
+    "Preserve existing source-linked XR model placement, transform controls and original GLB assets."
   ],
   "history": [
     {

@@ -49,6 +49,11 @@ _thumb_guard=threading.Lock()
 _thumb_active=set()
 _THUMBNAIL_CONCURRENT=1
 
+_XR_TEXTURE_REVISION='uv-seam-v2'
+
+def _xr_preview_revision_path(owner,jid):
+    return MODEL_DIR/f'{owner}_{jid}.xr.revision'
+
 def _xr_preview_json_path(owner,jid):
     return MODEL_DIR/f'{owner}_{jid}.xr.json'
 
@@ -223,6 +228,7 @@ def _xr_existing_job_worker(owner,jid,key):
         try:
             with temp.open('xb') as f:os.fchmod(f.fileno(),0o600);f.write(encoded)
             temp.replace(prepared)
+            _xr_preview_revision_path(owner,jid).write_text(_XR_TEXTURE_REVISION)
         finally:temp.unlink(missing_ok=True)
         error.unlink(missing_ok=True)
         _xr_preview_error_version_path(owner,jid).unlink(missing_ok=True)
@@ -1320,7 +1326,7 @@ def update_3d_transform(jid):
         return jsonify(error='Invalid 3D position, rotation or scale'),400
     norm=math.sqrt(sum(x*x for x in rotation))
     if norm<.2 or norm>1.8:return jsonify(error='Invalid 3D orientation'),400
-    # Backward compatibility: v0.10.40 clients could send unequal XYZ scales.
+    # Backward compatibility: v0.10.41 clients could send unequal XYZ scales.
     # Store one proportional scale instead, never a distorted GLB shape.
     uniform_size=min(4,max(.2,float(size)*math.prod(float(x) for x in axis_scale)**(1/3)))
     transform={'offset':[round(float(x),4) for x in offset],
@@ -1480,6 +1486,7 @@ def media_3d_preview_retry(jid):
             return jsonify(error='Quest conversion is already in progress'),409
         error.unlink(missing_ok=True)
     cached.unlink(missing_ok=True);pending.unlink(missing_ok=True)
+    _xr_preview_revision_path(owner,jid).unlink(missing_ok=True)
     _xr_preview_error_version_path(owner,jid).unlink(missing_ok=True)
         # A converted GLB was already validated; do not discard it.
     return jsonify(status='READY_TO_RETRY',job_id=jid,paid_generation=False,
@@ -1497,10 +1504,16 @@ def media_3d_preview(jid):
         return jsonify(error='3D model still generating',stage='generation',code='JOB_NOT_FINISHED',job_id=jid),409
     owner=g.user['id'];cached=_xr_preview_json_path(owner,jid)
     output,failed,pending=_xr_preview_paths(owner,jid)
-    if cached.is_file():
+    revision=_xr_preview_revision_path(owner,jid)
+    if cached.is_file() and revision.is_file() and revision.read_text() == _XR_TEXTURE_REVISION:
         response=app.response_class(cached.read_bytes(),mimetype='application/json')
         response.headers['Cache-Control']='private, no-store'
         return response
+    if cached.is_file():
+        # Old previews have welded together atlas UV seams. Rebuild from the
+        # already purchased GLB; no new Tripo generation or model download.
+        cached.unlink(missing_ok=True)
+        revision.unlink(missing_ok=True)
     if failed.is_file():
         marker=_xr_preview_error_version_path(owner,jid)
         # Previously failed jobs should be retried ONCE on this new deployment,

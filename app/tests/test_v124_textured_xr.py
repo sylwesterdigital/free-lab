@@ -1,4 +1,4 @@
-"""v0.10.40: models remain attached to saved sources; bounded textured GLB previews.
+"""v0.10.41: models remain attached to saved sources; bounded textured GLB previews.
 No AI requests, no provider costs and no remote network.
 """
 import io,json,math,struct,unittest
@@ -71,6 +71,49 @@ class TexturedXR124(unittest.TestCase):
         self.assertLessEqual(len(sampled),3000)
         self.assertGreater(len(sampled),50)
         self.assertTrue(all(len(set(v[0] for v in face))==3 for face in sampled))
+
+    def test_texture_seams_survive_dense_mesh_simplification(self):
+        # Many triangles share spatial cells but carry different face-corner
+        # UVs. The old clustering routine copied the first UV for every cell.
+        triangles=[]
+        for y in range(95):
+            for x in range(95):
+                a=(x/95,y/95,0);b=((x+1)/95,y/95,0)
+                c=(x/95,(y+1)/95,0);d=((x+1)/95,(y+1)/95,0)
+                # UV seams vary by face across otherwise identical geometry.
+                u=x/95;v=y/95
+                triangles.append(((a,(u,v)),(b,(u+.02,v)),(c,(u,v+.03))))
+                triangles.append(((c,(u+.40,v+.50)),(b,(u+.42,v+.50)),(d,(u+.42,v+.53))))
+        original_uv={tuple(tuple(v[1]) for v in tri) for tri in triangles}
+        result,changed=glb_xr.triangle_cluster(triangles,1,3500)
+        self.assertTrue(changed)
+        self.assertLessEqual(len(result),3500)
+        self.assertGreater(len(result),50)
+        self.assertTrue(all(tuple(tuple(v[1]) for v in tri) in original_uv for tri in result))
+
+    def test_gltf_khr_texture_transform_applies_per_corner(self):
+        import math
+        attrs={'TEXCOORD_0':2,'TEXCOORD_1':3}
+        data={2:[(0,0),(1,1)],3:[(.25,.5),(.5,.75)]}
+        info={'texCoord':0,'extensions':{'KHR_texture_transform':{'texCoord':1,
+              'offset':[.2,.1],'scale':[2,1],'rotation':math.pi/2}}}
+        values=glb_xr.texture_coordinates(info,attrs,lambda index,*_:data[index],2)
+        self.assertAlmostEqual(values[0][0],-.3)
+        self.assertAlmostEqual(values[0][1],.6)
+        self.assertAlmostEqual(values[1][0],-.55)
+        self.assertAlmostEqual(values[1][1],1.1)
+        self.assertIsNone(glb_xr.texture_coordinates({'texCoord':1},{'TEXCOORD_0':2},lambda *_:[],2))
+
+    def test_desktop_flat_models_face_camera_without_nonuniform_stretch(self):
+        source=(ROOT/'frontend/assets/model-stage.mjs').read_text()
+        self.assertIn('root=new THREE.Group();root.add(obj);scene.add(root)',source)
+        self.assertIn('root.scale.setScalar(uniform)',source)
+        self.assertIn('root.position.copy(center).multiplyScalar(-uniform)',source)
+        self.assertIn('if(thin&&size.y===shortest)',source)
+        self.assertIn('pitch=1.18',source)
+        self.assertNotIn('root.scale.multiplyScalar(scale)',source)
+        self.assertIn('_XR_TEXTURE_REVISION',B)
+        self.assertIn('Old previews have welded together atlas UV seams',B)
 
     def test_xr_textured_shader_and_source_lifecycle(self):
         self.assertIn('const XMV=',XR)

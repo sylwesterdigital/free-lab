@@ -1,4 +1,4 @@
-"""v0.10.40 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
+"""v0.10.41 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -93,7 +93,7 @@ class Tripo31(unittest.TestCase):
   from test_v124_textured_xr import glb_fixture
   from types import SimpleNamespace
   source=ast.parse(APP)
-  names=('_xr_decode_isolated','_xr_preview_json_path','_xr_preview_stage_path','_xr_preview_error_version_path','_xr_preview_stage',
+  names=('_xr_decode_isolated','_xr_preview_json_path','_xr_preview_revision_path','_xr_preview_stage_path','_xr_preview_error_version_path','_xr_preview_stage',
          '_xr_preview_heartbeat','_xr_preview_paths','_xr_existing_job_worker')
   functions=[n for n in source.body if isinstance(n,ast.FunctionDef) and n.name in names]
   with tempfile.TemporaryDirectory() as tmp:
@@ -105,7 +105,7 @@ class Tripo31(unittest.TestCase):
    environment={'MODEL_DIR':directory,'DB':database,'db':db,'glb_xr':glb_xr,'model_cache':model_cache,
                 'avatar_optimizer':SimpleNamespace(blender_command=lambda:'/fake/blender',optimize_xr_preview=lambda raw:fixture),
                 'threading':threading,'time':time,'os':os,'re':re,'json':json,'sqlite3':sqlite3,'secrets':secrets,'tempfile':tempfile,
-                '_xr_preview_guard':threading.Lock(),'_xr_preview_active':{(uid,jid)}}
+                '_xr_preview_guard':threading.Lock(),'_xr_preview_active':{(uid,jid)},'_XR_TEXTURE_REVISION':'uv-seam-v2'}
    exec(compile(ast.Module(body=functions,type_ignores=[]),'<xr-worker>','exec'),environment)
    pending=directory/f'{uid}_{jid}.xr.pending'
    for large in (False,True):
@@ -119,6 +119,7 @@ class Tripo31(unittest.TestCase):
     mesh=json.loads(ready.read_text())
     self.assertEqual(mesh['triangles'],2)
     self.assertFalse(pending.exists())
+    self.assertEqual((directory/f'{uid}_{jid}.xr.revision').read_text(),'uv-seam-v2')
     self.assertFalse((directory/f'{uid}_{jid}.xr.stage').exists())
     self.assertFalse((directory/f'{uid}_{jid}.xr.error').exists())
     ready.unlink()
@@ -187,7 +188,7 @@ class Tripo31(unittest.TestCase):
 if __name__=='__main__':unittest.main()
 
 
-# v0.10.40: private Blender thumbnails and XR GPU lifecycle diagnostics.
+# v0.10.41: private Blender thumbnails and XR GPU lifecycle diagnostics.
 class ModelThumbnailTests(unittest.TestCase):
  def test_backend_exposes_thumbnail_and_source_fallback(self):
   self.assertIn('def _model_thumb_path(owner,jid):',APP)
@@ -234,7 +235,7 @@ class XR3DDiagnosticsTests(unittest.TestCase):
   self.assertIn("'Cache-Control'",source)
 
 class XRMeshOwnershipAndLibraryRegressionTests(unittest.TestCase):
- """v0.10.40 regression: GPU buffers must remain owned by the XR model."""
+ """v0.10.41 regression: GPU buffers must remain owned by the XR model."""
  def test_ownership_transfer_preserves_mesh_parts_during_finally_cleanup(self):
   xr=(ROOT/'frontend/assets/xr.js').read_text()
   self.assertIn("kind:'3dmesh',parts:pieces.slice()",xr)
@@ -264,7 +265,7 @@ class XRMeshOwnershipAndLibraryRegressionTests(unittest.TestCase):
   self.assertIn("c.kind==='gallery')&&c.captionNormal",xr)
   self.assertIn("cards.filter(c=>c.kind!=='galleryheader')",xr)
 
-# v0.10.40: Quest controllers, local axis gizmos and static library animation.
+# v0.10.41: Quest controllers, local axis gizmos and static library animation.
 class XRTransformAndLibraryTests(unittest.TestCase):
  def test_library_header_is_static_and_tween_skips_unanimated_cards(self):
   self.assertIn("kind:'galleryheader',data:{},pos:[0,.67,-.04],from:[0,.67,-.04],to:[0,.67,-.04],start:0,duration:0",XR)
