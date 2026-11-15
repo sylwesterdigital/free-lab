@@ -61,9 +61,9 @@ async function awaitPreparedPreview(jobId,token){
  if(token===loadingToken)throw Error('3D preparation is still pending. Reopen the viewer after the server finishes; no new generation needed.');
  return null;
 }
-async function open(id,avatar=false,localFile=null){const token=++loadingToken;const stage=$('modelStage');stage.classList.remove('hidden');active=true;
+async function open(id,avatar=false,localFile=null,posterUrl=''){const token=++loadingToken;const stage=$('modelStage');stage.classList.remove('hidden');active=true;
  $('modelStageTitle').textContent=localFile?'Local avatar preview · '+(localFile.size/1_000_000).toFixed(2)+' MB':avatar?'My 3D avatar':'3D model #'+id;
- const dl=$('modelStageDownload');dl.classList.add('hidden');dl.removeAttribute('href');state('Loading 3D model…',true);
+ const dl=$('modelStageDownload');dl.classList.add('hidden');dl.removeAttribute('href');const poster=$('modelStagePoster');if(poster){if(posterUrl){poster.src=posterUrl;poster.classList.remove('hidden');}else{poster.removeAttribute('src');poster.classList.add('hidden');}}state('Loading 3D model…',true);
  try{await loadThree();if(token!==loadingToken)return;
  const canvas=$('modelStageCanvas');if(!renderer){renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'default',alpha:false});renderer.outputColorSpace=THREE.SRGBColorSpace;
   scene=new THREE.Scene();scene.background=new THREE.Color(0x101c1b);camera=new THREE.PerspectiveCamera(43,1,.01,120);
@@ -85,11 +85,11 @@ async function open(id,avatar=false,localFile=null){const token=++loadingToken;c
     if(object)state('Model loaded · '+(avatar?'avatar mesh':'textured Quest preview')+' · original GLB is preserved');}
    catch(fallbackError){throw Error('GLB loader: '+e.message+' · XR preview: '+fallbackError.message);}
   }
-  if(token!==loadingToken)return;fit(object);
+  if(token!==loadingToken)return;fit(object);if(poster)poster.classList.add('hidden');
  }catch(e){if(token===loadingToken)state('3D preview unavailable: '+e.message);}
  finally{if(token===loadingToken)$('modelStageStatus')?.classList.remove('working');}
 }
-function close(){++loadingToken;active=false;cancelAnimationFrame(raf);raf=0;clearRoot();$('modelStage').classList.add('hidden');}
+function close(){++loadingToken;active=false;cancelAnimationFrame(raf);raf=0;clearRoot();const poster=$('modelStagePoster');if(poster){poster.classList.add('hidden');poster.removeAttribute('src');}$('modelStage').classList.add('hidden');}
 const cv=$('modelStageCanvas');if(cv){cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY};cv.setPointerCapture(e.pointerId);});
  cv.addEventListener('pointermove',e=>{if(!drag)return;yaw+=(e.clientX-drag.x)*.008;pitch=Math.max(-1.3,Math.min(1.3,pitch+(e.clientY-drag.y)*.006));drag={x:e.clientX,y:e.clientY};});
  cv.addEventListener('pointerup',()=>{drag=null;});cv.addEventListener('pointercancel',()=>{drag=null;});

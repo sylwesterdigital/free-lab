@@ -12,6 +12,9 @@ MAX_UPLOAD=16_000_000
 MAX_XR=4_000_000
 MAX_SECONDS=240
 
+MAX_THUMBNAIL_SECONDS=120
+
+
 def blender_command():
     configured=os.getenv('FREE_LAB_BLENDER_BIN','').strip()
     if configured and Path(configured).is_file() and os.access(configured,os.X_OK):return configured
@@ -64,6 +67,32 @@ def optimize_xr_preview(raw, blender=None):
     """Read-only Quest preview prep from a previously paid 3D job; original is preserved."""
     from .model_cache import MAX_MODEL
     return _convert_glb(raw,blender,input_limit=MAX_MODEL,output_limit=8_000_000,xr_mode=True)
+
+
+def render_thumbnail(raw, blender=None, size=512):
+    """Render a square PNG thumbnail from a private GLB using headless Blender."""
+    from .model_cache import MAX_MODEL
+    if not 20<=len(raw)<=MAX_MODEL:raise ValueError('GLB exceeds the thumbnail input limit')
+    program=blender or blender_command()
+    if not program:raise RuntimeError('Headless Blender unavailable on this server')
+    size=max(256,min(1024,int(size or 512)))
+    root=Path(__file__).resolve().parent
+    with tempfile.TemporaryDirectory(prefix='fl-glb-thumb-') as work:
+        src=Path(work)/'input.glb';dst=Path(work)/'thumbnail.png'
+        src.write_bytes(raw)
+        cmd=[program,'--background','--factory-startup','--disable-autoexec','--threads','2',
+             '--python',str(root/'model_thumbnail_worker.py'),'--',str(src),str(dst),str(size)]
+        env={k:v for k,v in os.environ.items() if not k.startswith(('PYTHONPATH','PYTHONSTARTUP'))}
+        try:r=subprocess.run(cmd,capture_output=True,text=True,timeout=MAX_THUMBNAIL_SECONDS,env=env,cwd=work,check=False)
+        except subprocess.TimeoutExpired:raise RuntimeError('Blender thumbnail render timed out') from None
+        except OSError as e:raise RuntimeError('Blender executable cannot be launched') from e
+        if r.returncode or not dst.is_file():
+            msg=(r.stderr or r.stdout or 'unknown render error')[-440:].replace('\n',' ')
+            raise RuntimeError('Blender could not render the thumbnail: '+msg)
+        output=dst.read_bytes()
+        if len(output)<100 or output[:8]!=b'\x89PNG\r\n\x1a\n':
+            raise RuntimeError('Blender produced an invalid thumbnail')
+        return output
 
 
 def _worker(path,job_id,validate):

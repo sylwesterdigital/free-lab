@@ -1,10 +1,14 @@
-"""v0.10.36 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
+"""v0.10.37 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 from backend import tripo3d
 ROOT=Path(__file__).resolve().parents[1]
 APP=(ROOT/'backend/app.py').read_text()
+FRONT=(ROOT/'frontend/assets/app.js').read_text()
+STAGE=(ROOT/'frontend/assets/model-stage.mjs').read_text()
+HTML=(ROOT/'frontend/index.html').read_text()
+CSS=(ROOT/'frontend/assets/style.css').read_text()
 XR=(ROOT/'frontend/assets/xr.js').read_text()
 CACHE=(ROOT/'backend/model_cache.py').read_text()
 
@@ -181,3 +185,50 @@ class Tripo31(unittest.TestCase):
   self.assertIn('setStatus(',section)
 
 if __name__=='__main__':unittest.main()
+
+
+# v0.10.37: private Blender thumbnails and XR GPU lifecycle diagnostics.
+class ModelThumbnailTests(unittest.TestCase):
+ def test_backend_exposes_thumbnail_and_source_fallback(self):
+  self.assertIn('def _model_thumb_path(owner,jid):',APP)
+  self.assertIn("@app.get('/api/media/3d/<int:jid>/thumbnail')",APP)
+  self.assertIn("'thumbnail_url':thumbnail_url",APP)
+  self.assertIn("'thumbnail_kind':thumbnail_kind",APP)
+  self.assertIn("'source_image_url':source_url",APP)
+  self.assertIn('_ensure_model_thumbnail(owner,jid)',APP)
+
+ def test_gallery_renders_thumbnail_cards(self):
+  self.assertIn('function modelJobPoster(job){',FRONT)
+  self.assertIn('function modelJobThumb(job){',FRONT)
+  self.assertIn("window.FreeLabModelStage?.open(job.id,false,null,poster||job.source_image_url||'')",FRONT)
+  self.assertIn('model-job-thumb',CSS)
+  self.assertIn('model-job-actions',CSS)
+
+ def test_model_viewer_uses_loading_poster(self):
+  self.assertIn('id="modelStagePoster"',HTML)
+  self.assertIn("const poster=$('modelStagePoster')",STAGE)
+  self.assertIn('if(posterUrl){poster.src=posterUrl;poster.classList.remove(\'hidden\');}',STAGE)
+  self.assertIn('if(poster)poster.classList.add(\'hidden\');',STAGE)
+
+if __name__=='__main__':unittest.main()
+
+class XR3DDiagnosticsTests(unittest.TestCase):
+ def test_job_load_reports_requests_results_and_failed_http(self):
+  xr=(ROOT/'frontend/assets/xr.js').read_text()
+  for event in ('MODEL_LOAD_REQUESTED','MODEL_LOAD_STARTED','MODEL_PREVIEW_HTTP_REQUEST',
+                'MODEL_PREVIEW_HTTP_RESULT','MODEL_GEOMETRY_RECEIVED','MODEL_GPU_BUFFER_UPLOADED',
+                'MODEL_GPU_TEXTURE_UPLOADED','MODEL_ATTACHED_TO_XR_SCENE',
+                'MODEL_FIRST_GPU_DRAW_SUBMITTED','MODEL_LOAD_FAILED','MODEL_SOURCE_MISMATCH'):
+   self.assertIn("'"+event+"'",xr)
+  self.assertIn('console[method](\'[FREELAB XR 3D] \'+stage,entry);',xr)
+  self.assertIn('window.FreeLabXR3DDiagnostics',xr)
+  self.assertIn('function xrGLErrors(){',xr)
+  self.assertIn("'XR_FRAMEBUFFER_STATUS'",xr)
+
+ def test_thumbnail_endpoint_private_and_falls_back_to_source(self):
+  source=APP.split("@app.get('/api/media/3d/<int:jid>/thumbnail')",1)[1].split("@app.get('/api/media/3d/<int:jid>/asset')",1)[0]
+  self.assertIn('@require_user',source)
+  self.assertIn("g.user['id']",source)
+  self.assertIn('IMAGE_DIR/origin',source)
+  self.assertIn('_ensure_model_thumbnail',source)
+  self.assertIn("'Cache-Control'",source)

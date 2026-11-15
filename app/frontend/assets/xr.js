@@ -22,6 +22,29 @@ let followOffset=[0,-.85,-1.16],followWorld=null,eyeWorld=null,depthState='unkno
 let voiceRecord=null,voiceRecordStarted=0,voiceMeterLast=0,cameraHintUntil=0,meshJobOrigin=null;
 let particles=[],handPinch=new WeakMap(),lastNative=new WeakMap(),clickState=new WeakMap(),lastEyeUpdate=0,lastMicUpdate=0,inferenceCard=null,inferenceStarted=0;
 const PW=600,PH=420,MAX_CLOUD=10,TAU=2*Math.PI;
+// 3D model lifecycle is observable in the Quest Browser console. This records
+// only job IDs, geometry counts, GPU status and placement -- never model URLs,
+// private images, credentials or GLB bytes. No paid provider calls.
+const xr3DLog=[];const xr3DOnce=new Set();
+function xr3D(stage,details={},level='info'){
+ const entry={at:new Date().toISOString(),stage,...details};xr3DLog.push(entry);
+ if(xr3DLog.length>240)xr3DLog.shift();
+ const method=level==='error'?'error':level==='warn'?'warn':'info';
+ console[method]('[FREELAB XR 3D] '+stage,entry);
+ window.FreeLab?.traceEvent?.('XR 3D '+stage+' · '+JSON.stringify(details).slice(0,190),level);
+ return entry;
+}
+function xr3DThrottled(key,stage,details={},level='warn'){
+ if(xr3DOnce.has(key))return;
+ xr3DOnce.add(key);xr3D(stage,details,level);
+}
+function xrGLErrors(){
+ if(!gl||gl.isContextLost())return {context:'lost'};
+ const values=[];for(let i=0;i<3;i++){const value=gl.getError();if(value===gl.NO_ERROR)break;values.push('0x'+value.toString(16));}
+ return {context:'ok',errors:values};
+}
+window.FreeLabXR3DDiagnostics={getLog:()=>xr3DLog.slice(),clear:()=>{xr3DLog.length=0;xr3DOnce.clear();}};
+
 // One navigation pill. Image-specific actions belong only to the selected card.
 const tools=[['gallery','▣'],['createimage','✎'],['follow','◎'],['debug','≡'],['config','⚙'],['exit','×']];
 // A context menu only exists after clicking the image's ···, never in parallel by default.
@@ -115,11 +138,12 @@ function inverse(m){const a=m[0],b=m[4],c=m[8],d=m[1],e=m[5],f=m[9],g=m[2],h=m[6
  const x=m[12],y=m[13],z=m[14];return new Float32Array([A,E,I,0,B,G,J,0,C,H,K,0,-A*x-B*y-C*z,-E*x-G*y-H*z,-I*x-J*y-K*z,1]);}
 function compile(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
 function shader(v,f){const p=gl.createProgram();gl.attachShader(p,compile(gl.VERTEX_SHADER,v));gl.attachShader(p,compile(gl.FRAGMENT_SHADER,f));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));return p;}
-function setup(){canvas=document.createElement('canvas');canvas.width=16;canvas.height=16;gl=canvas.getContext('webgl2',{alpha:true,antialias:false,premultipliedAlpha:true,depth:true,xrCompatible:true,powerPreference:'high-performance'})||canvas.getContext('webgl',{alpha:true,antialias:false,premultipliedAlpha:true,depth:true,xrCompatible:true});if(!gl)throw Error('WebGL unavailable for XR');canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();window.FreeLab?.traceEvent?.('XR GPU context lost; immersive session will be ended safely','error');try{session?.end();}catch{}},{once:false});program=shader(V,F);lineProgram=shader(LV,LF);mascotProgram=shader(MV,MF);meshProgram=shader(XMV,XMF);meshJobProgram=shader(JBV,JBF);strandProgram=shader(STRAND_V,STRAND_F);strandBuffer=gl.createBuffer();initializeMascotSphere();
+function setup(){canvas=document.createElement('canvas');canvas.width=16;canvas.height=16;gl=canvas.getContext('webgl2',{alpha:true,antialias:false,premultipliedAlpha:true,depth:true,xrCompatible:true,powerPreference:'high-performance'})||canvas.getContext('webgl',{alpha:true,antialias:false,premultipliedAlpha:true,depth:true,xrCompatible:true});if(!gl)throw Error('WebGL unavailable for XR');canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();xr3D('XR_WEBGL_CONTEXT_LOST',{jobs:meshPreviews.filter(m=>m.parts?.length).map(m=>m.jobId)},'error');window.FreeLab?.traceEvent?.('XR GPU context lost; immersive session will be ended safely','error');try{session?.end();}catch{}},{once:false});program=shader(V,F);lineProgram=shader(LV,LF);mascotProgram=shader(MV,MF);meshProgram=shader(XMV,XMF);meshJobProgram=shader(JBV,JBF);strandProgram=shader(STRAND_V,STRAND_F);strandBuffer=gl.createBuffer();initializeMascotSphere();
  const a=[-.5,-.5,0,0,1,.5,-.5,0,1,1,-.5,.5,0,0,0,-.5,.5,0,0,0,.5,-.5,0,1,1,.5,.5,0,1,0];
  quad=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,quad);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(a),gl.STATIC_DRAW);rayBuffer=gl.createBuffer();
  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.disable(gl.CULL_FACE);
  const neutral=document.createElement('canvas');neutral.width=neutral.height=1;neutral.getContext('2d').fillRect(0,0,1,1);meshWhite=texture(neutral);
+ xr3D('XR_RENDERER_READY',{webgl:typeof WebGL2RenderingContext!=='undefined'&&gl instanceof WebGL2RenderingContext?'webgl2':'webgl1',meshProgram:Boolean(meshProgram),contextAttributes:gl.getContextAttributes?.(),gpu:xrGLErrors()});
 }
 // A real perspective-shaded 3D mascot. No billboard textures, CDN or downloaded GLB.
 function initializeMascotSphere(){const data=[];const seg=20,rings=14;
@@ -970,7 +994,7 @@ function releaseMeshPreview(mesh){
 function clearCollectionMeshes(){
  // Each job/model is owned by the source branch, never by the headset's global scene.
  // Do not discard provider jobs: those survive branch navigation in SQLite.
- meshGeneration++;
+ meshGeneration++;xr3DOnce.clear();
  meshPreviews=meshPreviews.filter(m=>{if(m.guestId)return true;releaseMeshPreview(m);return false;});
  for(const badge of meshJobBadges.values())if(badge.front&&gl)gl.deleteTexture(badge.front);
  meshJobBadges.clear();meshPreviewFailures.clear();meshPreviewRetries.clear();meshNextAttemptAt.clear();selectedMesh=null;if(meshTools?.front&&gl)gl.deleteTexture(meshTools.front);meshTools=null;
@@ -1466,7 +1490,11 @@ function renderView(t,frame){if(!session||gl.isContextLost()){return;}const pose
  window.FreeLabRooms.publish([m[12],m[13],m[14]],liveCards,[q.x,q.y,q.z,q.w],shared);
  }
  pollRoomVisitors(t);placeRoomVisitors(pose);poll3d(t);pollLabSelector(frame,t,pose);pollStringLab(frame,t);pollFingerLab(frame,t);pollFrameLab(frame,t);pollPlacedFrameTouch(frame,t);pollFrameGames(t,pose);advanceGrab(frame);for(const src of session.inputSources)pinchPoll(frame,src);pollGestures(frame,t);tween(t);faceCloudCards(pose,t);updateMascot(frame,t);tickMascotSpeech(t);tickVoiceIndicator(t,pose);typeStatus(t);updateMicVisual(t);updateDebugCard(t);if(captureEye&&t-lastEyeUpdate>67){if(eyeState!=='idle'&&t>eyeUntil)eyeState='idle';paintEye(t);lastEyeUpdate=t;}if(cameraHint&&t-lastHintCheck>180){lastHintCheck=t;const label=cameraHintMode();if(label!==cameraHintState){cameraHintState=label;cameraHintUntil=t+(label==='off'||label==='ready'?10000:7000);gl.deleteTexture(cameraHint.front);cameraHint.front=cameraHintTexture(label);cameraHint.back=cameraHint.front;cameraHint.resources=[cameraHint.front];}cameraHint.visible=t<cameraHintUntil&&voicePhase!=='listening'&&voicePhase!=='processing';}if(t-lastUi>150){updateHover(frame);lastUi=t;}
- gl.bindFramebuffer(gl.FRAMEBUFFER,session.renderState.baseLayer.framebuffer);gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+ gl.bindFramebuffer(gl.FRAMEBUFFER,session.renderState.baseLayer.framebuffer);
+ if(t-(renderView.lastXRFramebufferCheck||0)>19000){renderView.lastXRFramebufferCheck=t;
+  const status=gl.checkFramebufferStatus(gl.FRAMEBUFFER),gpu=xrGLErrors();
+  xr3D('XR_FRAMEBUFFER_STATUS',{status:'0x'+status.toString(16),complete:status===gl.FRAMEBUFFER_COMPLETE,framebufferWidth:session.renderState.baseLayer.framebufferWidth,framebufferHeight:session.renderState.baseLayer.framebufferHeight,gpu},!gpu.errors?.length&&status===gl.FRAMEBUFFER_COMPLETE?'info':'error');}
+ gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
  for(const view of pose.views){const vp0=session.renderState.baseLayer.getViewport(view);gl.viewport(vp0.x,vp0.y,vp0.width,vp0.height);const vp=matmul(view.projectionMatrix,view.transform.inverse.matrix);
  decoration(vp);for(const c of cards)drawCard(c,vp);if(toolbar)drawCard(toolbar,vp);if(statusCard?.visible)drawCard(statusCard,vp);if(editbar)drawCard(editbar,vp);if(captureEye&&voicePhase!=='listening'&&voicePhase!=='processing')drawCard(captureEye,vp);if(cameraHint)drawCard(cameraHint,vp);if(voiceButton&&uiSettings.voice!==false)drawCard(voiceButton,vp);if(extractButton?.visible)drawCard(extractButton,vp);if(voiceOk)drawCard(voiceOk,vp);if(voiceCancel)drawCard(voiceCancel,vp);if(promptPanel)drawCard(promptPanel,vp);if(debugShowing&&debugPanel)drawCard(debugPanel,vp);if(configShowing&&configPanel)drawCard(configPanel,vp);/* description is composited after mascot for legibility */for(const m of meshPreviews)drawMeshPreview(m,vp,t);if(selectedMesh&&meshPreviews.includes(selectedMesh)){syncMeshTools();if(meshTools)drawCard(meshTools,vp);}draw3DJobBadges(vp,t);if(voiceBadge)drawCard(voiceBadge,vp);sparkles(vp,t);drawImageInference(vp,t);highlightCards(vp,t);drawHands(frame,vp);drawStringLab(vp,t,pose);drawFingerLab(vp,t,pose);drawFramePhotos(vp);drawSpatialFrames(vp,t,pose);drawShapeTargets(vp,t,pose);drawFrameCubes(vp);if(labMenu?.visible)drawCard(labMenu,vp);for(const visitor of visitorBadges)drawCard(visitor,vp);depthCapability(frame,view);
  for(const src of session.inputSources){const r=ray(frame,src);if(!r)continue;const h=pick(r),end=vadd(r.o,vmul(r.d,h?.dist||1.2));const colour=src.hand?[.72,1,.75,.7]:[.77,.88,1,.72];line(vp,[r.o,end],colour);line(vp,[end],colour,true,h?16:9);}
@@ -2084,31 +2112,40 @@ function createMeshPart(raw){
 }
 async function spawnMeshPreview(job,origin=null){
  const jobId=typeof job==='number'?job:job.id;
- if(meshPreviews.some(m=>m.jobId===jobId)||meshPreviewFailures.has(jobId)||meshLoadingJobs.has(jobId)||meshLoadingJobs.size>=2||!session||performance.now()<(meshNextAttemptAt.get(jobId)||0))return;
+ xr3DThrottled('requested-'+meshGeneration+'-'+jobId,'MODEL_LOAD_REQUESTED',{jobId,provider:job?.provider||'unknown',status:job?.status||'unknown',captureId:job?.capture_id??cloud?.id,objectId:job?.object_id??null},'info');
+ const skipReason=meshPreviews.some(m=>m.jobId===jobId)?'already-loaded':meshPreviewFailures.has(jobId)?'previous-load-failed':meshLoadingJobs.has(jobId)?'loading-now':meshLoadingJobs.size>=2?'load-concurrency-limit':!session?'xr-session-absent':performance.now()<(meshNextAttemptAt.get(jobId)||0)?'preview-poll-backoff':null;
+ if(skipReason){xr3DThrottled('skip-'+meshGeneration+'-'+jobId+'-'+skipReason,'MODEL_LOAD_SKIPPED',{jobId,reason:skipReason},'warn');return;}
+
  const captureId=typeof job==='number'?cloud?.id:job.capture_id;
  const objectId=typeof job==='number'?null:(job.object_id||null);
- if(!captureId||!cloud||cloud.id!==captureId)return;
+ if(!captureId||!cloud||cloud.id!==captureId){xr3DThrottled('capture-mismatch-'+meshGeneration+'-'+jobId,'MODEL_SOURCE_MISMATCH',{jobId,captureId,activeCaptureId:cloud?.id},'warn');return;}
  const scope=meshGeneration;
  meshLoadingJobs.add(jobId);
+ xr3D('MODEL_LOAD_STARTED',{jobId,captureId,objectId,generation:scope,anchor:meshAnchor({captureId,objectId}),gpu:xrGLErrors()});
  const pieces=[];
  try{
   const previous=meshJobBadges.get(jobId);
   if(!previous||!['PREPARING','WAITING','LOADING'].includes(previous.status))syncMeshJobBadge({...job,id:jobId,capture_id:captureId,object_id:objectId,provider:job.provider||'3D',status:'LOADING',progress:100});
+  xr3D('MODEL_PREVIEW_HTTP_REQUEST',{jobId,endpoint:'/api/media/3d/'+jobId+'/preview'});
   const result=await window.FreeLab.modelXRPreview(jobId);
+  xr3D('MODEL_PREVIEW_HTTP_RESULT',{jobId,status:result?.status||'READY',stage:result?.stage||'',parts:Array.isArray(result?.parts)?result.parts.length:0,triangles:result?.triangles||0,normalized:result?.normalized,textureOmitted:result?.texture_omitted});
   if(['PREPARING','WAITING'].includes(result?.status)){
    syncMeshJobBadge({...job,id:jobId,capture_id:captureId,object_id:objectId,provider:job.provider||'3D',status:result.status,stage:result.stage,progress:100});
    const counter=(meshPreviewRetries.get(jobId)||0)+1;meshPreviewRetries.set(jobId,counter);
    if(counter>75)throw Error('Quest model preparation timed out; reopen the source to retry');
    const delay=result.status==='WAITING'?12000:8500;meshNextAttemptAt.set(jobId,performance.now()+delay-200);
+   xr3D('MODEL_PREPARATION_PENDING',{jobId,state:result.status,stage:result.stage,attempt:counter,retryInMs:delay});
    setTimeout(()=>{if(scope===meshGeneration&&cloud?.id===captureId&&session)void spawnMeshPreview(job,origin);},delay);
    return;
   }
   if(!Array.isArray(result.parts)||!result.parts.length||result.parts.length>12)throw Error('3D preview does not contain coherent surfaces');
-  if(scope!==meshGeneration||cloud?.id!==captureId||!session)return;
+  xr3D('MODEL_GEOMETRY_RECEIVED',{jobId,partCount:result.parts.length,triangleCount:result.parts.reduce((n,p)=>n+(p.triangles||0),0),texturedParts:result.parts.filter(p=>Boolean(p.texture)).length});
+  if(scope!==meshGeneration||cloud?.id!==captureId||!session){xr3D('MODEL_DISCARDED_SCENE_CHANGED',{jobId,captureId,activeCaptureId:cloud?.id,sessionActive:Boolean(session)});return;}
   for(const raw of result.parts){
    const part=createMeshPart(raw);pieces.push(part);
-   if(raw.texture)part.texture=await xrEmbeddedTexture(raw.texture);
-   if(scope!==meshGeneration||cloud?.id!==captureId||!session)return;
+   xr3D('MODEL_GPU_BUFFER_UPLOADED',{jobId,part:pieces.length,vertices:part.count,bytes:part.count*32,gpu:xrGLErrors()});
+   if(raw.texture){part.texture=await xrEmbeddedTexture(raw.texture);xr3D('MODEL_GPU_TEXTURE_UPLOADED',{jobId,part:pieces.length,textureAllocated:Boolean(part.texture),gpu:xrGLErrors()});}
+   if(scope!==meshGeneration||cloud?.id!==captureId||!session){xr3D('MODEL_UPLOAD_DISCARDED_SCENE_CHANGED',{jobId,captureId,activeCaptureId:cloud?.id,sessionActive:Boolean(session)});return;}
   }
   const xform=job?.transform||{};
   const validVec=(v,n)=>Array.isArray(v)&&v.length===n&&v.every(x=>Number.isFinite(x));
@@ -2117,14 +2154,15 @@ async function spawnMeshPreview(job,origin=null){
    rotation:validVec(xform.rotation,4)?quatNorm(xform.rotation):[0,0,0,1],
    modelScale:Number.isFinite(xform.scale)?clamp(xform.scale,.2,4):1,
    q:[0,0,0,1],created:performance.now()};
-  if(!meshAnchor(model))return;
+  if(!meshAnchor(model)){xr3D('MODEL_ANCHOR_MISSING',{jobId,captureId,objectId,cloudId:cloud?.id},'error');return;}
   meshPreviews.push(model);pieces.length=0;meshPreviewRetries.delete(jobId);meshNextAttemptAt.delete(jobId);
+  {const pose=meshWorldPose(model);xr3D('MODEL_ATTACHED_TO_XR_SCENE',{jobId,worldPosition:pose?.pos,worldRotation:pose?.q,worldScale:pose?.scale,renderScaleMetres:.30,partCount:model.parts.length,vertexCount:model.parts.reduce((n,p)=>n+p.count,0),anchor:pose?.anchor,gpu:xrGLErrors()});}
   syncMeshJobBadge({...job,id:jobId,capture_id:captureId,object_id:objectId,
     provider:typeof job==='number'?'3D':job.provider,status:'SUCCEEDED',progress:100});
   const a=meshAnchor(model);if(a)launchParticles(a.pos);
   setStatus('3D POPPED INTO XR · '+(result.texture_omitted?'solid mesh':'textured mesh')+' · attached to source',10500);
   cue('bloom');
- }catch(e){if(scope===meshGeneration){meshNextAttemptAt.delete(jobId);meshPreviewFailures.add(jobId);markMeshPreviewError(jobId,e.message);setStatus('3D MODEL FAILED · '+String(e.message).slice(0,70),12000);}}
+ }catch(e){xr3D('MODEL_LOAD_FAILED',{jobId,captureId,error:String(e.message),httpStatus:e.status||null,stack:e.stack?.slice(0,800),gpu:xrGLErrors()},'error');if(scope===meshGeneration){meshNextAttemptAt.delete(jobId);meshPreviewFailures.add(jobId);markMeshPreviewError(jobId,e.message);setStatus('3D MODEL FAILED · '+String(e.message).slice(0,70),12000);}}
  finally{for(const part of pieces){if(part.buffer)gl.deleteBuffer(part.buffer);if(part.texture)gl.deleteTexture(part.texture);}meshLoadingJobs.delete(jobId);}
 }
 function drawMeshPreview(mesh,vp,t){
@@ -2138,8 +2176,8 @@ function drawMeshPreview(mesh,vp,t){
   gl.uniformMatrix4fv(gl.getUniformLocation(mascotProgram,'uModel'),false,model);
   gl.uniform4fv(gl.getUniformLocation(mascotProgram,'uColor'),[.48,.92,.69,1]);gl.drawArrays(gl.TRIANGLES,0,mesh.count);return;
  }
- if(!mesh.parts?.length||!meshProgram||mesh.captureId!==cloud?.id)return;
- const pose=meshWorldPose(mesh);if(!pose)return;
+ if(!mesh.parts?.length||!meshProgram||mesh.captureId!==cloud?.id){xr3DThrottled('drawskip-'+mesh.jobId+'-'+meshGeneration,'MODEL_DRAW_SKIPPED',{jobId:mesh.jobId,parts:mesh.parts?.length||0,shaderAvailable:Boolean(meshProgram),captureId:mesh.captureId,activeCaptureId:cloud?.id},'warn');return;}
+ const pose=meshWorldPose(mesh);if(!pose){xr3DThrottled('draw-anchor-'+mesh.jobId+'-'+meshGeneration,'MODEL_DRAW_NO_ANCHOR',{jobId:mesh.jobId},'error');return;}
  const k=Math.min(1,(t-mesh.created)/680),ease=k*k*(3-2*k);
  // Real-world longest axis is ~30 cm: no ceiling-filling fragment clouds.
  const model=matmul(translate(...pose.pos),matmul(quatMatrix(pose.q),scale(.30*pose.scale*ease,.30*pose.scale*ease,.30*pose.scale*ease)));
@@ -2155,6 +2193,8 @@ function drawMeshPreview(mesh,vp,t){
   gl.bindTexture(gl.TEXTURE_2D,part.texture||meshWhite);gl.uniform1i(gl.getUniformLocation(meshProgram,'uTextured'),part.texture?1:0);
   gl.uniform4fv(gl.getUniformLocation(meshProgram,'uColor'),part.color);gl.drawArrays(gl.TRIANGLES,0,part.count);
  }
+ if(!mesh.firstDrawLogged){mesh.firstDrawLogged=true;xr3D('MODEL_FIRST_GPU_DRAW_SUBMITTED',{jobId:mesh.jobId,worldPosition:pose.pos,worldScale:pose.scale,meshScaleMetres:.30*pose.scale*ease,vertexCount:mesh.parts.reduce((n,p)=>n+p.count,0),gpu:xrGLErrors()});}
+ else if(t-(mesh.lastGpuCheck||0)>17000){mesh.lastGpuCheck=t;const gpu=xrGLErrors();if(gpu.errors?.length)xr3D('MODEL_GPU_DRAW_ERROR',{jobId:mesh.jobId,gpu},'error');}
 }
 async function reopenCloudModels(captureId){
  const scope=meshGeneration;
@@ -2164,6 +2204,7 @@ async function reopenCloudModels(captureId){
   // Do not silently ignore every model after the first two. Keep a bounded set
   // of visible XR previews for performance, but surface every recent job state.
   const related=all.filter(j=>j.capture_id===captureId).slice(0,12);
+  xr3DThrottled('scan-'+meshGeneration+'-'+captureId,'SOURCE_3D_JOBS',{captureId,totalJobs:all.length,matchedJobs:related.map(j=>({jobId:j.id,status:j.status,cached:j.cached,objectId:j.object_id})),sourceCards:cards.filter(c=>c.kind==='source'||c.kind==='ancestor'||c.kind==='object').map(c=>({kind:c.kind,id:c.data?.id,visible:c.visible}))},'info');
   for(const job of related){
    if(scope!==meshGeneration||cloud?.id!==captureId)return;
     const existing=meshJobBadges.get(job.id);
@@ -2179,12 +2220,12 @@ async function reopenCloudModels(captureId){
    if(scope!==meshGeneration||cloud?.id!==captureId||loaded>=6)return;
    if(job.status!=='SUCCEEDED')continue;
    if(meshPreviews.some(m=>m.jobId===job.id)||meshLoadingJobs.has(job.id))continue;
-   if(!meshOwnerCard({captureId,objectId:job.object_id||null}))continue;
+   if(!meshOwnerCard({captureId,objectId:job.object_id||null})){xr3DThrottled('no-owner-'+meshGeneration+'-'+job.id,'SKIP_SOURCE_CARD_MISSING',{jobId:job.id,captureId,objectId:job.object_id,cloudId:cloud?.id},'warn');continue;}
    await spawnMeshPreview(job);
    if(scope!==meshGeneration)return;
    loaded=meshPreviews.filter(m=>m.parts?.length&&m.captureId===captureId).length;
   }
- }catch(e){window.FreeLab?.traceEvent?.('3D model reload: '+e.message,'warn');}
+ }catch(e){xr3D('SOURCE_MODEL_SCAN_FAILED',{captureId,error:String(e.message)},'error');window.FreeLab?.traceEvent?.('3D model reload: '+e.message,'warn');}
 }
 async function poll3d(t){
  if(cloud?.id&&t-meshSyncAt>17000&&!meshSyncBusy){
@@ -2354,7 +2395,7 @@ async function action(id){const t=performance.now();if(t-lastAction<200)return;l
 async function start(options={}){if(session)return;uiSettings=window.FreeLabXRUI?.read?.()||uiSettings;if(!navigator.xr)throw Error('WebXR is not available. Use Enter 3D for the browser viewer.');
  // Request the immersive session synchronously from the user's click; do not await GPU setup first.
  session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:options.requireDepth?['local','depth-sensing']:['local'],optionalFeatures:['local-floor','hand-tracking'],...(options.requireDepth?{depthSensing:{usagePreference:['cpu-optimized','gpu-optimized'],dataFormatPreference:['luminance-alpha','float32']}}:{})});
- try{setup();stringLab=new window.FreeLabStringLab.Experiment();stringLabState=null;rightStickDown=false;fingerLab=new window.FreeLabFingerLab.Experiment();fingerLabState=null;leftStickDown=false;frameLab=new window.FreeLabFrameLab.Experiment();frameLabState=null;frameGames=new window.FreeLabFrameGames.Engine();triangleLab=new window.FreeLabShapeSort.TriangleDraw();labSelector=new window.FreeLabLabSelector.Selector();labMenu=null;labMenuIndex=-1;await gl.makeXRCompatible();xrDomOverlay=false;session.updateRenderState({baseLayer:new XRWebGLLayer(session,gl,{alpha:true,antialias:false,depth:true,stencil:false,framebufferScaleFactor:.8})});
+ try{setup();stringLab=new window.FreeLabStringLab.Experiment();stringLabState=null;rightStickDown=false;fingerLab=new window.FreeLabFingerLab.Experiment();fingerLabState=null;leftStickDown=false;frameLab=new window.FreeLabFrameLab.Experiment();frameLabState=null;frameGames=new window.FreeLabFrameGames.Engine();triangleLab=new window.FreeLabShapeSort.TriangleDraw();labSelector=new window.FreeLabLabSelector.Selector();labMenu=null;labMenuIndex=-1;await gl.makeXRCompatible();xrDomOverlay=false;session.updateRenderState({baseLayer:new XRWebGLLayer(session,gl,{alpha:true,antialias:false,depth:true,stencil:false,framebufferScaleFactor:.8})});xr3D('XR_SESSION_RENDER_STATE',{depthRequested:Boolean(options.requireDepth),framebufferWidth:session.renderState.baseLayer?.framebufferWidth,framebufferHeight:session.renderState.baseLayer?.framebufferHeight,framebufferStatus:gl.checkFramebufferStatus(gl.FRAMEBUFFER),gpu:xrGLErrors()});
  try{refSpace=await session.requestReferenceSpace('local-floor');floorReference=true;}catch{refSpace=await session.requestReferenceSpace('local');floorReference=false;}poseReady=false;depthChecked=false;depthState=depthEnabled()?'Requested and enabled; checking data…':'Not supplied by headset/browser';depthProbeAt=0;depthLastReport='';depthBinding=null;
  session.addEventListener('selectstart',e=>{lastNative.set(e.inputSource,performance.now());if(e.inputSource.handedness==='left'&&labSelector?.open)return;grabStart(e.frame,e.inputSource);});
  session.addEventListener('selectend',e=>{lastNative.set(e.inputSource,performance.now());if(e.inputSource.handedness==='left'&&labSelector?.open)return;grabEnd(e.inputSource,e.frame);});
@@ -2366,6 +2407,7 @@ async function start(options={}){if(session)return;uiSettings=window.FreeLabXRUI
  // Resume queued cloud jobs after headset/browser restarts, without submitting a new paid request.
  const oldJobs=await window.FreeLab.list3DJobs?.().catch(()=>[])||[];
  pending3dJobs=oldJobs.filter(j=>['PENDING','IN_PROGRESS','UNKNOWN'].includes(j.status)).slice(0,12).map(j=>({id:j.id,provider:j.provider,captureId:j.capture_id,objectId:j.object_id}));meshyPollAt=0;
+ xr3D('XR_SESSION_MODEL_DISCOVERY',{savedCaptures:clouds.length,modelJobs:oldJobs.length,finishedJobs:oldJobs.filter(j=>j.status==='SUCCEEDED').length,pendingJobs:pending3dJobs.length,sceneState:'models attach only when their source capture is opened'});
 setStatus('CAPTURE → EXTRACT → PROMPT · camera pixels required',8500);
  if(uiSettings.voice!==false&&window.FreeLab?.pref?.('spoken')){mascotSay('Welcome to FreeLab!',3600);window.FreeLab?.speakUpdate?.('Welcome to FreeLab! Your room is ready to explore.');}
  session.requestAnimationFrame(updateView);
@@ -2373,4 +2415,5 @@ setStatus('CAPTURE → EXTRACT → PROMPT · camera pixels required',8500);
 }
 window.FreeLabXR={start,isRunning:()=>!!session};
 window.FreeLabXR.isListening=()=>voicePhase!=='idle';
+window.FreeLabXR.get3DDiagnostics=()=>window.FreeLabXR3DDiagnostics.getLog();
 })();

@@ -1,14 +1,15 @@
 {
-  "version": "0.10.36",
-  "title": "FREELAB v0.10.36 — 3D API stability and session recovery",
+  "version": "0.10.37",
+  "title": "FREELAB v0.10.37 — XR model load diagnostics and gallery thumbnails",
   "datetime": "2026-11-15",
   "changes": [
-    "Fix older Ubuntu environments missing FREE_LAB_SESSION_KEY: installer now creates one persistent Flask signing key rather than allowing Gunicorn workers to use incompatible random keys (401 errors).",
-    "The private /api/media/3d list now serves only bounded SQLite job metadata; it does not start multiple Tripo network monitors and Blender jobs from a frequent XR/Collection GET request.",
-    "Large GLB surface decoding now runs in a separate resource-limited process so excessive geometry cannot exhaust Gunicorn memory or block private API workers (502 mitigation).",
-    "SQLite WAL mode is configured during database initialization, rather than requiring journal-mode changes on every request and background-thread connection.",
-    "Session expiry is clearly reported, and desktop/mobile login is shown again without treating authentication failure as Tripo failure; XR prompts the user to sign in after leaving the session.",
-    "The original paid model job and source-linked spatial placeholder are preserved; this release does not generate a new paid model."
+    "XR now logs every real 3D model discovery, load attempt and skip reason directly to the browser console as [FREELAB XR 3D], including capture attachment, provider preview HTTP results, preparation state, geometry, texture and GPU uploads.",
+    "XR logs the world position, rotation, scale, triangle/vertex count, first GPU draw submission and WebGL/framebuffer error codes. The bounded log can be read from window.FreeLabXR3DDiagnostics.getLog().",
+    "A missing source card, changed XR scene, vanished session, failed preview request or failed GPU upload is now reported explicitly instead of silently returning without explanation.",
+    "Your 3D Models now shows visual thumbnails in the archive. Private headless Blender rendering creates square PNG thumbnails from existing cached GLBs in one cross-worker background process without another paid provider call.",
+    "Until Blender finishes, the owner-authenticated thumbnail URL displays the original source image. When a rendered PNG exists it replaces the temporary preview on the next gallery refresh.",
+    "Desktop 3D model viewer retains the known thumbnail on the full stage while the GLB or Quest-compatible preview loads, instead of showing an empty panel.",
+    "No existing model job is recreated, no new paid generation is triggered, and model original GLBs and account data remain intact. Physical Quest rendering still requires an actual headset check."
   ],
   "history": [
     {

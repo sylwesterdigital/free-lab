@@ -45,6 +45,10 @@ _xr_monitor_guard=threading.Lock()
 _xr_monitor_active=set()
 _XR_MONITOR_CONCURRENT=3
 
+_thumb_guard=threading.Lock()
+_thumb_active=set()
+_THUMBNAIL_CONCURRENT=1
+
 def _xr_preview_json_path(owner,jid):
     return MODEL_DIR/f'{owner}_{jid}.xr.json'
 
@@ -65,6 +69,64 @@ def _xr_preview_heartbeat(pending,stop):
         if not pending.exists():return
         try:pending.touch()
         except OSError:return
+
+def _model_thumb_path(owner,jid):
+    return MODEL_DIR/f'{owner}_{jid}.thumb.png'
+
+def _model_thumb_error_path(owner,jid):
+    return MODEL_DIR/f'{owner}_{jid}.thumb.error'
+
+def _job_source_image_url(row):
+    if row['object_id']:
+        return '/api/objects/'+str(row['object_id'])+'/image'
+    if row['capture_id']:
+        return '/api/captures/'+str(row['capture_id'])+'/image'
+    return None
+
+def _model_thumbnail_worker(owner,jid):
+    con=None
+    try:
+        con=db.connect(DB)
+        row=con.execute('SELECT status,model_path FROM jobs_3d WHERE id=? AND owner_id=?',(jid,owner)).fetchone()
+        if not row or row['status']!='SUCCEEDED':return
+        name=row['model_path'] or ''
+        if not re.fullmatch(r'[0-9]+_[0-9]+\.glb',name) or name!=f'{owner}_{jid}.glb':return
+        file=MODEL_DIR/name
+        if not file.is_file():return
+        # One heavyweight Blender process across all Gunicorn workers. Never
+        # hold a web request while rendering; the thumbnail endpoint serves the
+        # saved 2D source until the render is complete.
+        import fcntl
+        with open(MODEL_DIR/'.thumbnail-render.lock','a+b') as render_lock:
+            try:fcntl.flock(render_lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+            except BlockingIOError:return
+            try:
+                png=avatar_optimizer.render_thumbnail(file.read_bytes(),size=640)
+                target=_model_thumb_path(owner,jid)
+                target.write_bytes(png)
+                _model_thumb_error_path(owner,jid).unlink(missing_ok=True)
+            finally:fcntl.flock(render_lock.fileno(),fcntl.LOCK_UN)
+    except Exception as e:
+        try:_model_thumb_error_path(owner,jid).write_text(str(e)[:180])
+        except OSError:pass
+    finally:
+        if con is not None:con.close()
+        with _thumb_guard:_thumb_active.discard((owner,jid))
+
+def _ensure_model_thumbnail(owner,jid):
+    target=_model_thumb_path(owner,jid)
+    if target.is_file():return True
+    failed=_model_thumb_error_path(owner,jid)
+    if failed.is_file() and time.time()-failed.stat().st_mtime<12*3600:return False
+    if not avatar_optimizer.blender_command():return False
+    with _thumb_guard:
+        identity=(owner,jid)
+        if identity in _thumb_active:return False
+        if len(_thumb_active)>=_THUMBNAIL_CONCURRENT:return False
+        _thumb_active.add(identity)
+    threading.Thread(target=_model_thumbnail_worker,args=(owner,jid),daemon=True,
+                     name=f'freelab-thumb-{jid}').start()
+    return False
 
 def _xr_decode_isolated(raw,texture_edge):
     """Bounded child-process GLB decode: protect Gunicorn from expensive geometry.
@@ -132,6 +194,8 @@ def _xr_existing_job_worker(owner,jid,key):
             with con:con.execute('UPDATE jobs_3d SET model_path=?,cache_error=? WHERE id=? AND owner_id=?',
                                   (name,'',jid,owner))
             raw=(MODEL_DIR/name).read_bytes()
+        thumb_worker=globals().get('_ensure_model_thumbnail')
+        if callable(thumb_worker):thumb_worker(owner,jid)
         _xr_preview_stage(owner,jid,'Preparing Quest geometry')
         # H-series meshes can be many times larger than the rendered preview.
         # Avoid a multi-second Python triangle walk on very dense originals:
@@ -569,7 +633,7 @@ def admin_delete_profile(uid):
     filenames=[row[0] for row in g.con.execute('SELECT image_name FROM captures WHERE owner_id=? UNION SELECT image_name FROM objects WHERE owner_id=?',(uid,uid)) if row[0]]
     with g.con:g.con.execute('DELETE FROM users WHERE id=?',(uid,))
     for name in filenames:
-        if not re.fullmatch('[a-f0-9]{32}\.(jpg|png)',name):continue
+        if not re.fullmatch(r'[a-f0-9]{32}\.(jpg|png)',name):continue
         if g.con.execute('SELECT 1 FROM captures WHERE image_name=? UNION SELECT 1 FROM objects WHERE image_name=?',(name,name)).fetchone():continue
         try:(IMAGE_DIR/name).unlink(missing_ok=True)
         except OSError:pass
@@ -1115,12 +1179,19 @@ def media_capabilities():
                    video={},three_d={p:{'available':bool(provider_key(p)),'async':True} for p in ('aholo','meshy','tripo')},message='3D provider preference selects Aholo, Meshy or Tripo; no silent fallback.')
 
 def job_3d_dict(row):
+    owner=row['owner_id']
+    thumb=_model_thumb_path(owner,row['id'])
+    source_url=_job_source_image_url(row)
+    can_render=row['status']=='SUCCEEDED' and bool(row['model_path']) and bool(avatar_optimizer.blender_command())
+    thumbnail_url=('/api/media/3d/'+str(row['id'])+'/thumbnail' if thumb.is_file() or can_render else row['thumbnail_url'] or source_url)
+    thumbnail_kind=('blender' if thumb.is_file() else 'rendering' if can_render else 'provider' if row['thumbnail_url'] else 'source' if source_url else '')
     return {'id':row['id'],'capture_id':row['capture_id'],'object_id':row['object_id'],
             'provider':row['provider'],'model_id':row['model_id'] or None,
             'quality_preset':row['quality_preset'],'texture_quality':row['texture_quality'],
             'face_limit':row['face_limit'],'xr_texture_edge':row['xr_texture_edge'],
             'transform':json.loads(row['transform_json'] or '{}'), 'status':row['status'],'progress':row['progress'],
-            'credits':row['credits'],'thumbnail_url':row['thumbnail_url'],
+            'credits':row['credits'],'thumbnail_url':thumbnail_url,'thumbnail_kind':thumbnail_kind,
+            'source_image_url':source_url,
             'error':row['error'],'created_at':row['created_at'],
             'cached':bool(row['model_path']),'cache_error':row['cache_error'],
             'glb_url':('/api/media/3d/'+str(row['id'])+'/asset' if row['model_path'] else row['glb_url'])}
@@ -1231,6 +1302,8 @@ def media_3d_status(jid):
         if not failed.is_file():
             key=provider_key('tripo') if row['provider']=='tripo' else None
             _xr_ensure_preview_worker(owner,jid,key)
+    elif row['status']=='SUCCEEDED' and row['model_path']:
+        _ensure_model_thumbnail(g.user['id'],jid)
     return jsonify(job_3d_dict(row))
 
 
@@ -1254,6 +1327,35 @@ def update_3d_transform(jid):
                               (json.dumps(transform,separators=(',',':')),jid,g.user['id']))
     if not changed.rowcount:abort(404)
     return jsonify(job_id=jid,transform=transform,saved=True)
+
+@app.get('/api/media/3d/<int:jid>/thumbnail')
+@require_user
+def private_3d_thumbnail(jid):
+    row=g.con.execute('SELECT id,owner_id,capture_id,object_id,status,model_path FROM jobs_3d WHERE id=? AND owner_id=?',(jid,g.user['id'])).fetchone()
+    if not row:abort(404)
+    thumb=_model_thumb_path(g.user['id'],jid)
+    if thumb.is_file():
+        resp=send_file(thumb,mimetype='image/png',max_age=0)
+        resp.headers['Cache-Control']='private, no-store'
+        return resp
+    if row['status']=='SUCCEEDED' and row['model_path']:
+        _ensure_model_thumbnail(g.user['id'],jid)
+    # While Blender renders, serve the exact source image as a temporary poster.
+    # Never expose someone else's capture, and never claim it is a 3D render.
+    if row['object_id']:
+        origin=g.con.execute('SELECT image_name FROM objects WHERE id=? AND owner_id=? AND shelf!=?',
+                             (row['object_id'],g.user['id'],'bin')).fetchone()
+    else:
+        origin=None
+    if not origin and row['capture_id']:
+        origin=g.con.execute('SELECT image_name FROM captures WHERE id=? AND owner_id=?',
+                             (row['capture_id'],g.user['id'])).fetchone()
+    if origin and re.fullmatch(r'[a-f0-9]{32}\.(jpg|png)',origin['image_name'] or ''):
+        image=IMAGE_DIR/origin['image_name']
+        if image.is_file():
+            resp=send_file(image,mimetype='image/png' if image.suffix=='.png' else 'image/jpeg',max_age=0)
+            resp.headers['Cache-Control']='private, no-store';return resp
+    abort(404)
 
 @app.get('/api/media/3d/<int:jid>/asset')
 @require_user

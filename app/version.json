@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.36",
-  "description": "Stable session signing, safe private 3D list and isolated XR GLB decoding"
+  "version": "0.10.37",
+  "description": "XR 3D load/GPU console diagnostics and private Blender model thumbnails"
 }

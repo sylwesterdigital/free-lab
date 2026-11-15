@@ -407,38 +407,52 @@ async function createXR3D(cid,oid,prompt='',preset=null){
 }
 async function checkXR3D(id,refresh=false){return api('/media/3d/'+id+(refresh?'?refresh=1':''));}
 async function list3DJobs(){const response=await api('/media/3d');return response.jobs||[];}
+function modelJobPoster(job){return job.thumbnail_url||job.source_image_url||'';}
+function modelJobThumb(job){
+ const button=el('button','model-job-thumb');button.type='button';button.title='Open 3D preview';button.setAttribute('aria-label','Open 3D preview for job '+job.id);
+ const poster=modelJobPoster(job);
+ if(poster){const img=el('img');img.loading='lazy';img.alt='';img.src=poster;img.onerror=()=>{if(job.source_image_url&&!img.dataset.fallback){img.dataset.fallback='1';img.src=job.source_image_url;}else{button.classList.add('empty');img.remove();button.append(el('span','',job.status==='SUCCEEDED'?'3D':'…'));}};button.append(img);}
+ else{button.classList.add('empty');button.append(el('span','',job.status==='SUCCEEDED'?'3D':'…'));}
+ if(job.status==='SUCCEEDED')button.onclick=()=>window.FreeLabModelStage?.open(job.id,false,null,poster||job.source_image_url||'');
+ else button.disabled=true;
+ return button;
+}
 async function refresh3DJobs(){
  const panel=$('modelJobs');if(!panel)return;
  panel.replaceChildren();try{
   const response=await api('/media/3d');
   if(!response.jobs.length){panel.append(el('p','small-muted','No 3D jobs yet. Select an image in XR → 3D → Generate.'));return;}
-  for(const job of response.jobs){const row=el('div','model-job');
-   row.append(el('strong','',`3D · ${job.provider} · ${job.status} · ${job.progress}%`));
-   row.append(el('span','small-muted',`Source #${job.capture_id||'-'} · ${job.credits===null?'Credits pending':job.credits+' credits'}`));
-   if(job.error)row.append(el('p','small-muted',job.error));
+  for(const job of response.jobs){const row=el('div','model-job');const poster=modelJobPoster(job);
+   row.append(modelJobThumb(job));
+   const body=el('div','model-job-body');
+   body.append(el('strong','',`3D · ${job.provider} · ${job.status} · ${job.progress}%`));
+   body.append(el('span','small-muted',`Source #${job.capture_id||'-'} · ${job.credits===null?'Credits pending':job.credits+' credits'}${job.thumbnail_kind==='blender'?' · Blender thumbnail':job.thumbnail_kind==='provider'?' · Provider thumbnail':job.thumbnail_kind==='rendering'?' · Rendering Blender thumbnail':job.source_image_url?' · Source thumbnail':''}`));
+   if(job.error)body.append(el('p','small-muted',job.error));
+   const actions=el('div','model-job-actions');
    const audit=el('button','tiny-btn','Inspect 3D pipeline');audit.type='button';
    audit.onclick=async()=>{audit.disabled=true;audit.textContent='Inspecting…';try{
-    const d=await modelXRDiagnostics(job.id);let panel=row.querySelector('.model-diagnostic');
-    if(!panel){panel=el('pre','model-diagnostic','');row.append(panel);}
+    const d=await modelXRDiagnostics(job.id);let info=row.querySelector('.model-diagnostic');
+    if(!info){info=el('pre','model-diagnostic','');row.append(info);}
     const stages=d.steps.map(s=>s.name+': '+s.state+(s.detail?' · '+s.detail:''));
-    panel.textContent=['Job #'+d.job_id+' · '+d.provider.toUpperCase()+' · '+(d.model_id||'model version not recorded'),
+    info.textContent=['Job #'+d.job_id+' · '+d.provider.toUpperCase()+' · '+(d.model_id||'model version not recorded'),
       'Current stage: '+d.stage,'Cached GLB: '+(d.model.cached?(d.model.bytes/1e6).toFixed(2)+' MB':'no'),
       'Geometry compression: '+(d.model.compression.join(', ')||'none declared'),
       'Blender available: '+(d.blender_available?'yes':'no'),...stages,
       'Next action: '+d.next_action].join('\n');
    }catch(e){notify('3D diagnostics: '+e.message);}finally{audit.disabled=false;audit.textContent='Inspect 3D pipeline';}};
-   row.append(audit);
+   actions.append(audit);
    if(job.status==='SUCCEEDED'){
     const retry=el('button','tiny-btn','Retry XR preview');retry.type='button';
     retry.onclick=async()=>{if(!await window.FreeLabDialog.confirm('Retry preparing this existing 3D model for Quest? No new paid 3D task is created.'))return;
       try{await retryXRPreview(job.id);notify('XR preview error reset. Reopen the source or tap its 3D cube to load again.');}
-      catch(e){notify('XR retry unavailable: '+e.message);}};row.append(retry);
+      catch(e){notify('XR retry unavailable: '+e.message);}};actions.append(retry);
    }
-   if(job.status==='SUCCEEDED'){const view=el('button','tiny-btn','View in 3D');view.type='button';view.onclick=()=>window.FreeLabModelStage?.open(job.id);row.append(view);}
-   if(job.glb_url){const a=el('a','tiny-btn','Download GLB');a.href=job.glb_url;a.rel='noopener noreferrer';a.target='_blank';row.append(a);
-    const renew=el('button','tiny-btn','Renew link');renew.onclick=async()=>{try{await checkXR3D(job.id,true);await refresh3DJobs();}catch(e){notify(e.message)}};row.append(renew);}
+   if(job.status==='SUCCEEDED'){const view=el('button','tiny-btn','View in 3D');view.type='button';view.onclick=()=>window.FreeLabModelStage?.open(job.id,false,null,poster||job.source_image_url||'');actions.append(view);}
+   if(job.glb_url){const a=el('a','tiny-btn','Download GLB');a.href=job.glb_url;a.rel='noopener noreferrer';a.target='_blank';actions.append(a);
+    const renew=el('button','tiny-btn','Renew link');renew.onclick=async()=>{try{await checkXR3D(job.id,true);await refresh3DJobs();}catch(e){notify(e.message)}};actions.append(renew);}
    if(!['SUCCEEDED','FAILED','CANCELED'].includes(job.status)){
-    const button=el('button','tiny-btn','Check status');button.onclick=async()=>{try{await checkXR3D(job.id);await refresh3DJobs();}catch(e){notify(e.message)}};row.append(button);}
+    const button=el('button','tiny-btn','Check status');button.onclick=async()=>{try{await checkXR3D(job.id);await refresh3DJobs();}catch(e){notify(e.message)}};actions.append(button);}
+   body.append(actions);row.append(body);
    panel.append(row);
   }
  }catch(e){panel.append(el('p','small-muted','3D jobs unavailable · '+e.message));}
@@ -580,7 +594,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.36');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.37');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{
