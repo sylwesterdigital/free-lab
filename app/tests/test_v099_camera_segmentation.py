@@ -10,8 +10,8 @@ BACK=(ROOT/'backend/app.py').read_text()
 
 class CameraAndSegmentation099(unittest.TestCase):
  def test_camera_has_clear_readiness_states(self):
-  for text in ('CAMERA OFF  ·  PRESS THE EYE TO ENABLE',
-               'CAMERA ON  ·  PRESS THE EYE TO CAPTURE',
+  for text in ('PRESS THE EYE TO ENABLE CAMERA',
+               'CAMERA ON · PRESS THE EYE TO CAPTURE',
                'SAVING CAPTURE  ·  PLEASE WAIT',
                'PHOTO READY  ·  PRESS ✳ TO EXTRACT',
                'Camera ENABLED'.upper()):
@@ -19,7 +19,7 @@ class CameraAndSegmentation099(unittest.TestCase):
   self.assertIn('function liveCameraState(){',XR)
   self.assertIn("track?.readyState==='live'&&!track.muted&&video?.videoWidth>0",XR)
   self.assertIn("ctx.createRadialGradient(160,160,93,160,160,149)",XR)
-  self.assertIn("kind:'status',size:[.47,.071]",XR)
+  self.assertIn("kind:'status',size:[.70,.108]",XR)
   self.assertIn("if(!cameraLive){",XR)
   self.assertIn("XR capture always samples the current live camera",UI)
   self.assertIn('if(cameraHint)drawCard(cameraHint,vp)',XR)
@@ -69,7 +69,7 @@ console.log('Upper fan and upright camera-facing geometry passed');'''
   r=subprocess.run(['node','-e',script],cwd=ROOT,text=True,capture_output=True,timeout=15)
   self.assertEqual(r.returncode,0,r.stderr or r.stdout)
  def test_release_manifest_marker(self):
-  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.56')
+  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.57')
   self.assertIn('function extractionAvailable()',XR)
 
 if __name__=='__main__':unittest.main()

@@ -10,7 +10,7 @@ from pathlib import Path,PurePosixPath
 
 ROOT=Path(sys.argv[1]).resolve();sys.argv=[sys.argv[0]]+sys.argv[2:]
 UPDATES=ROOT/'updates';UPLOADS=ROOT/'uploads';STATE=ROOT/'.free-lab'
-VERSION='0.9.2';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
+VERSION='0.9.3';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
 REPO='git@github.com:sylwesterdigital/free-lab.git'
 HOST=os.getenv('FREE_LAB_SSH_HOST','root@46.62.232.64')
 PORT=os.getenv('FREE_LAB_SSH_PORT','333')
@@ -69,7 +69,19 @@ def validate(archive,stage):
     except (zipfile.BadZipFile,OSError) as e:raise BadArchive('Invalid ZIP: '+str(e))
     with z:
         info=z.infolist();names=[f.filename for f in info if not f.is_dir()]
-        if len(info)>100 or sum(f.file_size for f in info)>20*1024*1024:raise BadArchive('ZIP exceeds file count or size cap')
+        # Resource safeguards, not a cap on legitimate application architecture.
+        # v0.10.57 itself stays under the prior watcher's limit so this upgrade is deployable.
+        max_members=2048;max_total=128*1024*1024;max_member=32*1024*1024;max_archive=64*1024*1024
+        if archive.stat().st_size>max_archive:raise BadArchive('Compressed ZIP exceeds 64 MiB budget')
+        if len(info)>max_members or sum(f.file_size for f in info)>max_total:
+            raise BadArchive('ZIP exceeds safe member count or total uncompressed budget')
+        for f in info:
+            if f.file_size>max_member or f.flag_bits & 1:
+                raise BadArchive('Oversized or encrypted release member: '+f.filename)
+            if f.file_size>1024*1024 and f.file_size/max(1,f.compress_size)>250:
+                raise BadArchive('Suspicious ZIP expansion ratio: '+f.filename)
+            if f.compress_type not in (zipfile.ZIP_STORED,zipfile.ZIP_DEFLATED):
+                raise BadArchive('Unsupported ZIP compression method: '+f.filename)
         if len(names)!=len(set(names)):raise BadArchive('Duplicate ZIP entries')
         for f in info:
             p=PurePosixPath(f.filename)

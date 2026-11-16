@@ -55,33 +55,25 @@ e.update({left:a,right:b,time:100});e.update({left:a,right:b,time:300});
 const result=e.update({left:a,right:null,time:450});if(result.mode!=='idle'||e.frames.length)throw Error('lost hand must abort current frame');
 ''')
 
-    def test_selector_x_open_stick_cycle_trigger_confirm(self):
-        self.node(r'''const fs=require('fs'),vm=require('vm'),w={};
-vm.runInNewContext(fs.readFileSync('frontend/assets/lab-selector.js','utf8'),{window:w});
-const S=new w.FreeLabLabSelector.Selector();
-function inp(xButton,trigger,x){return [{handedness:'left',gamepad:{mapping:'xr-standard',buttons:[{pressed:trigger},{},{},{pressed:false},{pressed:xButton}],axes:[0,0,x,0]}}]}
-let u=S.update(inp(true,false,0));if(!u.open||u.event!=='open'||u.index!==0)throw Error('X opens menu');
-u=S.update(inp(false,false,-.9));if(u.index!==7||u.event!=='step'||!u.open)throw Error('L stick wraps and menu stays open');
-u=S.update(inp(false,false,-.9));if(u.index!==7)throw Error('held stick must not auto-repeat');
-S.update(inp(false,false,0));u=S.update(inp(false,false,1));if(u.index!==0)throw Error('neutral re-arms the stick');
-u=S.update(inp(false,false,0));if(!u.open)throw Error('releasing X must not dismiss menu');
-u=S.update(inp(false,true,0));if(u.open||u.mode!=='frames'||u.event!=='select')throw Error('trigger confirms');
-S.update(inp(false,false,0));u=S.update(inp(true,false,0));if(!u.open)throw Error('X reopens');
-S.update(inp(false,false,0));u=S.update(inp(true,false,0));if(u.open||u.event!=='cancel')throw Error('X cancels');
-if(w.FreeLabLabSelector.input([{handedness:'right',gamepad:{mapping:'xr-standard',buttons:[{pressed:true},{},{},{},{pressed:true}],axes:[0,0,1,0]}}]).xPressed)throw Error('right controller ignored');
-''')
+    def test_experimental_selection_is_only_in_agency(self):
+        self.assertFalse((ROOT/'frontend/assets/lab-selector.js').exists())
+        self.assertNotIn('lab-selector.js',PAGE)
+        self.assertIn("agencyEnterLab(mode)",XR)
+        self.assertIn("xrExperience='agency-lab'",XR)
+        self.assertNotIn('pollLabSelector',XR)
+        self.assertNotIn('labMenu',XR)
 
     def test_integration_menu_near_controller_and_frozen_frames(self):
         for token in ('renderAgencyLab(t,frame,pose)', 'pollFrameLab(frame,t)', 'drawSpatialFrames(vp,t,pose)',
                       'window.FreeLabFrameLab.Experiment()', 'agencyEnterLab(mode)',
                       "frame.getJointPose?.(src.hand.get(jointName),refSpace)",
-                      "labMenu.q=quatY(cameraYaw(pose))",'for(const f of frameLab.frames)',
+                      "agencyEnterLab(mode)",'for(const f of frameLab.frames)',
                       "window.FreeLab?.pref?.('frameHoldSeconds')",'gl.TRIANGLE_STRIP'):
             self.assertIn(token,XR)
-        self.assertIn('lab-selector.js?v=0.10.56',PAGE)
-        self.assertIn('frame-lab.js?v=0.10.56',PAGE)
+        self.assertNotIn('lab-selector.js',PAGE)
+        self.assertIn('frame-lab.js?v=0.10.57',PAGE)
         self.assertIn('id="pref-frameHoldSeconds"',PAGE)
-        for name in ('frame-lab.js','lab-selector.js'):
+        for name in ('frame-lab.js',):
             self.assertNotIn('fetch(', (ROOT/'frontend/assets'/name).read_text())
 
 if __name__ == '__main__':unittest.main()

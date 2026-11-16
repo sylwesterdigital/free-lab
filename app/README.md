@@ -383,7 +383,7 @@ No database, backend, nginx or watcher changes. The downloadable ZIP is suitable
 for the normal *local* watcher validation, but final headset visual/performance
 acceptance remains required.
 
-## v0.10.56 — headset graphics quality controls
+## v0.10.51 — headset graphics quality controls
 
 Settings → Experience → Graphics quality controls framebuffer scale (0.8×, 1.0×, 1.2×, 1.5×, 2.0×), XR antialiasing and fixed foveation. Use Balanced by default; higher scales use considerably more GPU and memory and may reduce frame rate. Settings persist in the current browser only, with strict input validation. Foveation changes can take effect during an immersive XR session when supported; framebuffer scaling and AA are applied when **re-entering XR**. The existing in-headset My Stuff CONFIG panel includes an XR GRAPHICS submenu for in-session experimentation. A browser may cap requested scaling and ignore unsupported foveation; use the diagnostic framebuffer dimensions to verify actual behavior. If a graphics layer cannot be allocated, a safe lower-resolution layer is tried; no server or model API call is involved. Device-specific visual sharpness, thermal throttling and frame timing must be tested on the target headset.
 
@@ -396,3 +396,33 @@ Settings → Experience → Graphics quality controls framebuffer scale (0.8×, 
 - Add colour-coded Throw Lab targets and no-timer matching scores, pastel fading target effects, new frame colours, and fresh clean rounds.
 - Add individually coloured falling cubes that stack or cancel in matching-colour pairs, distinct hanging frame colours, and correct/incorrect Shape Sort sparkles.
 - Keep experimental activities in Agency rather than My Stuff, preserve passthrough and private progress, and avoid new paid requests.
+
+
+## v0.10.57 — Agency interaction refinement and release tooling
+
+The immersive Agency activity board has a taller subdued glass panel, a readable
+activity label within its top margin and 20%-smaller icons. BACK TO MAIN and
+EXIT XR share one depth outside the board, and the decorative corner dot is
+removed. In play, Number Flow answers are individually coloured and separated;
+ARENA timer and score sit at greater depth, while the AGENCY return control
+stays outside the active workspace. The hand/controller ray and game state
+remain independent of My Stuff.
+
+Throw Lab scatters six smaller targets through the upper space; wrong-colour
+collisions dispose of their projectiles with corrective red feedback. Private
+or public room selection is restored before immersive entry, with a separate
+depth-capable choice. The temporary My Stuff camera prompt and closer voice
+indicator use readable non-squashed text. The Quest keyboard submission has
+single-submit guards. The obsolete controller Experimental selector and its
+asset have been removed, and labs are entered only through Agency.
+
+Watcher 0.9.3 is bundled. This release is deliberately packaged to fit watcher
+0.9.2, which can then upgrade itself. Subsequent releases may contain up to
+2,048 entries and 128 MiB of uncompressed app files; every file still requires
+a SHA-256 match, and unsafe paths, symlinks, encrypted members, oversized
+members and suspicious ZIP expansion ratios are rejected. These ceilings are
+security/resource budgets, not architecture or module-count targets.
+
+Quest Browser hand tracking, camera availability and 3D-avatar GLB loading
+still require acceptance testing on the headset. Neither the deployment
+watcher dry run nor local unit tests reproduce those device-specific paths.

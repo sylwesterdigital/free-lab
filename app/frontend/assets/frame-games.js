@@ -16,7 +16,7 @@ function colorFor(n){return PALETTE[((n%PALETTE.length)+PALETTE.length)%PALETTE.
 function targetFrameHit(corners,target){if(!target||!target.center)return false;
  const x=target.center[0],y=target.center[1],z=target.center[2],half=target.half||[.22,.23,.14];
  // A hit anywhere in the opening counts, not only on a thin wire edge.
- const c=center({corners});return Math.abs(c[0]-x)<half[0]+.10&&Math.abs(c[1]-y)<half[1]+.10&&Math.abs(c[2]-z)<half[2]+.16;
+ const c=center({corners});return Math.abs(c[0]-x)<half[0]+.05&&Math.abs(c[1]-y)<half[1]+.05&&Math.abs(c[2]-z)<half[2]+.075;
 }
 
 function segmentContact(a,b,c,d){
@@ -91,7 +91,7 @@ class Engine{
  constructor(){this.clear();}
  clear(){this.boxes=[];this.links=[];this.throws=[];this.mode='off';this.lastTime=null;this.floorY=0;this.events=[];this.targets=[];this.score=0;this.colorIndex=0;this.targetSeed=0;}
  setMode(m){if(m!==this.mode){this.boxes=[];this.links=[];this.throws=[];this.targets=[];this.score=0;this.colorIndex=0;}this.mode=m;this.lastTime=null;}
- setTargets(targets){this.targets=Array.isArray(targets)?targets.slice(0,6).map(t=>({...t,center:t.center.slice(),half:(t.half||[.22,.22,.14]).slice()})):[];}
+ setTargets(targets){this.targets=Array.isArray(targets)?targets.slice(0,8).map(t=>({...t,center:t.center.slice(),half:(t.half||[.07,.07,.05]).slice()})):[];}
  nextColor(){return colorFor(this.colorIndex++);}
 
  setFloor(y){if(Number.isFinite(y))this.floorY=y;}
@@ -166,7 +166,8 @@ class Engine{
     fly.scored=true;
     if(target.color===f.color){this.score++;events.push({event:'throw-score',id:fly.id,score:this.score,target:target.center.slice(),color:f.color});
      this.targets=[];this.throws=this.throws.filter(v=>v!==fly);const ix=frames.indexOf(f);if(ix>=0)frames.splice(ix,1);}
-    else{fly.missedTargets.push(target.id);events.push({event:'throw-miss',id:fly.id,target:target.center.slice()});}
+    else{fly.missedTargets.push(target.id);events.push({event:'throw-miss',id:fly.id,target:target.center.slice(),wrong:true});
+     this.throws=this.throws.filter(v=>v!==fly);const ix=frames.indexOf(f);if(ix>=0)frames.splice(ix,1);}
     break;
    }
    fly.alpha=clamp((1-u)/.35,0,1);

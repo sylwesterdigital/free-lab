@@ -1,4 +1,4 @@
-"""Regression guards for v0.10.56. No network, headset, camera, or paid API calls."""
+"""Regression guards for v0.10.57. No network, headset, camera, or paid API calls."""
 import json
 import re
 import unittest
@@ -87,13 +87,13 @@ class QuestCompact118(unittest.TestCase):
 
  def test_release_versions(self):
   for name in ('version.json','frontend/version.json','changelog.json','frontend/changelog.json'):
-   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.56')
-  self.assertIn('room-viewer.mjs?v=0.10.56',ROOMS)
-  self.assertIn('xr.js?v=0.10.56',HTML)
+   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.57')
+  self.assertIn('room-viewer.mjs?v=0.10.57',ROOMS)
+  self.assertIn('xr.js?v=0.10.57',HTML)
 
 if __name__=='__main__': unittest.main()
 
-"""v0.10.56 Agency XR regression checks: independent labs, text aspect, focus and reachable play."""
+"""v0.10.57 Agency XR regression checks: independent labs, text aspect, focus and reachable play."""
 import unittest
 from pathlib import Path
 XR=(Path(__file__).resolve().parents[1]/'frontend/assets/xr.js').read_text()

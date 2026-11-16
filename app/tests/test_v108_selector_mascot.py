@@ -8,18 +8,12 @@ class SelectorAndMascot108(unittest.TestCase):
  def node(self,script):
   result=subprocess.run(['node','-e',script],cwd=ROOT,text=True,capture_output=True,timeout=20)
   self.assertEqual(result.returncode,0,result.stderr or result.stdout)
- def test_persistent_x_left_trigger_confirm_and_cancel(self):
-  self.node(r'''const fs=require('fs'),vm=require('vm'),w={};vm.runInNewContext(fs.readFileSync('frontend/assets/lab-selector.js','utf8'),{window:w});
-const selector=new w.FreeLabLabSelector.Selector();
-const s=(x,trigger,axis)=>[{handedness:'left',gamepad:{mapping:'xr-standard',buttons:[{pressed:trigger},{},{},{pressed:false},{pressed:x}],axes:[0,0,axis,0]}}];
-let v=selector.update(s(true,false,0));if(v.event!=='open')throw Error('X should open');
-for(let i=0;i<4;i++){v=selector.update(s(false,false,0));if(!v.open)throw Error('X release should NOT close');}
-v=selector.update(s(false,false,1));if(v.index!==1||v.event!=='step')throw Error('stick step');
-selector.update(s(false,false,0));v=selector.update(s(false,false,1));if(v.index!==2)throw Error('second step');
-v=selector.update(s(false,true,0));if(v.event!=='select'||v.open||v.mode!=='chain')throw Error('trigger apply');
-selector.update(s(false,false,0));v=selector.update(s(true,false,0));if(!v.open)throw Error('X reopen');
-selector.update(s(false,false,0));v=selector.update(s(true,false,0));if(v.event!=='cancel'||v.open||v.mode!=='chain')throw Error('X cancel leaves active mode untouched');
-''')
+
+ def test_no_controller_lab_selector(self):
+  self.assertFalse((ROOT/'frontend/assets/lab-selector.js').exists())
+  self.assertNotIn('FreeLabLabSelector',XR)
+  self.assertIn("agencyEnterLab(mode)",XR)
+  self.assertIn("if(xrExperience==='agency-lab'){renderAgencyLab(t,frame,pose);return;}",XR)
  def test_swept_thrown_frame_single_mascot_impact(self):
   self.node(r'''const fs=require('fs'),vm=require('vm'),w={};vm.runInNewContext(fs.readFileSync('frontend/assets/frame-games.js','utf8'),{window:w});
 const G=w.FreeLabFrameGames;const eng=new G.Engine();eng.setMode('throw');
@@ -31,7 +25,7 @@ for(let time=20;time<400;time+=20){const u=eng.update(frames,time,{mascot:[.32,1
 if(count!==1)throw Error('collision must trigger exactly once: '+count);
 ''')
  def test_xr_wiring_and_procedural_sound(self):
-  for token in ("if(sel.event==='select'||sel.event==='cancel')", "if(e.inputSource.handedness==='left'&&labSelector?.open)return", "mascotHitUntil=t+1000", "launchMascotSparks(event.position,t)", "cue('impact')", "const warm=impact>0"):
+  for token in ("mascotHitUntil=t+1000", "launchMascotSparks(event.position,t)", "cue('impact')", "const warm=impact>0"):
    self.assertIn(token,XR)
   self.assertIn("if(name==='impact')",(ROOT/'frontend/assets/sound.js').read_text())
 

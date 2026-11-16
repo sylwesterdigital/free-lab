@@ -1,4 +1,4 @@
-"""v0.10.56: shape matching, room permissions, provider scopes, gallery and XR navigation."""
+"""v0.10.57: shape matching, room permissions, provider scopes, gallery and XR navigation."""
 import os,sys,tempfile,sqlite3,subprocess,unittest
 from pathlib import Path
 from backend import db,aholo3d
@@ -28,13 +28,13 @@ class Experiments111(unittest.TestCase):
   D.update({...spread,time:450});const place=D.update({...spread,time:790});
   if(place.event!=='place'||place.placed.shape!=='triangle'||place.placed.corners.length!==3)throw Error('triangle release');
   ''')
- def test_selection_includes_sort_mode(self):
-  node('''const fs=require('fs'),vm=require('vm'),w={};vm.runInNewContext(fs.readFileSync('frontend/assets/lab-selector.js','utf8'),{window:w});
-  const s=new w.FreeLabLabSelector.Selector();if(w.FreeLabLabSelector.MODES.length!==8||w.FreeLabLabSelector.MODES[1]!=='sort')throw Error('missing sort');
-  const inp=(x,tr,axis)=>[{handedness:'left',gamepad:{mapping:'xr-standard',buttons:[{pressed:tr},{},{},{},{pressed:x}],axes:[0,0,axis,0]}}];
-  s.update(inp(true,false,0));s.update(inp(false,false,0));s.update(inp(false,false,1));const sel=s.update(inp(false,true,0));
-  if(sel.mode!=='sort'||sel.open)throw Error('sort selection');
-  ''')
+
+ def test_sort_mode_exists_in_agency_only(self):
+  js=(ROOT/'frontend/assets/xr.js').read_text()
+  self.assertIn("['agency-exp:sort'",js)
+  self.assertIn("'sort'",js)
+  self.assertIn("agencyEnterLab(mode)",js)
+  self.assertNotIn('FreeLabLabSelector',js)
  def test_xr_wires_shape_bins_and_cinema(self):
   js=(ROOT/'frontend/assets/xr.js').read_text()
   for needle in ('placeShapeTargets','drawShapeTargets(vp,t,pose)','targetHit(df,shapeTargets)','case \'cinemaprev\'','case \'cinemanext\'','FreeLabRooms.publish','room','triangleLab.update'):

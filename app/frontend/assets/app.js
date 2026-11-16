@@ -369,8 +369,8 @@ async function init(){
  const supportsAR=async()=>{try{return Boolean(navigator.xr&&await navigator.xr.isSessionSupported('immersive-ar'));}catch{return false;}};
  const portalTitle=document.querySelector('.stage-portal>div>strong'),portalMode=document.querySelector('#enterXR .xr-letter strong'),portalHint=document.querySelector('.stage-portal>div>span');
  const updateEntry=async()=>{const canXR=await supportsAR();if(portalMode)portalMode.textContent=canXR?'XR':'3D';if(portalTitle)portalTitle.textContent=canXR?'ENTER SPATIAL REALITY':'ENTER 3D PREVIEW';if(portalHint)portalHint.textContent=canXR?'QUEST · IMMERSIVE AR':'BROWSER · THREE.JS · ORBIT / EXPLORE';$('depthXR').classList.toggle('hidden',!canXR);};void updateEntry();
- $('enterXR').onclick=async()=>{window.FreeLabSound?.unlock();window.FreeLabSound?.play('enter');if(!state.user)return notify('Sign in before entering 3D');if(navigator.xr)window.FreeLabXR.start().catch(e=>notify('XR entry: '+e.message));else window.FreeLabRooms.previewLocal().catch(e=>notify('3D preview: '+e.message));};
- $('depthXR')?.addEventListener('click',()=>{if(!state.user)return notify('Sign in before entering XR');window.FreeLabXR.start({requireDepth:true}).catch(e=>notify('XR depth: '+e.message));});
+ $('enterXR').onclick=async()=>{window.FreeLabSound?.unlock();window.FreeLabSound?.play('enter');if(!state.user)return notify('Sign in before entering 3D');if(navigator.xr)window.FreeLabRooms?.chooseXR?.();else window.FreeLabRooms.previewLocal().catch(e=>notify('3D preview: '+e.message));};
+ $('depthXR')?.addEventListener('click',()=>{if(!state.user)return notify('Sign in before entering XR');if(navigator.xr)window.FreeLabRooms?.chooseXR?.(true);else window.FreeLabRooms.previewLocal().catch(e=>notify('3D preview: '+e.message));});
  document.querySelectorAll('[data-media]').forEach(button=>button.onclick=()=>{state.mediaFilter=button.dataset.media;renderObjects();});$('collectionSearch').addEventListener('input',renderObjects);$('galleryComposer').onsubmit=galleryComposerSubmit;document.querySelectorAll('[data-gallery-action]').forEach(b=>b.onclick=()=>void galleryAI(b.dataset.galleryAction));$('toggleLibrary').onclick=()=>setLibrary($('workspace').classList.contains('hidden'));$('refresh3DJobs').onclick=refresh3DJobs;
  $('closeLibrary').onclick=()=>setLibrary(false);$('galleryClose').onclick=()=>$('desktopGallery').classList.add('hidden');$('galleryPrev').onclick=()=>browseGallery(-1);$('galleryNext').onclick=()=>browseGallery(1);let swipeX=null;$('galleryImage').addEventListener('touchstart',e=>{swipeX=e.changedTouches[0].clientX;},{passive:true});$('galleryImage').addEventListener('touchend',e=>{if(swipeX!==null&&Math.abs(e.changedTouches[0].clientX-swipeX)>35)browseGallery(e.changedTouches[0].clientX<swipeX?1:-1);swipeX=null;},{passive:true});document.addEventListener('keydown',e=>{if($('desktopGallery').classList.contains('hidden'))return;if(e.key==='Escape')$('galleryClose').click();else if(e.key==='ArrowLeft')browseGallery(-1);else if(e.key==='ArrowRight')browseGallery(1);});
  document.querySelectorAll('.model-option').forEach(btn=>btn.onclick=()=>{$('modelChoice').value=btn.dataset.model;document.querySelectorAll('.model-option').forEach(b=>b.classList.toggle('selected',b===btn));});
@@ -645,7 +645,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.56');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.57');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{

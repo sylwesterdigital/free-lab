@@ -1,4 +1,4 @@
-"""v0.10.56 checks: private bounded avatar workflow and no-camera text generation.
+"""v0.10.57 checks: private bounded avatar workflow and no-camera text generation.
 No paid services, live headset, or server Blender required.
 """
 import base64,io,json,struct,tempfile,time,unittest
@@ -90,7 +90,7 @@ class VoiceText125(unittest.TestCase):
   self.assertIn("if(evt.key==='Enter'&&!evt.isComposing)",XR)
   self.assertIn('void applyPrompt();',XR)
   self.assertIn("voicePhase==='listening'?'LISTENING",XR)
-  self.assertIn('const w=1024,h=Math.max(96,18+lines.length*76)',XR)
+  self.assertIn('const w=960,h=Math.max(86,14+lines.length*58)',XR)
   self.assertIn('[[darkPrevious,-.245],[darkNext,0],[darkClose,.245]]',XR)
   self.assertIn('w=.377*factor,hh=.081*factor',XR)
 
