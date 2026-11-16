@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.60",
-  "description": "Agency XR improvements with watcher-compatible release packaging and seamless watcher reload"
+  "version": "0.10.61",
+  "description": "Reliable XR video explainers: visible missing-media status, retry, and HLS/MP4 playback readiness"
 }

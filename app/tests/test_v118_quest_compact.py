@@ -1,4 +1,4 @@
-"""Regression guards for v0.10.60. No network, headset, camera, or paid API calls."""
+"""Regression guards for v0.10.61. No network, headset, camera, or paid API calls."""
 import json
 import re
 import unittest
@@ -87,13 +87,13 @@ class QuestCompact118(unittest.TestCase):
 
  def test_release_versions(self):
   for name in ('version.json','frontend/version.json','changelog.json','frontend/changelog.json'):
-   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.60')
-  self.assertIn('room-viewer.mjs?v=0.10.60',ROOMS)
-  self.assertIn('xr.js?v=0.10.60',HTML)
+   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.61')
+  self.assertIn('room-viewer.mjs?v=0.10.61',ROOMS)
+  self.assertIn('xr.js?v=0.10.61',HTML)
 
 
 
-"""v0.10.60 Agency XR regression checks: independent labs, text aspect, focus and reachable play."""
+"""v0.10.61 Agency XR regression checks: independent labs, text aspect, focus and reachable play."""
 import unittest
 from pathlib import Path
 XR=(Path(__file__).resolve().parents[1]/'frontend/assets/xr.js').read_text()
@@ -175,6 +175,45 @@ vm.runInNewContext(fs.readFileSync('frontend/assets/agency-video.js','utf8'),{wi
  if(a.visited('shapes',42))throw Error('Explainer should be unseen at first login');
  a.remember('shapes',42);if(!a.visited('shapes',42)||a.visited('shapes',43))throw Error('Per-user explainer memory broken');
 })().catch(e=>{console.error(e);process.exit(1)});''')
+ def test_explainer_opens_before_network_and_missing_video_is_visible(self):
+  # Execute the actual XR explainer state machine with an isolated mocked media
+  # catalog. A missing playlist must not turn HOW TO PLAY into a silent no-op.
+  self.run_node(r'''const fs=require('fs'),vm=require('vm');
+const source=fs.readFileSync('frontend/assets/xr.js','utf8');
+const code=source.slice(source.indexOf('function agencyVideoUser(){'),source.indexOf('function agencyProfileCard(){'));
+let checks=0,launches=0,paints=0;
+const media={visited:()=>false,stop:()=>{},remember:()=>{},urls:()=>({hls:'/videos/shape_garden/video_hls/index.m3u8'}),
+ sources:async()=>{checks++;return {hls:null,mp4:null};}};
+const ctx={window:{FreeLabAgencyMedia:media},session:{},xrExperience:'agency',agencyScreen:'play',
+ agencyExplainer:null,agencyExplainerToken:0,agencyVideoFrameAt:0,agencyLock:()=>{},
+ agencyBuild:()=>{paints++;},console,Date,performance:{now:()=>10}};
+vm.createContext(ctx);vm.runInContext(code,ctx);
+ctx.agencyBuildVideoCards=()=>{paints++;};
+(async()=>{
+ ctx.agencyShowExplainer('shapes');
+ if(paints!==1||ctx.agencyScreen!=='explainer')throw Error('Missing immediate XR response to HOW TO PLAY');
+ await new Promise(resolve=>setImmediate(resolve));
+ if(ctx.agencyExplainer?.state!=='missing'||paints!==2)throw Error('Missing video not surfaced in XR panel');
+ if(ctx.agencyExplainer?.failed)throw Error('No video should be a missing state, not playback failure');
+ // The first visit may skip optional media rather than trap a new player.
+ ctx.agencyShowExplainer('shapes',()=>launches++);
+ await new Promise(resolve=>setImmediate(resolve));
+ if(launches!==1||checks!==2)throw Error('Missing explainer blocked first-time game entry');
+ media.sources=async()=>({hls:'/videos/shape_garden/video_hls/index.m3u8',mp4:null});
+ media.play=async(_activity,_available)=>({ready:true,video:{}});
+ ctx.agencyShowExplainer('shapes');
+ await new Promise(resolve=>setImmediate(resolve));
+ if(ctx.agencyExplainer?.state!=='playing')throw Error('Published video did not reach ready state');
+})().catch(e=>{console.error(e);process.exitCode=1});''')
+ def test_explainer_status_and_manual_retry_are_operable(self):
+  self.assertIn("if(agencyScreen==='explainer'){agencyBuildVideoCards();return;}",XR)
+  self.assertIn("state==='missing'?'VIDEO NOT PUBLISHED'",XR)
+  self.assertIn('Publish your HLS or MP4, then tap RETRY VIDEO',XR)
+  self.assertIn('./watch-free-lab.sh --sync-videos',XR)
+  self.assertIn('agencyLoadExplainerMedia(++agencyExplainerToken)',XR)
+  self.assertIn('returnScreen=launch?null:agencyScreen',XR)
+  self.assertIn("if(launch&&media?.visited(activity,agencyVideoUser()))",XR)
+  self.assertIn("if(entry.launch){agencyExplainer=null;agencyExplainerToken++;entry.launch();return;}",XR)
  def test_cube_preview_consistent_colour(self):
   self.run_node(r'''const fs=require('fs'),vm=require('vm'),w={};
 vm.runInNewContext(fs.readFileSync('frontend/assets/frame-games.js','utf8'),{window:w});
@@ -187,7 +226,7 @@ for(let i=0;i<14;i++){
 }
 ''')
  def test_video_overlay_navigation_and_hover(self):
-  self.assertIn('agency-video.js?v=0.10.60',PAGE)
+  self.assertIn('agency-video.js?v=0.10.61',PAGE)
   self.assertIn('agencyShowExplainer(agencyGame,agencyStartGame)',XR)
   for token in ('agencyVideoDismiss()',"'agency-video-screen'","'agency-video-play'","'agency-video-skip'", "'agency-howto'", 'agencyControlsReact(frame,t)',"agencyScreen='explainer'", 'agencySession.startedAt+=Date.now()-e.shownAt'):
    self.assertIn(token,XR)

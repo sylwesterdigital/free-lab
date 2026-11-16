@@ -25,23 +25,36 @@ async function hlsEngine(){if(window.Hls?.isSupported?.())return window.Hls;
 function stop(){if(!active)return;const s=active;active=null;try{s.hls?.destroy();}catch{}try{s.video.pause();s.video.removeAttribute('src');s.video.load();}catch{}s.video.remove();}
 async function play(activity,available,{onEnd=()=>{},onError=()=>{}}={}){
  stop();const video=document.createElement('video');video.setAttribute('playsinline','');video.setAttribute('webkit-playsinline','');video.playsInline=true;video.preload='auto';video.crossOrigin='anonymous';video.loop=false;video.controls=false;
- // A video playing in the browser's DOM is decoded by Quest's normal media pipeline.
- Object.assign(video.style,{position:'fixed',width:'1px',height:'1px',opacity:'0',pointerEvents:'none',left:'-100px',top:'-100px'});document.body.append(video);
- const state={video,hls:null,activity,ready:false,lastTime:-1,onEnd,onError};active=state;
+ // Only one decoder exists at a time. Quest renders these decoded frames into
+ // WebGL; the underlying media element must not capture controller input.
+ Object.assign(video.style,{position:'fixed',width:'2px',height:'2px',opacity:'0.001',pointerEvents:'none',left:'0',top:'0'});document.body.append(video);
+ const state={video,hls:null,activity,ready:false,waitingForTap:false,onEnd,onError,usedMp4:false};active=state;
  video.onended=()=>{if(active===state)onEnd();};
- video.onerror=()=>{if(active===state)onError('Video could not be decoded');};
+ const useMp4=()=>{if(!available.mp4||state.usedMp4)return false;
+  state.usedMp4=true;state.hls?.destroy();state.hls=null;video.src=available.mp4;video.load();return true;};
+ video.onerror=()=>{if(active!==state)return;
+  if(useMp4()){video.play().catch(e=>{if(active===state){state.waitingForTap=true;onError('MP4 playback needs a tap: '+e.message);}});}
+  else onError('Video could not be decoded');};
  try{
   if(available.hls&&video.canPlayType('application/vnd.apple.mpegurl'))video.src=available.hls;
   else if(available.hls){try{const Hls=await hlsEngine();if(active!==state)return null;
-    state.hls=new Hls({enableWorker:true,maxBufferLength:20,maxMaxBufferLength:36});state.hls.loadSource(available.hls);state.hls.attachMedia(video);
-    state.hls.on(Hls.Events.ERROR,(_event,error)=>{if(error.fatal&&active===state){if(available.mp4){state.hls?.destroy();state.hls=null;video.src=available.mp4;video.play().catch(()=>{});}else onError('HLS playback unavailable');}});
-   }catch(e){if(!available.mp4)throw e;video.src=available.mp4;}
-  }else if(available.mp4)video.src=available.mp4;
+    // Wait for the manifest before requesting playback. Calling play() while
+    // HLS.js has not attached a MediaSource can fail with NotSupportedError.
+    await new Promise((resolve,reject)=>{
+     const hls=new Hls({enableWorker:true,maxBufferLength:20,maxMaxBufferLength:36});state.hls=hls;
+     hls.on(Hls.Events.MANIFEST_PARSED,()=>resolve());
+     hls.on(Hls.Events.ERROR,(_event,error)=>{
+      if(!error.fatal||active!==state)return;
+      if(useMp4())resolve();else reject(Error('HLS playback unavailable: '+(error.details||error.type||'decoder error')));
+     });
+     hls.loadSource(available.hls);hls.attachMedia(video);
+    });
+   }catch(e){if(!useMp4())throw e;}
+  }else if(available.mp4){state.usedMp4=true;video.src=available.mp4;}
   else throw Error('No explainer media uploaded');
-  // play() is initiated from the user's activity selection; a pause/permission
-  // error shows an explicit PLAY action, not a permanently blank surface.
-  try{await video.play();if(active===state)state.ready=true;}catch(e){
-   if(e.name==='NotAllowedError'&&active===state){state.waitingForTap=true;return state;}
+  if(active!==state)return null;
+  try{await video.play();if(active===state){state.ready=true;state.waitingForTap=false;}}catch(e){
+   if(active===state&&e.name==='NotAllowedError'){state.waitingForTap=true;return state;}
    throw e;}
  }catch(e){if(active===state)onError(e.message||'Video unavailable');}
  return state;

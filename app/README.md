@@ -1,3 +1,16 @@
+## v0.10.61 — Responsive XR HOW TO PLAY
+
+The explainer panel now opens on selection, even if media is not yet published.
+If the HLS playlist or MP4 is missing, it shows **VIDEO NOT PUBLISHED** and
+a **RETRY VIDEO** control. Games remain available without a video. Video files
+are independent of the application ZIP: place them in the repo at
+`videos/<activity>/video_hls/index.m3u8` (or `videos/<activity>/video.mp4`),
+then run `./watch-free-lab.sh --sync-videos`. This command must actually be
+executed on the development machine; deploying the application ZIP alone does
+not upload media. Check publication directly in a browser at
+`https://free-lab.cam/videos/shape_garden/video_hls/index.m3u8` and look for
+`#EXTM3U`. HLS streaming requires a compatible browser or an HLS.js decoder.
+
 # FREELAB — Spatial Agency v0.10.60
 
 Self-hosted Quest 3 WebXR application served at https://free-lab.cam/. Deploy `FREE_LAB_RELEASE_v0.10.60.zip` by placing it in the macOS watcher's `updates/` directory. Watcher v0.9.5 is bundled with this complete release; the existing installed watcher validates it before deployment.

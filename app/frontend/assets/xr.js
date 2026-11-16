@@ -1914,41 +1914,65 @@ function beginAgencyTransition(destination,label,sub='',launchMode=null){
 function agencyVideoUser(){return window.FreeLab?.getState?.()?.user?.id||'guest';}
 function agencyVideoDismiss(){
  const e=agencyExplainer;if(!e)return;
+ const media=window.FreeLabAgencyMedia,played=media?.current?.video?.currentTime>0.5;
  agencyExplainer=null;agencyExplainerToken++;
- window.FreeLabAgencyMedia?.stop?.();window.FreeLabAgencyMedia?.remember?.(e.activity,agencyVideoUser());
+ if(played&&e.available&&!e.failed)media?.remember?.(e.activity,agencyVideoUser());
+ media?.stop?.();
  if(e.returnScreen){
   if(agencySession&&e.returnScreen==='play')agencySession.startedAt+=Date.now()-e.shownAt;
   agencyScreen=e.returnScreen;
   if(xrExperience==='agency-lab')agencyBuildLabCards();else agencyBuild();
  }else if(typeof e.launch==='function')e.launch();
- agencyLock(800);
+ agencyLock(400);
+}
+function agencyVideoFailure(message){
+ if(!agencyExplainer)return;
+ agencyExplainer.state='error';agencyExplainer.failed=String(message||'Video playback failed').slice(0,180);
+ window.FreeLab?.traceEvent?.('AGENCY VIDEO · '+agencyExplainer.activity+' · '+agencyExplainer.failed,'warn');
+ agencyVideoFrameAt=0;
+}
+function agencyLoadExplainerMedia(token){
+ const entry=agencyExplainer,media=window.FreeLabAgencyMedia;if(!entry||!media)return;
+ void media.sources(entry.activity).then(available=>{
+  if(token!==agencyExplainerToken||!session||entry!==agencyExplainer)return;
+  if(!available.hls&&!available.mp4){
+   window.FreeLab?.traceEvent?.('AGENCY VIDEO · no media published: '+media.urls(entry.activity).hls,'warn');
+   if(entry.launch){agencyExplainer=null;agencyExplainerToken++;entry.launch();return;}
+   entry.state='missing';entry.failed='';agencyVideoFrameAt=0;agencyBuildVideoCards();return;
+  }
+  entry.available=available;entry.state='loading';entry.failed='';agencyVideoFrameAt=0;agencyBuildVideoCards();
+  void media.play(entry.activity,available,{onEnd:agencyVideoDismiss,onError:agencyVideoFailure}).then(state=>{
+   if(entry!==agencyExplainer||token!==agencyExplainerToken)return;
+   if(state?.waitingForTap)entry.state='tap';else if(state?.ready)entry.state='playing';
+  }).catch(error=>{if(entry===agencyExplainer)agencyVideoFailure(error?.message||'Video playback unavailable');});
+ }).catch(error=>{
+  if(token!==agencyExplainerToken||entry!==agencyExplainer)return;
+  agencyVideoFailure('Unable to check media: '+(error?.message||'unknown error'));
+  if(entry.launch){agencyExplainer=null;agencyExplainerToken++;entry.launch();}
+ });
 }
 function agencyShowExplainer(activity,launch=null){
- const media=window.FreeLabAgencyMedia,token=++agencyExplainerToken,returnScreen=launch?null:agencyScreen;
- if(!media){launch?.();return;}
- // Videos are optional external static assets. Missing files never block gameplay.
- if(launch&&media.visited(activity,agencyVideoUser())){launch();return;}
- agencyLock(650);
- void media.sources(activity).then(available=>{
-  if(token!==agencyExplainerToken||!session)return;
-  if(!available.hls&&!available.mp4){if(launch)launch();else setStatus('Explainer video not uploaded for this activity',3800);return;}
-  agencyExplainer={activity,available,launch,returnScreen,shownAt:Date.now(),failed:''};
-  agencyScreen='explainer';agencyVideoFrameAt=0;
-  if(xrExperience==='agency-lab')agencyBuildVideoCards();else agencyBuild();
-  agencyLock(650);
-  void media.play(activity,available,{onEnd:agencyVideoDismiss,onError:message=>{
-    if(agencyExplainer?.activity===activity){agencyExplainer.failed=message;setStatus('Explainer: '+message+' · choose PLAY or START',4500);}
-  }});
- }).catch(error=>{if(token===agencyExplainerToken){setStatus('Explainer unavailable · '+error.message,3500);launch?.();}});
+ const media=window.FreeLabAgencyMedia,returnScreen=launch?null:agencyScreen;
+ if(launch&&media?.visited(activity,agencyVideoUser())){launch();return;}
+ const token=++agencyExplainerToken;
+ agencyExplainer={activity,available:null,launch,returnScreen,shownAt:Date.now(),state:'checking',failed:''};
+ agencyScreen='explainer';agencyVideoFrameAt=0;
+ // Render before asynchronous existence checks, even when the media is absent.
+ // This guarantees an observable response to the HOW TO PLAY control.
+ if(xrExperience==='agency-lab')agencyBuildVideoCards();else agencyBuild();
+ agencyLock(350);
+ if(!media){agencyVideoFailure('Explainer player is not loaded');if(launch){agencyExplainer=null;launch();}return;}
+ agencyLoadExplainerMedia(token);
 }
 function agencyBuildVideoCards(){
  agencyClearCards();agencySceneEntered=performance.now();
  const a=agencyExplainer;if(!a)return;
  const label=(a.activity in (window.FreeLabAgency?.GAMES||{})?window.FreeLabAgency.GAMES[a.activity]?.name:agencyExperimentalOptions().find(x=>x[0]===a.activity)?.[1])||'AGENCY';
  agencyUiCard('agency-video-title',String(label).toUpperCase(),'',0,.53,.94,.13,{bareText:true,passive:true,accent:'#ffffff',z:-.24});
- agencyUiCard('agency-video-screen','PLAY EXPLAINER','',0,.08,.92,.52,{passive:true,accent:'#ffffff',z:.15});
- agencyNavCard('agency-video-play','PLAY / PAUSE',-.25,-.29,.31,.12,'#8ef4e4',.18);
- agencyNavCard('agency-video-skip',a.returnScreen?'RESUME':'START ACTIVITY',.24,-.29,.34,.12,'#ffdaad',.18);
+ agencyUiCard('agency-video-screen','EXPLAINER','',0,.08,.92,.52,{passive:true,accent:'#ffffff',z:.15});
+ const needsRetry=a.state==='missing'||a.state==='error';
+ agencyNavCard('agency-video-play',needsRetry?'RETRY VIDEO':'PLAY / PAUSE',-.25,-.30,.31,.12,'#8ef4e4',.18);
+ agencyNavCard('agency-video-skip',a.returnScreen?'BACK TO GAME':'START ACTIVITY',.24,-.30,.34,.12,'#ffdaad',.18);
 }
 function agencyVideoFrame(t){
  if(!agencyExplainer||!gl||t-agencyVideoFrameAt<80)return;
@@ -1956,13 +1980,28 @@ function agencyVideoFrame(t){
  if(!card)return;
  agencyVideoFrameAt=t;
  if(!agencyVideoCanvas){agencyVideoCanvas=document.createElement('canvas');agencyVideoCanvas.width=864;agencyVideoCanvas.height=488;agencyVideoContext=agencyVideoCanvas.getContext('2d',{alpha:true});}
- const cv=agencyVideoCanvas,ctx=agencyVideoContext,w=cv.width,h=cv.height;
- ctx.clearRect(0,0,w,h);ctx.save();entrancePath(ctx,14,14,w-28,h-28,65);ctx.clip();ctx.fillStyle='rgba(10,16,20,.82)';ctx.fillRect(0,0,w,h);
- if(video&&video.readyState>=2&&video.videoWidth>0){
+ const cv=agencyVideoCanvas,ctx=agencyVideoContext,w=cv.width,h=cv.height,a=agencyExplainer;
+ ctx.clearRect(0,0,w,h);ctx.save();entrancePath(ctx,14,14,w-28,h-28,65);ctx.clip();ctx.fillStyle='rgba(10,16,20,.92)';ctx.fillRect(0,0,w,h);
+ let hasFrame=false;
+ if(video&&video.readyState>=2&&video.videoWidth>0&&a.state!=='error'){
   const vratio=video.videoWidth/video.videoHeight,slot=(w-46)/(h-46),dw=vratio>slot?w-46:(h-46)*vratio,dh=dw/vratio;
-  try{ctx.drawImage(video,(w-dw)/2,(h-dh)/2,dw,dh);}catch{}
- }else{
-  drawFittedText(ctx,agencyExplainer.failed?'VIDEO UNAVAILABLE':'PLAY EXPLAINER',w/2,h*.51,{maxWidth:w*.85,startSize:52,fill:'#efffff'});
+  try{ctx.drawImage(video,(w-dw)/2,(h-dh)/2,dw,dh);hasFrame=true;}catch(e){agencyVideoFailure('Cannot draw video in XR: '+e.message);}
+ }
+ if(!hasFrame){
+  const state=a.state;
+  const headline=state==='checking'?'CHECKING VIDEO LIBRARY':state==='missing'?'VIDEO NOT PUBLISHED':state==='error'?'PLAYBACK UNAVAILABLE':state==='tap'?'TAP PLAY TO START':'LOADING EXPLAINER';
+  drawFittedText(ctx,headline,w/2,h*.43,{maxWidth:w*.85,startSize:46,fill:state==='error'?'#ffb0b0':'#efffff'});
+  if(state==='missing'){
+   drawFittedText(ctx,'Publish your HLS or MP4, then tap RETRY VIDEO',w/2,h*.59,{maxWidth:w*.85,startSize:26,weight:'550',fill:'#b7d8d2'});
+   drawFittedText(ctx,'./watch-free-lab.sh --sync-videos',w/2,h*.70,{maxWidth:w*.80,startSize:26,weight:'600',fill:'#a5ffe5'});
+  }else if(state==='error'){
+   drawFittedText(ctx,a.failed||'Try MP4 or HLS playback again',w/2,h*.62,{maxWidth:w*.86,startSize:28,weight:'550',fill:'#ffd0d0'});
+  }else if(state==='checking'){
+   drawFittedText(ctx,'The game can still be started immediately',w/2,h*.60,{maxWidth:w*.82,startSize:26,weight:'500',fill:'#b8d5cf'});
+  }
+ }else if(video.paused){
+  ctx.fillStyle='rgba(0,0,0,.45)';ctx.fillRect(0,0,w,h);
+  drawFittedText(ctx,'TAP PLAY / PAUSE',w/2,h*.50,{maxWidth:w*.75,startSize:45,fill:'#ffffff'});
  }
  ctx.restore();ctx.save();entrancePath(ctx,14,14,w-28,h-28,65);ctx.lineWidth=13;ctx.strokeStyle='rgba(255,255,255,.96)';ctx.shadowColor='rgba(255,255,255,.32)';ctx.shadowBlur=19;ctx.stroke();ctx.restore();
  if(video?.duration>0&&Number.isFinite(video.duration)){
@@ -1985,15 +2024,15 @@ function agencyProfileCard(){
   const tex=texture(cv);agencyFreeCards([card]);card.front=card.back=tex;card.resources=[tex];
  };img.onerror=()=>{agencyProfileLoading=false;};img.src='/api/me/avatar?v='+encodeURIComponent(user.id);}
 }
-function agencyBuild(){if(!gl||!agencyRoot||!['entrance','agency'].includes(xrExperience))return;agencyClearCards();agencySceneEntered=performance.now();
+function agencyBuild(){if(!gl||!agencyRoot||!['entrance','agency'].includes(xrExperience))return;
+ if(agencyScreen==='explainer'){agencyBuildVideoCards();return;}
+ agencyClearCards();agencySceneEntered=performance.now();
  const E=window.FreeLabAgency;if(!E)return;
  if(xrExperience==='entrance'){
   agencyEntrancePanel('xr-mystuff','MY STUFF','Capture. Keep. Rediscover.',-.246,'#5BFFE0');
   agencyEntrancePanel('xr-agency','AGENCY','Play. Focus. Feel good.',.246,'#5BFFE0');
  }else if(agencyScreen==='transition'&&agencyTransition){
   agencyAdd('agency-head',agencyTransition.label,agencyTransition.sub||'Opening…',0,.18,1.06,.28,'#faffff',true,-.06);
- }else if(agencyScreen==='explainer'){
-  agencyBuildVideoCards();
  }else if(agencyScreen==='lobby'){
   agencyAdd('agency-head','AGENCY','Play. Focus. Feel good.',0,.67,1.10,.18,'#faffff',true,-.13);
   agencyBoardCard('agency-board',0,-.055,1.66,.94,.012);
@@ -2133,7 +2172,19 @@ function agencyEnter(destination){
  }else{agencyLabMode=null;agencyBuild();}
 }
 function agencyNavigate(id,src=null){if(!id||!['agency','entrance','agency-lab'].includes(xrExperience)||!agencyCanInteract())return;
- if(agencyExplainer){if(id==='agency-video-skip')agencyVideoDismiss();else if(id==='agency-video-play'){const v=window.FreeLabAgencyMedia?.current?.video;if(v){if(v.paused){void v.play().catch(e=>setStatus('Video: '+e.message,4000));}else v.pause();}}return;}
+ if(agencyExplainer){
+  if(id==='agency-video-skip'){agencyVideoDismiss();return;}
+  if(id==='agency-video-play'){
+   const e=agencyExplainer;
+   if(e.state==='missing'||e.state==='error'){
+    window.FreeLabAgencyMedia?.stop?.();e.state='checking';e.failed='';e.available=null;
+    agencyBuildVideoCards();agencyVideoFrameAt=0;agencyLoadExplainerMedia(++agencyExplainerToken);return;
+   }
+   const video=window.FreeLabAgencyMedia?.current?.video;
+   if(video){if(video.paused){void video.play().then(()=>{if(e===agencyExplainer)e.state='playing';}).catch(err=>agencyVideoFailure(err.message));}else{video.pause();e.state='paused';}}
+  }
+  return;
+ }
  if(!id.startsWith('agency-answer:')&&id!=='agency-target')agencyLock(650,{touch:true});
  if(id==='agency-howto'){agencyShowExplainer(xrExperience==='agency-lab'?agencyLabMode:agencyGame);return;}
  if(id==='xr-mystuff'||id==='agency-mystuff'){agencyLaunchMode=null;beginAgencyTransition('stuff','MY STUFF','Capture. Keep. Rediscover.');return;}
