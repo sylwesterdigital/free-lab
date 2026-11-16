@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.62",
-  "description": "Direct GPU decoded-frame video textures in XR, no 12.5 fps cap, complete scene teardown after playback"
+  "version": "0.10.63",
+  "description": "Quest 3D mascot, recorded Agency progress, CSV research export, canonical edit names and responsive collection filters"
 }

@@ -1,6 +1,6 @@
 """SQLite persistence and account isolation: no external DB required."""
 from __future__ import annotations
-import hashlib, hmac, os, secrets, sqlite3, time
+import hashlib, hmac, os, secrets, sqlite3, time, re
 from pathlib import Path
 
 SCHEMA = '''
@@ -103,6 +103,15 @@ CREATE INDEX IF NOT EXISTS room_sessions_room_history ON room_sessions(room_id,l
 CREATE INDEX IF NOT EXISTS room_sessions_open ON room_sessions(room_id,user_id,role,ended_at);
 
 CREATE TABLE IF NOT EXISTS auth_attempts (fingerprint TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')));
+CREATE TABLE IF NOT EXISTS agency_sessions (
+ id TEXT PRIMARY KEY, owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ activity TEXT NOT NULL, mode TEXT NOT NULL, level INTEGER NOT NULL DEFAULT 0,
+ started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ duration_ms INTEGER NOT NULL DEFAULT 0,
+ correct INTEGER NOT NULL DEFAULT 0, errors INTEGER NOT NULL DEFAULT 0, points INTEGER NOT NULL DEFAULT 0,
+ finished INTEGER NOT NULL DEFAULT 0 CHECK(finished IN (0,1))
+);
+CREATE INDEX IF NOT EXISTS agency_sessions_owner_date ON agency_sessions(owner_id,started_at);
 CREATE INDEX IF NOT EXISTS auth_attempts_recent ON auth_attempts(fingerprint,created_at);
 '''
 
@@ -162,6 +171,17 @@ def init(path):
         )''')
         # Efficient arbitrary-depth tree lookup; every node keeps its stable parent ID.
         con.execute('CREATE INDEX IF NOT EXISTS objects_capture_parent ON objects(owner_id,capture_id,parent_object_id,id)')
+
+def canonical_edit_label(label, previous_edits=0):
+    """Stable semantic image name; never concatenate a new Edited prefix."""
+    label=str(label or 'Image').strip()
+    count=0
+    while True:
+        match=re.match(r'^Edited(?:\s*\((\d+)\))?\s+',label,flags=re.I)
+        if not match:break
+        count+=min(9999,int(match.group(1))) if match.group(1) else 1
+        label=label[match.end():].strip()
+    return f'Edited ({max(1, previous_edits, count)}) {label or "Image"}'
 
 def record_room_session(con, room_id, user_id, role, active, now=None):
     '''Count genuine room visits, not every polling/heartbeat request.

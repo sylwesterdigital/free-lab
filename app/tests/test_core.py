@@ -49,3 +49,49 @@ class ApiTests(unittest.TestCase):
   self.assertEqual(self.client.post('/api/objects',json={'label':'item'}).status_code,403)
 
 if __name__=='__main__':unittest.main()
+
+class ActivityHistoryTests(unittest.TestCase):
+ def setUp(self):
+  self.temp=tempfile.TemporaryDirectory();self.path=Path(self.temp.name)/'activity.sqlite3';db.init(self.path)
+ def tearDown(self):self.temp.cleanup()
+ def test_schema_preserves_ownership_and_indexes(self):
+  with db.connect(self.path) as c:
+   with c:
+    u=db.create_user(c,'metrics_user','averysecurepassword123')
+    c.execute('INSERT INTO agency_sessions(id,owner_id,activity,mode,level,duration_ms,correct,errors) VALUES(?,?,?,?,?,?,?,?)',('a'*32,u,'math','free',2,123000,7,2))
+   row=c.execute('SELECT duration_ms,correct,errors FROM agency_sessions WHERE owner_id=?',(u,)).fetchone()
+   self.assertEqual((row['duration_ms'],row['correct'],row['errors']),(123000,7,2))
+   indexes={r['name'] for r in c.execute('PRAGMA index_list(agency_sessions)')}
+   self.assertIn('agency_sessions_owner_date',indexes)
+ def test_canonical_edited_name(self):
+  self.assertEqual(db.canonical_edit_label('Edited Edited Edited house'),'Edited (3) house')
+  self.assertEqual(db.canonical_edit_label('Edited (6) Edited house',7),'Edited (7) house')
+  self.assertEqual(db.canonical_edit_label('house',4),'Edited (4) house')
+  self.assertEqual(db.canonical_edit_label('Edited (3) house',1),'Edited (3) house')
+ def test_nondestructive_schema_reinitialization(self):
+  with db.connect(self.path) as c:
+   with c:
+    u=db.create_user(c,'userhistory','anotherstrongpassword123')
+    c.execute('INSERT INTO agency_sessions(id,owner_id,activity,mode,level) VALUES(?,?,?,?,?)',('c'*32,u,'cubes','free',0))
+  db.init(self.path)
+  with db.connect(self.path) as c:self.assertEqual(c.execute('SELECT COUNT(*) FROM agency_sessions').fetchone()[0],1)
+
+class ProductProgressGuards(unittest.TestCase):
+ def test_progress_metadata_and_xr_entry_are_present(self):
+  root=Path(__file__).parents[1]
+  html=(root/'frontend/index.html').read_text();xr=(root/'frontend/assets/xr.js').read_text()
+  app=(root/'frontend/assets/app.js').read_text();scene=(root/'frontend/assets/scene.mjs').read_text()
+  for selector in ('progressDashboard','progressPeriod','progressMetric','collectionTags','collectionFrom','collectionTo'):
+   self.assertIn(f'id="{selector}"',html)
+  for action in ('agencyTelemetryStart(', 'agencyTelemetryStop(',"'agency-progress'",'xrGalleryFilterPanel()'):
+   self.assertIn(action,xr)
+  self.assertIn("api('/agency/dashboard?days='",app)
+  self.assertIn('collectionDateOkay(',app)
+  self.assertIn("if(canvas&&stage){",scene)
+  self.assertNotIn('if(canvas&&stage&&!/OculusBrowser',scene)
+ def test_api_routes_are_private_and_opt_out_of_ai(self):
+  source=(Path(__file__).parents[1]/'backend/app.py').read_text()
+  for endpoint in ('/api/agency/sessions','/api/agency/dashboard','/api/agency/export.csv'):
+   self.assertIn(endpoint,source)
+  self.assertIn('scores\':\'self-reported by the client',source)
+  self.assertIn('private to the signed-in profile',source)

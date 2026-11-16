@@ -1,19 +1,35 @@
 {
-  "version": "0.10.62",
-  "title": "FREELAB v0.10.62 — Smooth XR video texture playback and clean dismissal",
+  "version": "0.10.63",
+  "title": "FREELAB v0.10.63 — Activity research and personal collection",
   "datetime": "2026-11-16",
   "changes": [
-    "Replace 12.5 fps Canvas compositing with direct HTMLVideoElement-to-WebGL texture transfers.",
-    "Update reusable GPU textures only on new decoded video frames, using browser frame callbacks and playback quality fallback.",
-    "Draw player border, error/status information and progress separately, without re-compositing the video per frame.",
-    "Clip video pixels to a rounded player surface in the GPU shader.",
-    "Remove all player geometry immediately on playback completion, exit or retry, and delete retained GPU textures.",
-    "Prevent invisible or fading Agency cards from writing into the depth buffer and masking game text.",
-    "Cancel decoded-frame callbacks on player shutdown; release cards on XR session exit.",
-    "Add automated GPU frame pacing, media callback cleanup and player teardown regression coverage.",
-    "Keep video assets outside release ZIP at /videos/<activity>/video_hls/index.m3u8, retaining the watcher-compatible 100-entry archive."
+    "Enable the same Three.js landing mascot on Quest Browser and desktop, scaling rendering pixel density for Quest.",
+    "Store account-scoped Agency sessions in SQLite with elapsed play time, modes, scores, errors and point totals; record ongoing and completed sessions.",
+    "Provide a responsive longitudinal Play & Progress dashboard with selectable metric and 7/30/90/365-day or all-time windows.",
+    "Add per-activity comparisons, daily time series, free-play totals, correct/error counts, research CSV export and methodology disclosure.",
+    "Keep data private to the authenticated profile; no automatic AI analysis, model call or cognitive diagnosis.",
+    "Name successive image edits Edited (N) original name rather than stacking Edited prefixes; normalize existing names non-destructively for display.",
+    "Provide occurrence-counted object-name chips plus native date-calendar filtering on desktop and mobile.",
+    "Add XR Collection name and date filters and a compact XR progress board inside Agency.",
+    "Keep bundled watcher and complete application architecture; preserve persistent HLS video files outside the release."
   ],
   "history": [
+    {
+      "version": "0.10.62",
+      "title": "FREELAB v0.10.62 — Smooth XR video texture playback and clean dismissal",
+      "datetime": "2026-11-16",
+      "changes": [
+        "Replace 12.5 fps Canvas compositing with direct HTMLVideoElement-to-WebGL texture transfers.",
+        "Update reusable GPU textures only on new decoded video frames, using browser frame callbacks and playback quality fallback.",
+        "Draw player border, error/status information and progress separately, without re-compositing the video per frame.",
+        "Clip video pixels to a rounded player surface in the GPU shader.",
+        "Remove all player geometry immediately on playback completion, exit or retry, and delete retained GPU textures.",
+        "Prevent invisible or fading Agency cards from writing into the depth buffer and masking game text.",
+        "Cancel decoded-frame callbacks on player shutdown; release cards on XR session exit.",
+        "Add automated GPU frame pacing, media callback cleanup and player teardown regression coverage.",
+        "Keep video assets outside release ZIP at /videos/<activity>/video_hls/index.m3u8, retaining the watcher-compatible 100-entry archive."
+      ]
+    },
     {
       "version": "0.10.61",
       "title": "FREELAB v0.10.61 — Reliable HOW TO PLAY explainers",

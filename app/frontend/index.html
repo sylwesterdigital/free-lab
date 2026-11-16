@@ -1,17 +1,18 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.62">
+<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.63">
 <title>FREELAB — Cognitive Agency · My Stuff &amp; Agency</title>
 <meta name="description" content="FREELAB Cognitive Agency — privately organise your world and explore gentle spatial games with hands, controllers or desktop.">
-<link rel="stylesheet" href="/assets/style.css?v=0.10.62">
+<link rel="stylesheet" href="/assets/style.css?v=0.10.63">
 </head><body>
 <div id="app" class="app-shell">
 <header class="header" aria-label="Site navigation">
-  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.62</span></a>
+  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.63</span></a>
   <nav class="header-right" aria-label="Workspace">
     <span class="live-pill"><span class="server-dot" id="connectionDot"></span><span id="healthStatus">Connecting</span></span>
     <button id="roomButton" class="nav-pill" type="button">Rooms</button>
+    <button id="openProgress" class="nav-pill" type="button" aria-controls="progressDashboard" aria-expanded="false">Progress</button>
     <button id="toggleLibrary" class="nav-pill" aria-expanded="false" aria-controls="workspace">Collection <span id="objectCount">0</span></button>
     <button class="nav-avatar" id="profileButton" title="Profile and model providers" aria-label="Account and model settings"><span id="profileInitials">ME</span><img id="profileAvatar" class="hidden" alt=""></button>
   </nav>
@@ -40,9 +41,21 @@
   <section id="workspace" class="workspace workspace-drawer hidden" aria-label="Private inventory">
     <div class="workspace-head"><div><p class="eyebrow">YOUR PERSONAL ARCHIVE</p><h2>Found in your world <span id="objectCounter" class="muted-count">00</span></h2></div><div class="workspace-actions"><div class="tabs"><button class="tab active" data-list="mine">Private</button><button class="tab" data-list="public">Public</button><button class="tab" data-list="bin">Bin</button></div><button id="closeLibrary" class="round-btn" aria-label="Close collection">×</button></div></div>
     <div class="archive-filter"><label for="collectionSearch" class="visually-hidden">Filter collection</label><input id="collectionSearch" type="search" placeholder="Search objects, date, description…" autocomplete="off" aria-label="Filter collection by name, date or description"><span id="collectionMatchCount" aria-live="polite"></span></div>
+    <section class="collection-facets" aria-label="Filter collection by object name and creation date">
+      <div class="facet-date-row"><label>From <input type="date" id="collectionFrom" aria-label="Created on or after"></label><label>To <input type="date" id="collectionTo" aria-label="Created on or before"></label><button type="button" id="collectionClear" class="facet-clear">Clear filters</button></div>
+      <div id="collectionTags" class="facet-tags" role="group" aria-label="Object names with occurrence counts"></div>
+    </section>
     <nav id="archiveMediaNav" class="archive-media-nav" aria-label="Collection media types"><button type="button" class="media-filter active" data-media="all" aria-pressed="true">ALL MEDIA</button><button type="button" class="media-filter" data-media="images" aria-pressed="false">IMAGES</button><button type="button" class="media-filter" data-media="3d" aria-pressed="false">3D MODELS</button><span id="archiveMediaContext" class="small-muted">Images and generated models, grouped by their sources</span><button id="refresh3DJobs" class="tiny-btn" type="button" title="Refresh model statuses">Refresh 3D</button></nav>
     <div id="modelJobs" class="hidden" aria-hidden="true"></div>
     <div id="items" class="item-grid"><div class="empty-state"><strong>Nothing collected yet</strong><p>Every object has a story. Start yours with a snapshot.</p></div></div>
+  </section>
+  <section id="progressDashboard" class="progress-dashboard hidden" aria-label="Agency play progress" aria-labelledby="progressHeading">
+    <header class="progress-heading"><div><p class="eyebrow">YOUR PERSONAL ACTIVITY</p><h2 id="progressHeading">Play &amp; progress</h2><p class="small-muted">Measured game sessions and exploratory trends, not a clinical or cognitive assessment.</p></div><button type="button" id="closeProgress" class="round-btn" aria-label="Close progress">×</button></header>
+    <div class="progress-actions"><label for="progressPeriod">Period <select id="progressPeriod"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option><option value="365">12 months</option><option value="all">All time</option></select></label><a id="progressExport" href="/api/agency/export.csv?days=30" download="freelab-activity.csv" class="progress-export">Export research CSV</a></div>
+    <div id="progressKpis" class="progress-kpis" aria-live="polite"></div>
+    <div class="progress-charts"><section><div class="progress-chart-head"><h3>Over time</h3><label for="progressMetric">Measure <select id="progressMetric"><option value="duration_ms">Play minutes</option><option value="correct">Correct answers</option><option value="sessions">Sessions</option><option value="points">Game points</option></select></label></div><div id="progressBars" class="progress-bars" role="img" aria-label="Daily play time"></div></section><section><h3>Activities</h3><div id="progressActivities" class="progress-activities"></div></section></div>
+    <div id="progressInsight" class="progress-insight" aria-live="polite"></div>
+    <p class="progress-disclosure">Times are elapsed within recorded XR activities; inactive moments may be included. Scores and mistakes are reported by the game client. No diagnosis, population norm, or improvement claim is inferred. Data are private to your profile. AI interpretation is not enabled or sent to Meta; that would require separate, explicit consent.</p>
   </section>
 </main>
 <footer class="footer"><a href="https://workwork.fun/" target="_blank" rel="noopener noreferrer">WORKWORK.FUN</a><span>PRIVATE BY DEFAULT · YOUR SPACE, YOUR RULES</span><a href="https://github.com/sylwesterdigital/free-lab" target="_blank" rel="noopener noreferrer" class="footer-github" aria-label="GitHub repository"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .8a11.2 11.2 0 0 0-3.54 21.83c.56.1.76-.24.76-.53v-2.1c-3.1.67-3.76-1.32-3.76-1.32-.5-1.29-1.23-1.63-1.23-1.63-1.01-.7.08-.69.08-.69 1.12.08 1.7 1.15 1.7 1.15.99 1.7 2.6 1.21 3.23.93.1-.72.39-1.22.71-1.5-2.47-.28-5.07-1.24-5.07-5.54 0-1.23.44-2.24 1.15-3.03-.12-.28-.5-1.43.1-2.99 0 0 .94-.3 3.08 1.16a10.7 10.7 0 0 1 5.6 0c2.14-1.46 3.07-1.16 3.07-1.16.61 1.56.23 2.71.12 2.99.72.79 1.14 1.8 1.14 3.03 0 4.31-2.6 5.25-5.08 5.53.4.34.76 1.01.76 2.04v3.02c0 .29.2.63.77.52A11.2 11.2 0 0 0 12 .8Z"/></svg><span>GitHub</span></a><button id="showChangelog" class="link-btn">DEV LOG ↗</button></footer>
@@ -150,7 +163,7 @@
 <div class="experience-preferences"><p class="eyebrow">XR / PERSONALIZATION</p>
      <label for="pref-mascotMode">MASCOT IN XR<select id="pref-mascotMode"><option value="3d">3D character</option><option value="2d">2D character</option><option value="none">Off</option></select></label>
      <label for="pref-frameHoldSeconds">FRAME DETACH TIMER<select id="pref-frameHoldSeconds"><option value="1.5">1.5 seconds</option><option value="3" selected>3 seconds</option><option value="5">5 seconds</option></select></label>
-     <p class="small-muted">Experimental labs are available from Agency in XR. Legacy controller shortcut remains available for testing.</p>
+     <p class="small-muted">Experimental labs are available from Agency in XR.</p>
      <label><input type="checkbox" id="pref-spoken"> Speak descriptions and gesture updates</label><label><input type="checkbox" id="pref-voiceConfirm"> Confirm recognized voice text before sending (off by default)</label>
      <label for="pref-speechEngine">MASCOT VOICE<select id="pref-speechEngine"><option value="browser">Device voice</option><option value="elevenlabs">ElevenLabs (paid)</option></select></label>
      <label for="pref-speechVoiceId">VOICE<select id="pref-speechVoiceId"><option value="">Choose a voice</option></select></label>
@@ -193,22 +206,22 @@
 <div id="modelStage" class="model-stage hidden" role="dialog" aria-label="Interactive 3D model viewer" aria-modal="true"><header><div><span class="eyebrow">FREELAB / MODEL VIEWER</span><h2 id="modelStageTitle">3D model</h2></div><div class="model-stage-tools"><button id="modelStageAxis" class="secondary-btn" type="button" title="Change model viewing orientation">Upright · Auto</button><a id="modelStageDownload" class="secondary-btn hidden" download>Download GLB</a><button id="modelStageClose" type="button" aria-label="Close 3D model viewer">×</button></div></header><div id="modelStageViewport" class="model-stage-viewport"><img id="modelStagePoster" class="hidden" alt="3D model thumbnail preview"><canvas id="modelStageCanvas" aria-label="Interactive 3D model. Drag to rotate, scroll to zoom."></canvas></div><p id="modelStageStatus" role="status">Preparing 3D scene…</p><p class="model-stage-hint">Drag to rotate · scroll or pinch to zoom · model loads privately</p></div>
 <div id="toast" class="toast hidden" role="status"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.module.js"}}</script>
-<script type="module" src="/assets/model-stage.mjs?v=0.10.62"></script>
-<script src="/assets/sound.js?v=0.10.62" defer></script>
-<script src="/assets/gestures.js?v=0.10.62" defer></script>
-<script src="/assets/strand-geometry.js?v=0.10.62" defer></script>
-<script src="/assets/string-lab.js?v=0.10.62" defer></script>
-<script src="/assets/finger-lab.js?v=0.10.62" defer></script>
-<script src="/assets/frame-lab.js?v=0.10.62" defer></script>
-<script src="/assets/frame-photo.js?v=0.10.62" defer></script>
-<script src="/assets/frame-games.js?v=0.10.62" defer></script>
-<script src="/assets/agency-video.js?v=0.10.62" defer></script>
-<script src="/assets/shape-sort.js?v=0.10.62" defer></script>
-<script src="/assets/rooms.js?v=0.10.62" defer></script>
-<script src="/assets/cloud-tree.js?v=0.10.62" defer></script>
-<script src="/assets/xr-ui.js?v=0.10.62" defer></script>
-<script src="/assets/dialog.js?v=0.10.62" defer></script>
-<script src="/assets/app.js?v=0.10.62" defer></script><script src="/assets/xr.js?v=0.10.62" defer></script>
-<script src="/assets/capture-studio.js?v=0.10.62" defer></script>
-<script src="/assets/scene.mjs?v=0.10.62" type="module"></script>
+<script type="module" src="/assets/model-stage.mjs?v=0.10.63"></script>
+<script src="/assets/sound.js?v=0.10.63" defer></script>
+<script src="/assets/gestures.js?v=0.10.63" defer></script>
+<script src="/assets/strand-geometry.js?v=0.10.63" defer></script>
+<script src="/assets/string-lab.js?v=0.10.63" defer></script>
+<script src="/assets/finger-lab.js?v=0.10.63" defer></script>
+<script src="/assets/frame-lab.js?v=0.10.63" defer></script>
+<script src="/assets/frame-photo.js?v=0.10.63" defer></script>
+<script src="/assets/frame-games.js?v=0.10.63" defer></script>
+<script src="/assets/agency-video.js?v=0.10.63" defer></script>
+<script src="/assets/shape-sort.js?v=0.10.63" defer></script>
+<script src="/assets/rooms.js?v=0.10.63" defer></script>
+<script src="/assets/cloud-tree.js?v=0.10.63" defer></script>
+<script src="/assets/xr-ui.js?v=0.10.63" defer></script>
+<script src="/assets/dialog.js?v=0.10.63" defer></script>
+<script src="/assets/app.js?v=0.10.63" defer></script><script src="/assets/xr.js?v=0.10.63" defer></script>
+<script src="/assets/capture-studio.js?v=0.10.63" defer></script>
+<script src="/assets/scene.mjs?v=0.10.63" type="module"></script>
 </body></html>

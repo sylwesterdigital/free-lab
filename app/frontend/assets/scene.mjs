@@ -4,7 +4,7 @@
 const canvas=document.getElementById('sceneCanvas');
 const stage=document.getElementById('sceneStage');
 const fallback=document.getElementById('sceneFallback');
-if(canvas&&stage&&!/OculusBrowser|Quest|Oculus/i.test(navigator.userAgent)){
+if(canvas&&stage){
  try{
   // Load only the pinned CDN module: do not request an absent local vendor file.
   // If the CDN is unavailable, the local CSS mascot remains visible.
@@ -13,7 +13,7 @@ if(canvas&&stage&&!/OculusBrowser|Quest|Oculus/i.test(navigator.userAgent)){
   const camera=new THREE.PerspectiveCamera(38,1,.1,70);camera.position.set(0.2,3.2,8.4);camera.lookAt(0,.75,0);
   const renderer=new THREE.WebGLRenderer({canvas,alpha:false,antialias:true,powerPreference:'high-performance'});
   renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.5;
-  renderer.setPixelRatio(Math.min(1.65,window.devicePixelRatio||1));
+  renderer.setPixelRatio(Math.min(/OculusBrowser|Quest|Oculus/i.test(navigator.userAgent)?1:1.65,window.devicePixelRatio||1));
   scene.add(new THREE.HemisphereLight(0xf3fff3,0x242b28,3.7));
   const key=new THREE.SpotLight(0xedfff1,130,22,Math.PI/4,.8);key.position.set(-3,7,6);scene.add(key);
   const rim=new THREE.PointLight(0x6bffa0,56,12);rim.position.set(4.4,2,-2);scene.add(rim);

@@ -1,11 +1,11 @@
 """Flask API: identity-scoped private object collection with optional Meta inference."""
 from __future__ import annotations
-import base64,hashlib,hmac,io,json,math,os,re,secrets,sqlite3,threading,time,urllib.request,urllib.error,subprocess,sys,tempfile
+import base64,hashlib,hmac,io,json,math,os,re,secrets,sqlite3,threading,time,urllib.request,urllib.error,subprocess,sys,tempfile,csv
 from pathlib import Path
 from datetime import datetime,timezone
 from functools import wraps
 from contextlib import closing
-from flask import Flask,abort,g,jsonify,request,send_file,session
+from flask import Flask,abort,g,jsonify,request,send_file,session,Response
 from itsdangerous import URLSafeTimedSerializer,BadSignature,SignatureExpired
 from werkzeug.middleware.proxy_fix import ProxyFix
 from . import db,providers,secrets as keyvault,sam,provider_checks,media,meshy3d,aholo3d,tripo3d,glb_preview,glb_xr,model_cache,avatar_optimizer
@@ -440,10 +440,87 @@ def body():
 
 def item_dict(row):
     result={k:row[k] for k in ('id','label','description','provider','visibility','created_at','capture_id','folder','shelf','parent_object_id','operation')}
+    if row['operation'] in ('image_edit','mix') and str(row['label']).lstrip().lower().startswith('edited '):
+        result['label']=db.canonical_edit_label(row['label'])
     try:result['spatial']=json.loads(row['spatial_json'] or '{}')
     except (ValueError,TypeError):result['spatial']={}
     result['has_image']=bool(row['image_name'])
     return result
+
+# Account-isolated, bounded descriptive activity records. All scores are client-reported.
+AGENCY_ACTIVITIES=frozenset(('shapes','math','hands','throw','sort','chain','cubes','frames','five','thumbs'))
+AGENCY_MODES=frozenset(('free','timed','daily'))
+
+@app.post('/api/agency/sessions')
+@require_user
+def agency_session_begin():
+    v=body();activity=v.get('activity');mode=v.get('mode','free');level=v.get('level',0)
+    if type(activity) is not str or activity not in AGENCY_ACTIVITIES or type(mode) is not str or mode not in AGENCY_MODES or type(level) is not int or not 0<=level<=3:
+        return jsonify(error='Invalid activity, mode, or level'),400
+    uid=secrets.token_hex(16)
+    with g.con:
+        g.con.execute('INSERT INTO agency_sessions(id,owner_id,activity,mode,level) VALUES(?,?,?,?,?)',
+                      (uid,g.user['id'],activity,mode,level))
+    return jsonify(id=uid),201
+
+@app.patch('/api/agency/sessions/<session_id>')
+@require_user
+def agency_session_update(session_id):
+    if not re.fullmatch(r'[a-f0-9]{32}',session_id):abort(404)
+    v=body()
+    valid={'duration_ms':14400000,'correct':100000,'errors':100000,'points':100000}
+    if any(type(v.get(k,0)) is not int or not 0<=v.get(k,0)<=limit for k,limit in valid.items()) or type(v.get('finished',False)) is not bool:
+        return jsonify(error='Invalid activity measurements'),400
+    with g.con:
+        row=g.con.execute('SELECT finished FROM agency_sessions WHERE id=? AND owner_id=?',(session_id,g.user['id'])).fetchone()
+        if not row:abort(404)
+        if row['finished']:return jsonify(ok=True,finished=True)
+        g.con.execute('''UPDATE agency_sessions SET duration_ms=MAX(duration_ms,?),
+            correct=MAX(correct,?),errors=MAX(errors,?),points=MAX(points,?),finished=?
+            WHERE id=? AND owner_id=?''',
+            (v.get('duration_ms',0),v.get('correct',0),v.get('errors',0),v.get('points',0),
+             int(v.get('finished',False)),session_id,g.user['id']))
+    return jsonify(ok=True,finished=v.get('finished',False))
+
+def agency_days():
+    days=request.args.get('days','30')
+    if days not in ('7','30','90','365','all'):abort(400)
+    return days
+
+def agency_rows(days):
+    # All time is bounded by one user's records; per-user data never crosses profiles.
+    if days=='all':return g.con.execute('SELECT * FROM agency_sessions WHERE owner_id=? ORDER BY started_at DESC',(g.user['id'],)).fetchall()
+    return g.con.execute("SELECT * FROM agency_sessions WHERE owner_id=? AND started_at>=strftime('%Y-%m-%dT%H:%M:%fZ','now',?) ORDER BY started_at DESC",
+                         (g.user['id'],f'-{days} days')).fetchall()
+
+@app.get('/api/agency/dashboard')
+@require_user
+def agency_dashboard():
+    days=agency_days();rows=agency_rows(days)
+    daily={};activities={};total={'sessions':0,'duration_ms':0,'free_ms':0,'correct':0,'errors':0,'points':0}
+    for r in rows:
+        key=r['started_at'][:10];activity=r['activity'];duration=r['duration_ms']
+        d=daily.setdefault(key,{'day':key,'sessions':0,'duration_ms':0,'free_ms':0,'correct':0,'errors':0,'points':0})
+        a=activities.setdefault(activity,{'activity':activity,'sessions':0,'duration_ms':0,'free_ms':0,'correct':0,'errors':0,'points':0})
+        for metric,val in (('sessions',1),('duration_ms',duration),('free_ms',duration if r['mode']=='free' else 0),
+                           ('correct',r['correct']),('errors',r['errors']),('points',r['points'])):
+            total[metric]+=val;d[metric]+=val;a[metric]+=val
+    return jsonify(period=days,timezone='UTC',total=total,daily=sorted(daily.values(),key=lambda x:x['day']),
+                   activities=sorted(activities.values(),key=lambda x:x['sessions'],reverse=True),
+                   methodology={'metric':'descriptive play telemetry','scores':'self-reported by the client; not a cognitive assessment',
+                   'duration':'elapsed time in an activity, excluding HOW TO PLAY playback; pauses and idle time may be included',
+                   'start':'recording begins with this release; historical sessions cannot be reconstructed from the server',
+                   'privacy':'private to the signed-in profile; no external AI processing'} )
+
+@app.get('/api/agency/export.csv')
+@require_user
+def agency_export():
+    days=agency_days();rows=agency_rows(days);output=io.StringIO()
+    writer=csv.writer(output);writer.writerow(('session_id','started_at_utc','activity','mode','level','duration_seconds','correct','errors','points','finished'))
+    for row in rows:
+        writer.writerow((row['id'],row['started_at'],row['activity'],row['mode'],row['level'],
+                        round(row['duration_ms']/1000,3),row['correct'],row['errors'],row['points'],row['finished']))
+    return Response(output.getvalue(),mimetype='text/csv',headers={'Content-Disposition':'attachment; filename="freelab-agency-'+days+'d.csv"','Cache-Control':'private, no-store'})
 
 @app.get('/api/health')
 def health():
@@ -913,7 +990,7 @@ def update_capture_cloud(cid):
 @app.get('/api/objects')
 @require_user
 def objects():
-    rows=g.con.execute('SELECT * FROM objects WHERE owner_id=? ORDER BY id DESC LIMIT 200',(g.user['id'],)).fetchall()
+    rows=g.con.execute('SELECT * FROM objects WHERE owner_id=? ORDER BY id DESC LIMIT 2000',(g.user['id'],)).fetchall()
     return jsonify(objects=[item_dict(row) for row in rows])
 
 @app.get('/api/public')
@@ -1620,10 +1697,21 @@ def media_edit():
     try:
         jpeg,usage=media.edit_meta_images(raws,prompt.strip(),key) if mix_sources else media.edit_meta_image(raws[0],prompt.strip(),key)
         name=secrets.token_hex(16)+'.jpg';file=IMAGE_DIR/name;file.write_bytes(jpeg)
+        # Traverse the saved parent chain rather than prepend visible strings.
+        edit_generation=1
+        if parent:
+            ancestor=g.con.execute('SELECT label,operation,parent_object_id FROM objects WHERE id=? AND owner_id=?',(parent,g.user['id'])).fetchone()
+            visited=set()
+            while ancestor and ancestor['parent_object_id'] not in visited:
+                if ancestor['operation'] in ('image_edit','mix'):
+                    edit_generation+=1
+                if ancestor['parent_object_id'] is None:break
+                visited.add(ancestor['parent_object_id'])
+                ancestor=g.con.execute('SELECT label,operation,parent_object_id FROM objects WHERE id=? AND owner_id=?',(ancestor['parent_object_id'],g.user['id'])).fetchone()
         try:
             with g.con:
                 new_id=g.con.execute('''INSERT INTO objects(owner_id,label,description,provider,image_name,sha256,capture_id,parent_object_id,operation)
-                       VALUES(?,?,?,?,?,?,?,?,?)''',(g.user['id'],('Edited '+label)[:80],prompt.strip()[:240],
+                       VALUES(?,?,?,?,?,?,?,?,?)''',(g.user['id'],db.canonical_edit_label(label, edit_generation)[:80],prompt.strip()[:240],
                         'muse-image-1.0',name,hashlib.sha256(jpeg).hexdigest(),cid,parent,'mix' if mix_sources else 'image_edit')).lastrowid
         except Exception:
             file.unlink(missing_ok=True);raise
