@@ -1,4 +1,4 @@
-"""Settings v0.10.44: one key per provider and a fixed-height scroll area."""
+"""Settings v0.10.46: one key per provider and a fixed-height scroll area."""
 import unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]

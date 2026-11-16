@@ -2,6 +2,7 @@
 from __future__ import annotations
 import base64,hashlib,hmac,io,json,math,os,re,secrets,sqlite3,threading,time,urllib.request,urllib.error,subprocess,sys,tempfile
 from pathlib import Path
+from datetime import datetime,timezone
 from functools import wraps
 from contextlib import closing
 from flask import Flask,abort,g,jsonify,request,send_file,session
@@ -1326,7 +1327,7 @@ def update_3d_transform(jid):
         return jsonify(error='Invalid 3D position, rotation or scale'),400
     norm=math.sqrt(sum(x*x for x in rotation))
     if norm<.2 or norm>1.8:return jsonify(error='Invalid 3D orientation'),400
-    # Backward compatibility: v0.10.44 clients could send unequal XYZ scales.
+    # Backward compatibility: v0.10.45 clients could send unequal XYZ scales.
     # Store one proportional scale instead, never a distorted GLB shape.
     uniform_size=min(4,max(.2,float(size)*math.prod(float(x) for x in axis_scale)**(1/3)))
     transform={'offset':[round(float(x),4) for x in offset],
@@ -1775,6 +1776,55 @@ def _room_dict(r):
     return {'id':r['id'],'owner_id':r['owner_id'],'visibility':r['visibility'],
             'active':bool(r['active']),'updated_at':r['updated_at']}
 
+def _room_card_info(r, now):
+    '''Owner/guest usage only; private assets are never enumerated from other rooms.'''
+    rid = r['id']
+    stats = g.con.execute('''SELECT COUNT(*) AS sessions,
+        COALESCE(SUM(MAX(0,COALESCE(ended_at,last_seen_at)-started_at)),0) AS seconds,
+        MAX(last_seen_at) AS accessed FROM room_sessions WHERE room_id=?''', (rid,)).fetchone()
+    latest = g.con.execute('''SELECT started_at,last_seen_at,ended_at
+        FROM room_sessions WHERE room_id=? ORDER BY last_seen_at DESC,id DESC LIMIT 1''', (rid,)).fetchone()
+    host = g.con.execute('''SELECT last_seen_at FROM room_sessions WHERE room_id=? AND role='host'
+        ORDER BY id DESC LIMIT 1''', (rid,)).fetchone()
+    live = bool(r['active'] and host and host['last_seen_at'] >= now-50)
+    visitors = g.con.execute('''SELECT COUNT(*) FROM room_presence
+        WHERE room_id=? AND last_seen>=?''', (rid,now-35)).fetchone()[0]
+    # The background is a capture explicitly published to this room, never an
+    # arbitrary image from the room owner's private collection.
+    try:
+        cards = json.loads(r['state_json']).get('cards', [])
+    except (ValueError, TypeError, AttributeError):
+        cards = []
+    thumbnail = False
+    media_count = 0
+    if isinstance(cards,list):
+        media_count=sum(isinstance(card,dict) and card.get('kind') in ('capture','object') for card in cards[-72:])
+        for card in reversed(cards[-72:]):
+            if not isinstance(card,dict) or card.get('kind') not in ('capture','object') or type(card.get('id')) is not int:
+                continue
+            table='captures' if card['kind']=='capture' else 'objects'
+            extra='hidden=0' if card['kind']=='capture' else "shelf!='bin'"
+            found=g.con.execute(f'''SELECT image_name FROM {table} WHERE id=? AND owner_id=? AND image_name IS NOT NULL AND image_name!='' AND {extra}''',
+                (card['id'],r['owner_id'])).fetchone()
+            if found:
+                image_root=IMAGE_DIR.resolve()
+                image_path=(image_root/found['image_name']).resolve()
+                if image_path.is_relative_to(image_root) and image_path.is_file():
+                    thumbnail=True
+                    break
+    can_view_thumb = r['visibility']=='public' or r['owner_id']==g.user['id'] or r['invited']==1
+    last_seen = stats['accessed']
+    # For rooms created prior to tracking, preserve a truthful last activity
+    # timestamp from the published state; do not invent historical sessions.
+    fallback = r['updated_at'] if not last_seen else None
+    return {
+      'active':live,'participant_count':visitors+(1 if live else 0),'media_count':media_count,
+      'session_count':stats['sessions'],'total_session_seconds':stats['seconds'],
+      'last_session_seconds':max(0, (latest['ended_at'] if latest['ended_at'] is not None else latest['last_seen_at'])-latest['started_at']) if latest else None,
+      'last_accessed_at':datetime.fromtimestamp(last_seen,timezone.utc).isoformat().replace('+00:00','Z') if last_seen else fallback,
+      'thumbnail_url':f'/api/rooms/{rid}/thumbnail' if thumbnail and can_view_thumb else None,
+    }
+
 @app.get('/api/rooms')
 @require_user
 def list_rooms():
@@ -1783,9 +1833,51 @@ def list_rooms():
      LEFT JOIN room_members m ON m.room_id=r.id AND m.user_id=?
      WHERE r.owner_id=? OR r.visibility='public' OR m.user_id=?
      ORDER BY r.active DESC,r.updated_at DESC LIMIT 100''',(g.user['id'],g.user['id'],g.user['id'])).fetchall()
-    return jsonify(rooms=[{**_room_dict(r),'owner':r['owner_name'],
+    now=int(time.time())
+    cards=[{**_room_dict(r),**_room_card_info(r,now),'owner':r['owner_name'],
       'joined':r['owner_id']==g.user['id'] or r['invited']==1,
-      'invited':r['invited']==0} for r in rows])
+      'mine':r['owner_id']==g.user['id'],
+      'invited':r['invited']==0} for r in rows]
+    cards.sort(key=lambda item:(not item['active'],item['last_accessed_at'] or ''),reverse=False)
+    return jsonify(rooms=cards)
+
+@app.get('/api/rooms/<int:rid>/thumbnail')
+@require_user
+def room_thumbnail(rid):
+    '''Small room-scoped image only, never unrestricted private media access.'''
+    r=_room_access(rid,require_join=False)
+    if not r or (r['visibility']=='private' and not _room_access(rid)):
+        abort(404)
+    try:
+        cards=json.loads(r['state_json']).get('cards',[])
+    except (ValueError,TypeError,AttributeError):
+        cards=[]
+    if not isinstance(cards,list):abort(404)
+    for card in reversed(cards[-72:]):
+        if not isinstance(card,dict) or type(card.get('id')) is not int:continue
+        if card.get('kind')=='capture':
+            item=g.con.execute('''SELECT image_name FROM captures WHERE id=? AND owner_id=? AND hidden=0''',
+                               (card['id'],r['owner_id'])).fetchone()
+        elif card.get('kind')=='object':
+            item=g.con.execute('''SELECT image_name FROM objects WHERE id=? AND owner_id=? AND shelf!='bin' ''',
+                               (card['id'],r['owner_id'])).fetchone()
+        else:continue
+        if not item or not item['image_name']:continue
+        image_root=IMAGE_DIR.resolve()
+        path=(image_root/item['image_name']).resolve()
+        if not path.is_relative_to(image_root) or not path.is_file() or path.stat().st_size>16*1024*1024:continue
+        try:
+            from PIL import Image,ImageOps
+            with Image.open(path) as source:
+                preview=ImageOps.fit(ImageOps.exif_transpose(source).convert('RGB'),(680,380),method=Image.Resampling.LANCZOS)
+                output=io.BytesIO()
+                preview.save(output,format='JPEG',quality=76,optimize=True)
+            output.seek(0)
+            response=send_file(output,mimetype='image/jpeg',max_age=0)
+            response.headers['Cache-Control']='private, no-store'
+            return response
+        except (OSError,ValueError,Image.DecompressionBombError):continue
+    abort(404)
 
 @app.get('/api/rooms/users')
 @require_user
@@ -1803,6 +1895,8 @@ def own_room():
             g.con.execute('''INSERT INTO live_rooms(owner_id,visibility,active) VALUES(?,?,1)
                  ON CONFLICT(owner_id) DO UPDATE SET visibility=excluded.visibility,active=1''',(g.user['id'],visibility))
     r=g.con.execute('SELECT * FROM live_rooms WHERE owner_id=?',(g.user['id'],)).fetchone()
+    if r and request.method=='PUT':
+        with g.con:db.record_room_session(g.con,r['id'],g.user['id'],'host',True)
     return jsonify(room=_room_dict(r) if r else None)
 
 @app.post('/api/rooms/mine/invite')
@@ -1833,14 +1927,18 @@ def room_heartbeat(rid):
     r=_room_access(rid)
     if not r:abort(404)
     if r['owner_id']!=g.user['id']:
-        with g.con:g.con.execute('''INSERT INTO room_presence(room_id,user_id,last_seen) VALUES(?,?,?)
-            ON CONFLICT(room_id,user_id) DO UPDATE SET last_seen=excluded.last_seen''',(rid,g.user['id'],int(time.time())))
+        with g.con:
+            g.con.execute('''INSERT INTO room_presence(room_id,user_id,last_seen) VALUES(?,?,?)
+                ON CONFLICT(room_id,user_id) DO UPDATE SET last_seen=excluded.last_seen''',(rid,g.user['id'],int(time.time())))
+            db.record_room_session(g.con,rid,g.user['id'],'visitor',True)
     return jsonify(ok=True)
 
 @app.delete('/api/rooms/<int:rid>/presence')
 @require_user
 def room_leave_presence(rid):
-    with g.con:g.con.execute('DELETE FROM room_presence WHERE room_id=? AND user_id=?',(rid,g.user['id']))
+    with g.con:
+        g.con.execute('DELETE FROM room_presence WHERE room_id=? AND user_id=?',(rid,g.user['id']))
+        db.record_room_session(g.con,rid,g.user['id'],'visitor',False)
     return jsonify(ok=True)
 
 @app.get('/api/rooms/mine/visitors')
@@ -1901,7 +1999,9 @@ def update_room_state():
     r=g.con.execute('SELECT id FROM live_rooms WHERE owner_id=?',(g.user['id'],)).fetchone()
     if not r:return jsonify(error='Create a room before updating'),409
     payload=json.dumps({'pose':pose,'q':[round(float(x),4) for x in orientation],'cards':clean,'shapes':clean_shapes},separators=(',',':'))
-    with g.con:g.con.execute('''UPDATE live_rooms SET state_json=?,active=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?''',(payload,int(active),r['id']))
+    with g.con:
+        g.con.execute('''UPDATE live_rooms SET state_json=?,active=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?''',(payload,int(active),r['id']))
+        db.record_room_session(g.con,r['id'],g.user['id'],'host',active)
     return jsonify(ok=True)
 
 @app.get('/api/rooms/<int:rid>/state')

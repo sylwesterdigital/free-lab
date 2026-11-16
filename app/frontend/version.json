@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.44",
-  "description": "Correct initial fullscreen 3D viewer aspect ratio and responsive camera sizing"
+  "version": "0.10.46",
+  "description": "Cross-platform secure room thumbnail paths and deployment regression fix"
 }

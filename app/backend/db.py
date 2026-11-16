@@ -91,6 +91,17 @@ CREATE TABLE IF NOT EXISTS room_members (
  PRIMARY KEY(room_id,user_id)
 );
 CREATE INDEX IF NOT EXISTS room_members_user ON room_members(user_id,room_id);
+CREATE TABLE IF NOT EXISTS room_sessions (
+ id INTEGER PRIMARY KEY,
+ room_id INTEGER NOT NULL REFERENCES live_rooms(id) ON DELETE CASCADE,
+ user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ role TEXT NOT NULL CHECK(role IN ('host','visitor')),
+ started_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL,
+ ended_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS room_sessions_room_history ON room_sessions(room_id,last_seen_at DESC);
+CREATE INDEX IF NOT EXISTS room_sessions_open ON room_sessions(room_id,user_id,role,ended_at);
+
 CREATE TABLE IF NOT EXISTS auth_attempts (fingerprint TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')));
 CREATE INDEX IF NOT EXISTS auth_attempts_recent ON auth_attempts(fingerprint,created_at);
 '''
@@ -136,7 +147,7 @@ def init(path):
         fields={row['name'] for row in con.execute('PRAGMA table_info(jobs_3d)')}
         if 'model_path' not in fields:con.execute("ALTER TABLE jobs_3d ADD COLUMN model_path TEXT NOT NULL DEFAULT ''")
         if 'cache_error' not in fields:con.execute("ALTER TABLE jobs_3d ADD COLUMN cache_error TEXT NOT NULL DEFAULT ''")
-        # v0.10.44: exact generation model pinned per job; historical jobs remain unknown.
+        # v0.10.45: exact generation model pinned per job; historical jobs remain unknown.
         if 'model_id' not in fields:con.execute("ALTER TABLE jobs_3d ADD COLUMN model_id TEXT NOT NULL DEFAULT ''")
         for column,definition in (
             ('quality_preset',"TEXT NOT NULL DEFAULT ''"),
@@ -151,6 +162,33 @@ def init(path):
         )''')
         # Efficient arbitrary-depth tree lookup; every node keeps its stable parent ID.
         con.execute('CREATE INDEX IF NOT EXISTS objects_capture_parent ON objects(owner_id,capture_id,parent_object_id,id)')
+
+def record_room_session(con, room_id, user_id, role, active, now=None):
+    '''Count genuine room visits, not every polling/heartbeat request.
+
+    An unclosed session older than 50 seconds is closed at its final heartbeat.
+    This avoids inflated durations after a headset disappears without calling leave.
+    Caller owns the SQLite transaction.
+    '''
+    if role not in ('host', 'visitor'):
+        raise ValueError('Invalid room participant role')
+    now = int(time.time() if now is None else now)
+    row = con.execute('''SELECT id,last_seen_at FROM room_sessions
+        WHERE room_id=? AND user_id=? AND role=? AND ended_at IS NULL
+        ORDER BY id DESC LIMIT 1''', (room_id, user_id, role)).fetchone()
+    if not active:
+        if row:
+            con.execute('''UPDATE room_sessions SET last_seen_at=?, ended_at=? WHERE id=?''',
+                        (now, now, row['id']))
+        return
+    if row and 0 <= now - row['last_seen_at'] <= 50:
+        con.execute('UPDATE room_sessions SET last_seen_at=? WHERE id=?', (now, row['id']))
+        return
+    if row:
+        con.execute('UPDATE room_sessions SET ended_at=last_seen_at WHERE id=?', (row['id'],))
+    con.execute('''INSERT INTO room_sessions(room_id,user_id,role,started_at,last_seen_at)
+        VALUES(?,?,?,?,?)''', (room_id, user_id, role, now, now))
+
 
 def hash_password(password, salt=None):
     salt=salt or secrets.token_bytes(16)

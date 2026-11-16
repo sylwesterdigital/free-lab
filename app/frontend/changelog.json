@@ -1,15 +1,39 @@
 {
-  "version": "0.10.44",
-  "title": "FREELAB v0.10.44 — stable first-open desktop 3D aspect ratio",
-  "datetime": "2026-11-15",
+  "version": "0.10.46",
+  "title": "FREELAB v0.10.46 — macOS room thumbnail validation compatibility",
+  "datetime": "2026-11-16",
   "changes": [
-    "Desktop 3D viewer now sizes its WebGL drawing buffer from the visible viewer viewport instead of stale canvas client dimensions; this fixes squashed models that only recovered after manually resizing the browser.",
-    "Model viewer viewport and WebGL canvas have independent layout sizing so the canvas intrinsic pixel dimensions cannot cause a grid feedback loop on first open.",
-    "Camera aspect and pixel ratio update on initial open, completed model loading, layout changes, and fullscreen/DevTools resizing using a ResizeObserver and guarded frame checks.",
-    "Regression tests exercise initial dimensions, successive resizes, hidden or temporarily zero-height layout and re-opening, without modifying imported GLB geometry.",
-    "Saved avatars, Tripo/AHOLO models, Quest rendering and paid provider settings remain unchanged."
+    "Resolve the room image storage root before security containment checks, avoiding false-negative thumbnails on macOS where /var resolves to /private/var.",
+    "Apply the same canonical-path verification in the authenticated room thumbnail endpoint and card metadata; retain rejection of image symlinks that escape private storage.",
+    "Add symlink-based cross-platform regression coverage for accepted private-room access and for attempted media directory escapes.",
+    "Preserve enhanced room cards, activity history, existing rooms and all previous 3D/XR features without reprocessing assets or making paid provider calls."
   ],
   "history": [
+    {
+      "version": "0.10.45",
+      "title": "FREELAB v0.10.45 — spatial room cards, previews and session analytics",
+      "datetime": "2026-11-16",
+      "changes": [
+        "Spatial Rooms now use image-backed desktop cards, with a privacy-safe patterned backdrop when no image has been shared to a room.",
+        "Room cards display live/offline status, public/private visibility, current participants, shared image count, last active time, session count, last session length and cumulative visit time.",
+        "New All rooms / Live / My rooms filters, live-first/recent, most-sessions and alphabetical sorting, plus manual refresh and 30-second lobby refresh.",
+        "SQLite now tracks host and guest room sessions from existing XR publishing and desktop presence heartbeats, deduplicating polls and ending abandoned sessions at the last heartbeat. Historical visits are not invented.",
+        "Room thumbnails are resized server-side from pictures deliberately published into a room, with signed-in access, private-room membership enforcement, path checks and no-store caching.",
+        "Existing rooms, images, 3D assets, XR interactions and private account data are preserved. No paid provider calls are introduced."
+      ]
+    },
+    {
+      "version": "0.10.44",
+      "title": "FREELAB v0.10.44 — stable first-open desktop 3D aspect ratio",
+      "datetime": "2026-11-15",
+      "changes": [
+        "Desktop 3D viewer now sizes its WebGL drawing buffer from the visible viewer viewport instead of stale canvas client dimensions; this fixes squashed models that only recovered after manually resizing the browser.",
+        "Model viewer viewport and WebGL canvas have independent layout sizing so the canvas intrinsic pixel dimensions cannot cause a grid feedback loop on first open.",
+        "Camera aspect and pixel ratio update on initial open, completed model loading, layout changes, and fullscreen/DevTools resizing using a ResizeObserver and guarded frame checks.",
+        "Regression tests exercise initial dimensions, successive resizes, hidden or temporarily zero-height layout and re-opening, without modifying imported GLB geometry.",
+        "Saved avatars, Tripo/AHOLO models, Quest rendering and paid provider settings remain unchanged."
+      ]
+    },
     {
       "version": "0.10.42",
       "title": "FREELAB v0.10.42 — direct XR grabbing and linked media archive",
