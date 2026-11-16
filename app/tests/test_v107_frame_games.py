@@ -59,7 +59,57 @@ s.update(inp(false,false,0));s.update(inp(true,false,0));s.update(inp(false,fals
                       'frameGames?.linkOnOverlap(frameLab.frames,df.id)', 'frameGames?.launch(frameLab.frames,frameTouch.id',
                       'pollFrameGames(t,pose)', 'drawFrameCubes(vp)', 'gl.drawArrays(gl.TRIANGLES,0,36)'):
             self.assertIn(token,XR)
-        self.assertIn('frame-games.js?v=0.10.46',PAGE)
+        self.assertIn('frame-games.js?v=0.10.47',PAGE)
         self.assertNotIn('cdn', (ROOT/'frontend/assets/frame-games.js').read_text())
 
 if __name__=='__main__':unittest.main()
+
+class CognitiveAgencyTests(unittest.TestCase):
+    """Actual JS game logic, desktop/XR entry points and safe offline progress."""
+    def run_node(self, source):
+        result=subprocess.run(['node','-e',source],cwd=ROOT,text=True,capture_output=True,timeout=25)
+        self.assertEqual(result.returncode,0,result.stdout+'\n'+result.stderr)
+    def test_games_run_offline_with_daily_seed_and_timeouts(self):
+        self.run_node(r'''const fs=require('fs'),vm=require('vm'),w={};
+vm.runInNewContext(fs.readFileSync('frontend/assets/shape-sort.js','utf8'),{window:w,Date,Math});
+const A=w.FreeLabAgency;
+if(Object.keys(A.GAMES).join('|')!=='shapes|math|hands')throw Error('Three games missing');
+let clock=100000,storage={v:'',getItem(){return this.v},setItem(_k,value){this.v=value;}};
+const start=(game,mode,level)=>new A.Session({game,mode,level,user:7,date:'2026-11-16',now:()=>clock,storage});
+for(const level of [0,1,2,3]){const s=start('shapes','free',level);const q=s.question;
+ if(q.options.length!==(level===0?2:3)||!q.options.some(x=>x.id===q.target.id))throw Error('Invalid target options');
+ const bad=q.options.find(x=>x.id!==q.target.id).id;
+ if(s.answer(bad).correct||s.errors!==1||s.score!==0)throw Error('Shape mismatch not counted');
+ if(!s.answer(q.target.id).correct||s.score!==1)throw Error('Shape match failed');
+}
+const d1=start('math','daily',2),d2=start('math','daily',2);
+if(JSON.stringify(d1.question)!==JSON.stringify(d2.question))throw Error('Daily challenge not repeatable');
+for(let i=0;i<8;i++){if(!d1.question.options.includes(d1.question.answer))throw Error('Math answer missing');
+ d1.answer(d1.question.answer);}
+if(!d1.completed||d1.score!==8)throw Error('Daily completion missing');
+const h=start('hands','free',0);let proper=h.question.hand==='L'?'left':'right';
+if(h.answer(proper==='left'?'right':'left',proper==='left'?'right':'left').correct)throw Error('Wrong hand accepted');
+if(!h.answer(proper,proper).correct)throw Error('Correct hand refused');
+const t=start('math','timed',0);clock+=120000;
+if(t.remaining()!==0||!t.tick()||!t.completed||t.answer(t.question.answer).accepted)throw Error('Timer not enforced');
+if(!storage.v.includes('"completed":true'))throw Error('Progress not stored');
+''')
+    def test_page_shows_calm_two_way_entrance_and_offline_agency_controls(self):
+        html=(ROOT/'frontend/index.html').read_text()
+        source=(ROOT/'frontend/assets/shape-sort.js').read_text()
+        for item in ('id="experienceGate"','id="chooseMyStuff"','id="chooseAgency"',
+                     'id="agencyStudio"','id="agencyXR"','id="agencyContent"',
+                     'Free Play','Daily Challenge','Shape Garden','Number Flow','Hand Harmony'):
+            self.assertIn(item,html+source)
+        self.assertIn("getState?.()?.user?.id",source)
+        self.assertIn('freelab-agency-v1-',source)
+        self.assertNotIn('fetch(',source[source.index('/* Cognitive Agency'):])
+    def test_quest_reuses_native_xr_renderer_with_hands_and_controller(self):
+        xr=(ROOT/'frontend/assets/xr.js').read_text()
+        for snippet in ("xrExperience==='agency'",'renderAgencyView(t,frame,pose)',
+                        'agencyPointerStart(e.frame,e.inputSource)',
+                        'agencyPointerEnd(e.frame,e.inputSource)',
+                        "src.hand.get('index-finger-tip')",
+                        "agencyGame==='hands'", "agencyGame==='shapes'", "agencyGame==='math'"):
+            self.assertIn(snippet,xr)
+        self.assertIn("start({experience:'agency'})",(ROOT/'frontend/assets/shape-sort.js').read_text())

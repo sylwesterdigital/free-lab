@@ -1,14 +1,26 @@
 {
-  "version": "0.10.46",
-  "title": "FREELAB v0.10.46 — macOS room thumbnail validation compatibility",
+  "version": "0.10.47",
+  "title": "FREELAB v0.10.47 — Cognitive Agency entrance and XR games",
   "datetime": "2026-11-16",
   "changes": [
-    "Resolve the room image storage root before security containment checks, avoiding false-negative thumbnails on macOS where /var resolves to /private/var.",
-    "Apply the same canonical-path verification in the authenticated room thumbnail endpoint and card metadata; retain rejection of image symlinks that escape private storage.",
-    "Add symlink-based cross-platform regression coverage for accepted private-room access and for attempted media directory escapes.",
-    "Preserve enhanced room cards, activity history, existing rooms and all previous 3D/XR features without reprocessing assets or making paid provider calls."
+    "Introduce a calming two-choice Cognitive Agency entrance: My Stuff preserves the existing private Collection and XR camera; Agency opens a dedicated activity lobby.",
+    "Add three playable games—Shape Garden sorting, Number Flow arithmetic and Hand Harmony left/right response—with Free Play, 2-minute Timed and deterministic eight-round Daily Challenge modes, each with four levels.",
+    "Make Agency playable on desktop with mouse/touch/keyboard, and in Quest via FREELAB native spatial cards, controller selection, hand touches and tracked pinch-to-carry shape interactions.",
+    "Store session summaries locally per signed-in user (browser only), show correct responses, retries and time spent, without introducing paid API requests, public rankings or medical claims.",
+    "Preserve all existing capture, room, provider and model features and the existing shared Nginx/Gunicorn deployment configuration; extend the regression tests for game logic and XR wiring."
   ],
   "history": [
+    {
+      "version": "0.10.47",
+      "title": "FREELAB v0.10.47 — macOS room thumbnail validation compatibility",
+      "datetime": "2026-11-16",
+      "changes": [
+        "Resolve the room image storage root before security containment checks, avoiding false-negative thumbnails on macOS where /var resolves to /private/var.",
+        "Apply the same canonical-path verification in the authenticated room thumbnail endpoint and card metadata; retain rejection of image symlinks that escape private storage.",
+        "Add symlink-based cross-platform regression coverage for accepted private-room access and for attempted media directory escapes.",
+        "Preserve enhanced room cards, activity history, existing rooms and all previous 3D/XR features without reprocessing assets or making paid provider calls."
+      ]
+    },
     {
       "version": "0.10.45",
       "title": "FREELAB v0.10.45 — spatial room cards, previews and session analytics",

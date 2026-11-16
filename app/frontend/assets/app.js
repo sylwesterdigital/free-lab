@@ -331,7 +331,7 @@ async function afterAuth(user){state.user=user;
  const portrait=$('profileAvatar');portrait.onload=()=>{portrait.classList.remove('hidden');$('profileInitials').classList.add('hidden');$('settingsAvatar').src=portrait.src;$('settingsAvatar').classList.remove('hidden');$('settingsAvatarInitials').classList.add('hidden');};
  portrait.onerror=()=>{portrait.classList.add('hidden');$('profileInitials').classList.remove('hidden');$('settingsAvatar').classList.add('hidden');$('settingsAvatarInitials').classList.remove('hidden');};
  $('settingsAvatarInitials').textContent=initials||'+';portrait.src='/api/me/avatar?v='+encodeURIComponent(user.id);
-$('main').classList.remove('hidden');$('loginView').classList.add('hidden');$('profileSummary').textContent=user.display_name+' · @'+user.username+' · '+user.role;$('adminTools').classList.toggle('hidden',user.role!=='admin');document.querySelectorAll('.admin-tab').forEach(e=>e.classList.toggle('hidden',user.role!=='admin'));await refresh();await loadObjects();startBackground3DMonitor();presentLog();if(user.role==='admin'){await loadProviderList().catch(e=>notify(e.message));}}
+$('main').classList.remove('hidden');$('loginView').classList.add('hidden');window.FreeLabAgencyUI?.showEntrance?.();$('profileSummary').textContent=user.display_name+' · @'+user.username+' · '+user.role;$('adminTools').classList.toggle('hidden',user.role!=='admin');document.querySelectorAll('.admin-tab').forEach(e=>e.classList.toggle('hidden',user.role!=='admin'));await refresh();await loadObjects();startBackground3DMonitor();presentLog();if(user.role==='admin'){await loadProviderList().catch(e=>notify(e.message));}}
 async function init(){
  wirePromptEditor();
  $('loginForm').onsubmit=async e=>{e.preventDefault();$('loginError').textContent='';try{const data=await api('/login',{method:'POST',body:JSON.stringify({username:$('username').value,password:$('password').value})});$('password').value='';await afterAuth(data.user);}catch(error){$('loginError').textContent=error.message;}};
@@ -594,7 +594,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.46');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.47');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{

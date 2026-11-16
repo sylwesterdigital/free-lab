@@ -1,13 +1,14 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.46">
-<title>FREELAB — Step into the spatial world</title>
-<link rel="stylesheet" href="/assets/style.css?v=0.10.46">
+<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.47">
+<title>FREELAB — Cognitive Agency · My Stuff &amp; Agency</title>
+<meta name="description" content="FREELAB Cognitive Agency — privately organise your world and explore gentle spatial games with hands, controllers or desktop.">
+<link rel="stylesheet" href="/assets/style.css?v=0.10.47">
 </head><body>
 <div id="app" class="app-shell">
 <header class="header" aria-label="Site navigation">
-  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.46</span></a>
+  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.47</span></a>
   <nav class="header-right" aria-label="Workspace">
     <span class="live-pill"><span class="server-dot" id="connectionDot"></span><span id="healthStatus">Connecting</span></span>
     <button id="roomButton" class="nav-pill" type="button">Rooms</button>
@@ -18,6 +19,11 @@
 <main id="main" class="main">
   <section class="scene-stage" id="sceneStage" aria-label="Animated FREELAB spatial environment">
     <canvas class="scene-canvas" id="sceneCanvas" aria-hidden="true"></canvas>
+    <section id="experienceGate" class="experience-gate hidden" aria-labelledby="experienceTitle">
+      <div class="experience-intro"><span class="eyebrow">FREELAB / COGNITIVE AGENCY</span><h1 id="experienceTitle">Make room for <em>yourself.</em></h1><p>Two gentle ways to explore. Everything starts with your choice.</p></div>
+      <div class="experience-choices"><button id="chooseMyStuff" class="experience-choice experience-my" type="button"><span class="choice-symbol" aria-hidden="true">◎</span><strong>My Stuff</strong><span>Capture, organise and rediscover the world around you.</span><b>OPEN MY WORLD ↗</b></button><button id="chooseAgency" class="experience-choice experience-agency" type="button"><span class="choice-symbol" aria-hidden="true">✳</span><strong>Agency</strong><span>Find your rhythm with calming spatial games and playful practice.</span><b>ENTER COGNITIVE REST ↗</b></button></div>
+      <p class="experience-notice">Your pace · Your space · No pressure</p>
+    </section>
     <div class="scene-fallback" id="sceneFallback" aria-hidden="true"><div class="fallback-shadow"></div><div class="fallback-creature"><div class="fallback-horn left"></div><div class="fallback-horn right"></div><div class="fallback-face"><i></i><i></i></div><div class="fallback-foot left"></div><div class="fallback-foot right"></div></div></div>
     <div class="scene-vignette"></div>
     <div class="stage-copy"><p class="eyebrow"><span class="pulse-dot"></span> YOUR WORLD IS WAITING</p><h1>Make the<br><em>invisible</em><br>discoverable<span class="period">.</span></h1><p>Capture your room. Watch objects bloom into a spatial collection. Keep the things worth remembering.</p></div>
@@ -35,6 +41,11 @@
     </nav>
     <aside class="scene-caption"><span class="caption-index">01 / SPATIAL COLLECTOR</span><p>Capture. Bloom.<br>Collect.</p><span class="caption-muted">Capture → recognize → collect in 3D.</span></aside>
     <span id="modelStatus" class="visually-hidden">Models ready on demand</span>
+  </section>
+  <section id="agencyStudio" class="agency-studio hidden" aria-labelledby="agencyTitle">
+    <header class="agency-top"><div><span class="eyebrow">FREELAB / COGNITIVE AGENCY</span><h2 id="agencyTitle">A little space to reset.</h2><p>Curiosity is enough. There is no need to be perfect.</p></div><div class="agency-top-actions"><button type="button" id="agencyXR" class="primary-btn">Enter Agency in XR ↗</button><button type="button" id="agencyHome" class="secondary-btn">Main entrance</button></div></header>
+    <div id="agencyContent" class="agency-content" aria-live="polite"></div>
+    <footer class="agency-disclaimer">Experimental activities for enjoyment and practice · Not a medical treatment or diagnostic tool · Personal progress is stored only in this browser</footer>
   </section>
   <section id="workspace" class="workspace workspace-drawer hidden" aria-label="Private inventory">
     <div class="workspace-head"><div><p class="eyebrow">YOUR PERSONAL ARCHIVE</p><h2>Found in your world <span id="objectCounter" class="muted-count">00</span></h2></div><div class="workspace-actions"><div class="tabs"><button class="tab active" data-list="mine">Private</button><button class="tab" data-list="public">Public</button><button class="tab" data-list="bin">Bin</button></div><button id="closeLibrary" class="round-btn" aria-label="Close collection">×</button></div></div>
@@ -172,22 +183,22 @@
 <div id="modelStage" class="model-stage hidden" role="dialog" aria-label="Interactive 3D model viewer" aria-modal="true"><header><div><span class="eyebrow">FREELAB / MODEL VIEWER</span><h2 id="modelStageTitle">3D model</h2></div><div class="model-stage-tools"><button id="modelStageAxis" class="secondary-btn" type="button" title="Change model viewing orientation">Upright · Auto</button><a id="modelStageDownload" class="secondary-btn hidden" download>Download GLB</a><button id="modelStageClose" type="button" aria-label="Close 3D model viewer">×</button></div></header><div id="modelStageViewport" class="model-stage-viewport"><img id="modelStagePoster" class="hidden" alt="3D model thumbnail preview"><canvas id="modelStageCanvas" aria-label="Interactive 3D model. Drag to rotate, scroll to zoom."></canvas></div><p id="modelStageStatus" role="status">Preparing 3D scene…</p><p class="model-stage-hint">Drag to rotate · scroll or pinch to zoom · model loads privately</p></div>
 <div id="toast" class="toast hidden" role="status"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.module.js"}}</script>
-<script type="module" src="/assets/model-stage.mjs?v=0.10.46"></script>
-<script src="/assets/sound.js?v=0.10.46" defer></script>
-<script src="/assets/gestures.js?v=0.10.46" defer></script>
-<script src="/assets/strand-geometry.js?v=0.10.46" defer></script>
-<script src="/assets/string-lab.js?v=0.10.46" defer></script>
-<script src="/assets/finger-lab.js?v=0.10.46" defer></script>
-<script src="/assets/frame-lab.js?v=0.10.46" defer></script>
-<script src="/assets/frame-photo.js?v=0.10.46" defer></script>
-<script src="/assets/lab-selector.js?v=0.10.46" defer></script>
-<script src="/assets/frame-games.js?v=0.10.46" defer></script>
-<script src="/assets/shape-sort.js?v=0.10.46" defer></script>
-<script src="/assets/rooms.js?v=0.10.46" defer></script>
-<script src="/assets/cloud-tree.js?v=0.10.46" defer></script>
-<script src="/assets/xr-ui.js?v=0.10.46" defer></script>
-<script src="/assets/dialog.js?v=0.10.46" defer></script>
-<script src="/assets/app.js?v=0.10.46" defer></script><script src="/assets/xr.js?v=0.10.46" defer></script>
-<script src="/assets/capture-studio.js?v=0.10.46" defer></script>
-<script src="/assets/scene.mjs?v=0.10.46" type="module"></script>
+<script type="module" src="/assets/model-stage.mjs?v=0.10.47"></script>
+<script src="/assets/sound.js?v=0.10.47" defer></script>
+<script src="/assets/gestures.js?v=0.10.47" defer></script>
+<script src="/assets/strand-geometry.js?v=0.10.47" defer></script>
+<script src="/assets/string-lab.js?v=0.10.47" defer></script>
+<script src="/assets/finger-lab.js?v=0.10.47" defer></script>
+<script src="/assets/frame-lab.js?v=0.10.47" defer></script>
+<script src="/assets/frame-photo.js?v=0.10.47" defer></script>
+<script src="/assets/lab-selector.js?v=0.10.47" defer></script>
+<script src="/assets/frame-games.js?v=0.10.47" defer></script>
+<script src="/assets/shape-sort.js?v=0.10.47" defer></script>
+<script src="/assets/rooms.js?v=0.10.47" defer></script>
+<script src="/assets/cloud-tree.js?v=0.10.47" defer></script>
+<script src="/assets/xr-ui.js?v=0.10.47" defer></script>
+<script src="/assets/dialog.js?v=0.10.47" defer></script>
+<script src="/assets/app.js?v=0.10.47" defer></script><script src="/assets/xr.js?v=0.10.47" defer></script>
+<script src="/assets/capture-studio.js?v=0.10.47" defer></script>
+<script src="/assets/scene.mjs?v=0.10.47" type="module"></script>
 </body></html>

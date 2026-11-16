@@ -300,3 +300,31 @@ The capture studio uses inline quick AI actions, a compact instruction composer,
 
 ### v0.10.19
 Desktop/mobile captures share three primary roundels. A context menu exposes 3D, and a multiline composer accepts image and text-guided instructions. AHOLO receives an authenticated, encoded reference image with asynchronous status checks; successful GLB outputs are cached privately when the provider download host passes the allowlist. Saved description threads are read-only retrievable. All paid provider tasks require in-app confirmation. AudioWorklet replaces main-thread audio recording when supported.
+
+## Cognitive Agency (v0.10.47)
+
+After sign-in, the two-card entrance offers **My Stuff** (the unchanged spatial
+camera, model generation, rooms and private Collection) or **Agency**. Agency is an
+experimental, offline practice space with three playable activities:
+
+- **Shape Garden:** matching 2D and stylised 3D shapes to containers, with
+  multiple randomly generated shapes in Free Play;
+- **Number Flow:** three-choice arithmetic with four difficulty levels;
+- **Hand Harmony:** left/right response targets; keyboard L/R on desktop or
+  tracked hand touch / matching hand-controller trigger in Quest.
+
+Modes are Free Play (no timer), Timed (120 seconds), and a repeatable eight-item
+Daily Challenge. Sessions display correct answers, retries and elapsed time.
+Progress is browser-local and namespaced per signed-in user; it is not sent to
+the API or synced across headsets. This is an experimental activity, not a
+clinical treatment or cognitive diagnostic. The games never submit paid
+provider requests.
+
+Agency XR uses the existing FREELAB WebXR rendering context and supports its
+controller rays and tracked hand pinch. On a Quest, select **Agency** from the
+entrance and choose **Enter Agency in XR**. The separate My Stuff entry opens
+the existing spatial collection workflow. The other seven proposed games are
+shown as upcoming ideas, not advertised as implemented features.
+
+No server routes, database migrations, Nginx configuration or watcher version
+are changed in this release. Backup and deploy with the normal watcher.
