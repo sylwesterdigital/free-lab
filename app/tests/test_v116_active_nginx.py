@@ -1,4 +1,4 @@
-"""v0.10.47 nginx active-vhost and real browser module MIME regression checks."""
+"""v0.10.48 nginx active-vhost and real browser module MIME regression checks."""
 import unittest
 from pathlib import Path
 from deploy import install
@@ -55,13 +55,25 @@ server {
    self.assertIn('default_type application/javascript;',block)
    self.assertIn('try_files $uri =404;',block)
 
- def test_installer_writes_active_and_canonical_files_and_rolls_both_back(self):
+ def test_installer_preserves_shared_nginx_and_checks_before_switch(self):
   text=Path(install.__file__).read_text()
   self.assertIn('live_site=active_nginx_target()',text)
-  self.assertIn('config_files=list(dict.fromkeys((site_target,live_site)))',text)
-  self.assertIn('for path in config_files:atomic_write(path,NGINX)',text)
-  self.assertIn('for path,data in prior_configs.items():',text)
+  self.assertIn('check_live_vhost_compatible(live_site)',text)
+  self.assertNotIn('for path in config_files:atomic_write(path,NGINX)',text)
+  self.assertNotIn("run('systemctl','reload','nginx')",text)
   self.assertIn('verify_local_es_modules()',text)
+  self.assertIn('for i,(file,data) in enumerate(prior_configs.items()):',text)
+
+ def test_compatible_site_is_accepted_and_custom_rules_preserved(self):
+  from tempfile import TemporaryDirectory
+  with TemporaryDirectory() as d:
+   p=Path(d)/'live.conf'
+   p.write_text(install.NGINX+'\n# Custom FREELAB rule that must survive releases\n')
+   self.assertTrue(install.check_live_vhost_compatible(p))
+   self.assertIn('Custom FREELAB rule',p.read_text())
+   p.write_text('server_name free-lab.cam;\n')
+   with self.assertRaisesRegex(RuntimeError,'will not overwrite'):
+    install.check_live_vhost_compatible(p)
 
 
 if __name__=='__main__':unittest.main()

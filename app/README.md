@@ -328,3 +328,33 @@ shown as upcoming ideas, not advertised as implemented features.
 
 No server routes, database migrations, Nginx configuration or watcher version
 are changed in this release. Backup and deploy with the normal watcher.
+
+
+## Cognitive Agency immersive XR entrance — v0.10.48
+
+The browser is the **launch surface only**. After sign-in, select **Enter XR**.
+The WebXR session begins at a neon-lit 3D entrance with two sculpted choices:
+**My Stuff**, which opens the existing spatial collection and capture tools;
+**Agency**, which opens the 3D lobby for Shape Garden, Number Flow and Hand Harmony.
+Nothing in the browser asks users to choose between these experiences.
+
+Agency's spatial activities reuse the tested private, local game rules.
+Headset interactions: controller trigger/squeeze ray pick, hand pinch and
+index-fingertip touch. RE-CENTER repositions the XR activity space around the current headset pose, and system reduced-motion preferences disable decorative floating. In Shape Garden, pinch/hold a real 3D polygon and drop
+into a geometrically open container; on release outside a bin the object resets.
+Number Flow accepts touches or controller selections on 3D answer blocks.
+Hand Harmony requires an identifiable left/right XR input source.
+Modes are Free Play, 2-minute Timed and Daily Challenge, with levels 0–3.
+
+The My Stuff toolbar includes HOME to return to the immersive entrance without
+leaving the XR session. Agency has its own HOME and My Stuff paths.
+Private Agency summaries remain local to the current browser profile.
+These are recreational exercises, not diagnosis or validated treatment.
+
+This patch does not change the backend, database schema, server ports or
+watcher v0.9.2. The installer is tightened to **preserve the existing
+shared Nginx configuration without a reload** and fail closed if the FREELAB
+vhost lacks its required asset routing; it still restarts the dedicated
+free-lab systemd unit. Local automation can verify syntax and
+game logic, but cannot validate true Quest hand-tracking, optics, or the live
+Ubuntu server. Perform headset QA before treating the release as production-ready.

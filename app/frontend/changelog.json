@@ -1,13 +1,14 @@
 {
-  "version": "0.10.47",
-  "title": "FREELAB v0.10.47 — Cognitive Agency entrance and XR games",
+  "version": "0.10.48",
+  "title": "FREELAB v0.10.48 — immersive XR entrance and spatial Agency",
   "datetime": "2026-11-16",
   "changes": [
-    "Introduce a calming two-choice Cognitive Agency entrance: My Stuff preserves the existing private Collection and XR camera; Agency opens a dedicated activity lobby.",
-    "Add three playable games—Shape Garden sorting, Number Flow arithmetic and Hand Harmony left/right response—with Free Play, 2-minute Timed and deterministic eight-round Daily Challenge modes, each with four levels.",
-    "Make Agency playable on desktop with mouse/touch/keyboard, and in Quest via FREELAB native spatial cards, controller selection, hand touches and tracked pinch-to-carry shape interactions.",
-    "Store session summaries locally per signed-in user (browser only), show correct responses, retries and time spent, without introducing paid API requests, public rankings or medical claims.",
-    "Preserve all existing capture, room, provider and model features and the existing shared Nginx/Gunicorn deployment configuration; extend the regression tests for game logic and XR wiring."
+    "Enter XR directly from the browser and choose MY STUFF or AGENCY only inside the immersive WebXR scene; preserve My Stuff camera, collections, capture and models.",
+    "Replace Agency 2D rectangles with native perspective-lit 3D portal sculptures, animated shapes, neon open-top sorting bins, tactile number choices and a spatial L/R hand target.",
+    "Restore the in-headset Home route from both My Stuff toolbar and Agency, with hand-pinch, direct fingertip touch, and controller ray/trigger selection.",
+    "Keep Free Play, 120-second Timed, daily deterministic challenges, four difficulty levels and browser-local private progress, with gentle response feedback and no medical claims.",
+    "Remove the browser My Stuff/Agency gate and standalone 2D Agency UI; browser remains the XR launch and collection administration surface.",
+    "Preserve active shared Nginx configuration on updates, with a compatibility preflight and no shared-service reload; keep watcher v0.9.2 and all existing service/data boundaries."
   ],
   "history": [
     {

@@ -176,6 +176,27 @@ def active_nginx_target():
                            ', '.join(sorted(names-{DOMAIN}))+'. Refusing destructive overwrite.')
     return active
 
+def check_live_vhost_compatible(path):
+    """Preflight only. Never replace an existing domain's Nginx configuration.
+
+    FREELAB releases change the app symlink and its dedicated systemd unit.
+    Other virtual hosts share this Nginx process and may contain custom rules.
+    An incompatible vhost needs an explicit administrator change, not an
+    automated rewrite by a ZIP watcher.
+    """
+    content=path.read_text()
+    required=(f'proxy_pass http://127.0.0.1:{API_PORT};',
+              'root /var/www/free-lab.cam/current/frontend;',
+              'location /assets/', 'try_files $uri =404;',
+              'location = /assets/room-viewer.mjs {',
+              'location = /assets/scene.mjs {',
+              'default_type application/javascript;')
+    missing=[item for item in required if item not in content]
+    if missing:
+        raise RuntimeError('Existing FREE LAB Nginx vhost requires administrator review; '
+                           'automatic update will not overwrite it. Missing: '+repr(missing))
+    return True
+
 def verify_local_es_modules():
     """Fail/rollback an installation if nginx serves ES modules as octet-stream.
 
@@ -352,6 +373,8 @@ def install(stage,version):
     # Earlier releases updated sites-available even when the live vhost was
     # loaded from a different file, leaving .mjs at application/octet-stream.
     live_site=active_nginx_target()
+    check_live_vhost_compatible(live_site)
+    run('nginx','-t')  # Check the entire shared configuration before any service change.
     prev_target=CURRENT.resolve() if CURRENT.is_symlink() else None
     stamp=time.strftime('%Y%m%d-%H%M%S')+'-'+version.replace('.','-')
     backup=BACKUP/stamp;backup.mkdir(parents=True,exist_ok=True)
@@ -368,38 +391,27 @@ def install(stage,version):
     changed=False
     try:
         atomic_write(UNIT,UNIT_TEXT);run('systemctl','daemon-reload')
-        # Update the canonical file AND the included file, if they differ.
-        # Do not replace the symlink itself with a regular file.
-        for path in config_files:atomic_write(path,NGINX)
+        # This is an application-only release. Do not rewrite or reload the
+        # shared Nginx service: it already points at the versioned symlink.
+        # If the vhost is incompatible, the preflight above fails closed.
         run('nginx','-t')
-        # Confirm that nginx -T sees our new JS MIME directives, not a stale
-        # duplicate or disabled vhost from an old configuration.
-        check=subprocess.run(['nginx','-T'],capture_output=True,text=True,timeout=22,check=True)
-        active_files=[Path(p).resolve(strict=True) for p in active_vhost_files(check.stdout)]
-        if active_files != [live_site] or 'location = /assets/room-viewer.mjs {' not in live_site.read_text():
-            raise RuntimeError('Active nginx vhost did not accept updated ES module MIME routing')
         switch(dest);changed=True
         run('systemctl','enable','free-lab')
         run('systemctl','restart','free-lab')
         wait_health(version)
-        run('systemctl','reload','nginx')
         verify_local_es_modules()
         print('DEPLOYED '+version)
         print('SERVER UNIT TESTS + LOCAL HEALTH + ES MODULE MIME PASSED')
         print('PUBLIC URL https://free-lab.cam/')
     except Exception:
-        # Recover *every* file changed, including the truly active nginx vhost.
-        for path,data in prior_configs.items():
-            if data is None:path.unlink(missing_ok=True)
-            else:path.write_bytes(data)
+        # The Nginx files were read and backed up, not modified. Never reload
+        # a shared server during application rollback.
         if prev_unit is None:UNIT.unlink(missing_ok=True)
         else:UNIT.write_bytes(prev_unit)
         if changed:
             if prev_target:switch(prev_target)
             else:CURRENT.unlink(missing_ok=True)
         run('systemctl','daemon-reload')
-        run('nginx','-t')
-        run('systemctl','reload','nginx')
         if prev_target:run('systemctl','restart','free-lab')
         else:run('systemctl','stop','free-lab')
         raise

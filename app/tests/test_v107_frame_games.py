@@ -59,7 +59,7 @@ s.update(inp(false,false,0));s.update(inp(true,false,0));s.update(inp(false,fals
                       'frameGames?.linkOnOverlap(frameLab.frames,df.id)', 'frameGames?.launch(frameLab.frames,frameTouch.id',
                       'pollFrameGames(t,pose)', 'drawFrameCubes(vp)', 'gl.drawArrays(gl.TRIANGLES,0,36)'):
             self.assertIn(token,XR)
-        self.assertIn('frame-games.js?v=0.10.47',PAGE)
+        self.assertIn('frame-games.js?v=0.10.48',PAGE)
         self.assertNotIn('cdn', (ROOT/'frontend/assets/frame-games.js').read_text())
 
 if __name__=='__main__':unittest.main()
@@ -94,22 +94,39 @@ const t=start('math','timed',0);clock+=120000;
 if(t.remaining()!==0||!t.tick()||!t.completed||t.answer(t.question.answer).accepted)throw Error('Timer not enforced');
 if(!storage.v.includes('"completed":true'))throw Error('Progress not stored');
 ''')
-    def test_page_shows_calm_two_way_entrance_and_offline_agency_controls(self):
+    def test_xr_first_entrance_is_not_a_browser_gate(self):
         html=(ROOT/'frontend/index.html').read_text()
+        app=(ROOT/'frontend/assets/app.js').read_text()
         source=(ROOT/'frontend/assets/shape-sort.js').read_text()
+        xr=(ROOT/'frontend/assets/xr.js').read_text()
+        self.assertIn('id="enterXR"',html)
         for item in ('id="experienceGate"','id="chooseMyStuff"','id="chooseAgency"',
-                     'id="agencyStudio"','id="agencyXR"','id="agencyContent"',
-                     'Free Play','Daily Challenge','Shape Garden','Number Flow','Hand Harmony'):
-            self.assertIn(item,html+source)
-        self.assertIn("getState?.()?.user?.id",source)
+                     'id="agencyStudio"','id="agencyContent"'):
+            self.assertNotIn(item,html)
+        self.assertIn('window.FreeLabXR.start()',app)
+        self.assertIn("xrExperience='entrance'",xr)
+        self.assertIn("'xr-mystuff'",xr)
+        self.assertIn("'xr-agency'",xr)
+        self.assertIn("case 'home':agencyEnter('entrance')",xr)
+        self.assertNotIn('start({experience:',source)
         self.assertIn('freelab-agency-v1-',source)
         self.assertNotIn('fetch(',source[source.index('/* Cognitive Agency'):])
+    def test_agency_uses_spatial_geometry_not_fake_3d_panels(self):
+        xr=(ROOT/'frontend/assets/xr.js').read_text()
+        for item in ('agencyGeometry(type)','agencySolid(vp,','agencyRing(vp,',
+                     "'agency-shape'", "'agency-bin:'",'agencyWorld(vp,t)',
+                     'agencyNodeDistance(r,n)','agencyContact(p)',
+                     'gl.drawArrays(gl.TRIANGLES,0,geom.count)',
+                     'agencyTip(frame,src)', "'handtarget'","agencyEnter('stuff')"):
+            self.assertIn(item,xr)
+        self.assertIn('agencyPointerEnd(frame,src)',xr)
+        self.assertNotIn("xrExperience=options.experience==='agency'",xr)
     def test_quest_reuses_native_xr_renderer_with_hands_and_controller(self):
         xr=(ROOT/'frontend/assets/xr.js').read_text()
         for snippet in ("xrExperience==='agency'",'renderAgencyView(t,frame,pose)',
                         'agencyPointerStart(e.frame,e.inputSource)',
                         'agencyPointerEnd(e.frame,e.inputSource)',
                         "src.hand.get('index-finger-tip')",
-                        "agencyGame==='hands'", "agencyGame==='shapes'", "agencyGame==='math'"):
+                        "node.type==='handtarget'", "agencyGame==='shapes'", "agencyGame==='math'"):
             self.assertIn(snippet,xr)
-        self.assertIn("start({experience:'agency'})",(ROOT/'frontend/assets/shape-sort.js').read_text())
+        self.assertIn("xrExperience!=='stuff'",xr)
