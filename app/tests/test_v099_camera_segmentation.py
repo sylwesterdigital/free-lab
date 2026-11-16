@@ -21,7 +21,7 @@ class CameraAndSegmentation099(unittest.TestCase):
   self.assertIn("ctx.createRadialGradient(160,160,93,160,160,149)",XR)
   self.assertIn("kind:'status',size:[.70,.108]",XR)
   self.assertIn("if(!cameraLive){",XR)
-  self.assertIn("XR capture always samples the current live camera",UI)
+  self.assertIn("captureXRFrame(crop)",UI)
   self.assertIn('if(cameraHint)drawCard(cameraHint,vp)',XR)
  def test_one_capture_animation_only_after_save(self):
   block=XR.split('async function makeCapture(){',1)[1].split('function bloomChildren(',1)[0]
@@ -69,7 +69,7 @@ console.log('Upper fan and upright camera-facing geometry passed');'''
   r=subprocess.run(['node','-e',script],cwd=ROOT,text=True,capture_output=True,timeout=15)
   self.assertEqual(r.returncode,0,r.stderr or r.stdout)
  def test_release_manifest_marker(self):
-  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.57')
+  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.60')
   self.assertIn('function extractionAvailable()',XR)
 
 if __name__=='__main__':unittest.main()

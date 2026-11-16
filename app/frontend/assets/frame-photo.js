@@ -29,7 +29,7 @@ function projectedCrop(corners,views){
  const xs=mean.map(x=>x[0]),ys=mean.map(x=>x[1]);const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
  if(maxX<0||minX>1||maxY<0||minY>1)return null;
  // Trim the edges slightly rather than expanding to unrelated room content.
- const width=clamp((maxX-minX)*.91,.045,.9),height=clamp((maxY-minY)*.91,.045,.9);
+ const width=clamp((maxX-minX),.045,.98),height=clamp((maxY-minY),.045,.98);
  return {x:clamp((minX+maxX-width)/2,0,1-width),y:clamp((minY+maxY-height)/2,0,1-height),width,height,aspect:frameAspect(corners),calibration:'approximate-xr-projection'};
 }
 function cropRect(crop,imageWidth,imageHeight){

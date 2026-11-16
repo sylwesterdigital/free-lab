@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.57",
-  "description": "Agency visual and interaction refinement; independent labs, safe room entry, and validated release tooling"
+  "version": "0.10.60",
+  "description": "Agency XR improvements with watcher-compatible release packaging and seamless watcher reload"
 }

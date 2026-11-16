@@ -1,6 +1,16 @@
-# FREELAB — Spatial Collector v0.7.0
+# FREELAB — Spatial Agency v0.10.60
 
-Self-hosted Quest 3 WebXR experiment served at https://free-lab.cam/. Deploy the only ZIP `FREE_LAB_RELEASE_v0.7.0.zip` by dropping it into the existing watcher’s `updates/` directory; the macOS watcher v0.4.1 remains unchanged and is bundled inside the release only because its checksum is part of the release contract.
+Self-hosted Quest 3 WebXR application served at https://free-lab.cam/. Deploy `FREE_LAB_RELEASE_v0.10.60.zip` by placing it in the macOS watcher's `updates/` directory. Watcher v0.9.5 is bundled with this complete release; the existing installed watcher validates it before deployment.
+
+## v0.10.60 — Independent HLS explainer videos and Spatial Agency
+
+Each activity reads its explainer media from the public, **persistent** folder `videos/<activity>/video_hls/index.m3u8` (public URL: `/videos/<activity>/video_hls/index.m3u8`), with its MPEG-TS segments beside the index. The folder sits in the repository root, NOT in the release ZIP. `video.mp4` directly in an activity folder is an optional playback fallback. These are public tutorial clips, not private captures or user documents.
+
+Supported folder names: `shape_garden`, `number_flow`, `hand_harmony`, `spatial_frames`, `shape_sort`, `chain_lab`, `cube_lab`, `throw_lab`, `five_note`, and `thumb_string`. The installer ensures `/var/www/free-lab.cam/videos` survives release/rollback and is available as `https://free-lab.cam/videos/` via the existing versioned Nginx document root (no shared-Nginx rewrite). Put the media folders in the repository root's `videos/`, then from macOS run **`./watch-free-lab.sh --sync-videos`**. This command only syncs the public video tree, removes orphaned media files within that tree, and does not deploy an application release or alter your database. Video files are not committed by the release watcher; Git working tree changes inside `videos/` do not prevent a release.
+
+Quest Chromium generally requires Media Source Extensions for `.m3u8`: the app first attempts native HLS, then `hls.js` from `/videos/hls.min.js` (optional, self-hosted); if that file is absent, it uses a pinned hls.js 1.7.4 CDN script. An available `video.mp4` is used as a fallback when HLS playback is unavailable. A missing video does not stop the game. The player only decodes while visible and releases its resources when closed. Quest headset decoder behavior needs physical testing.
+
+Spatial Frames capture uses a **real granted camera stream** only; AR passthrough visible through XR is not readable as web pixels. The captured rectangle paints immediately (not after database upload), then stores the same JPEG asynchronously. View-to-camera calibration remains approximate and cannot produce pixel-exact passthrough without a calibrated camera API. To grant camera access, select Spatial Frames and follow the browser camera permission request.
 
 ## First use
 
@@ -426,3 +436,12 @@ security/resource budgets, not architecture or module-count targets.
 Quest Browser hand tracking, camera availability and 3D-avatar GLB loading
 still require acceptance testing on the headset. Neither the deployment
 watcher dry run nor local unit tests reproduce those device-specific paths.
+
+## v0.10.60 — Compatible watcher upgrade
+
+This release retains every Agency gameplay feature from v0.10.58 while consolidating
+the corresponding regression suite into the existing Quest tests so the release archive
+fits the old 100-member validation limit. The included watcher v0.9.5 accepts up to
+2,048 safe members with bounded compressed/uncompressed sizes and automatically
+reloads the upgraded watcher after a successful release when running continuously.
+An older watcher already running in memory may require one restart after this upgrade.

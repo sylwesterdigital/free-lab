@@ -1,4 +1,4 @@
-"""FREELAB v0.10.57: source-only regressions. Never contacts paid providers."""
+"""FREELAB v0.10.60: source-only regressions. Never contacts paid providers."""
 import json,re,tempfile,unittest
 from pathlib import Path
 from backend import db,model_cache,glb_preview
@@ -66,11 +66,11 @@ class InlineModelAvatar122(unittest.TestCase):
   self.assertIn('as_attachment=request.args.get(\'download\')==\'1\'',BACK)
  def test_watcher_nul_status_and_release_consistency(self):
   if WATCH:
-   self.assertIn("VERSION='0.9.3'",WATCH)
+   self.assertIn("VERSION='0.9.5'",WATCH)
    self.assertIn("'--porcelain=v1','-z'",WATCH)
    self.assertIn(".stdout.split('\\0')",WATCH)
   for file in ('version.json','frontend/version.json','changelog.json','frontend/changelog.json'):
-   self.assertEqual(json.loads((ROOT/file).read_text())['version'],'0.10.57')
+   self.assertEqual(json.loads((ROOT/file).read_text())['version'],'0.10.60')
   for src in re.findall(r'(?:src|href)="(/assets/[^"]+)"',HTML):
    self.assertTrue((ROOT/'frontend'/src.split('?')[0].lstrip('/')).is_file(),src)
 if __name__=='__main__':unittest.main()

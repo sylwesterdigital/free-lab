@@ -10,7 +10,7 @@ from pathlib import Path,PurePosixPath
 
 ROOT=Path(sys.argv[1]).resolve();sys.argv=[sys.argv[0]]+sys.argv[2:]
 UPDATES=ROOT/'updates';UPLOADS=ROOT/'uploads';STATE=ROOT/'.free-lab'
-VERSION='0.9.3';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
+VERSION='0.9.5';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
 REPO='git@github.com:sylwesterdigital/free-lab.git'
 HOST=os.getenv('FREE_LAB_SSH_HOST','root@46.62.232.64')
 PORT=os.getenv('FREE_LAB_SSH_PORT','333')
@@ -70,7 +70,7 @@ def validate(archive,stage):
     with z:
         info=z.infolist();names=[f.filename for f in info if not f.is_dir()]
         # Resource safeguards, not a cap on legitimate application architecture.
-        # v0.10.57 itself stays under the prior watcher's limit so this upgrade is deployable.
+        # Transitional releases fit older watchers; new archives use the bounded 2,048-member gate.
         max_members=2048;max_total=128*1024*1024;max_member=32*1024*1024;max_archive=64*1024*1024
         if archive.stat().st_size>max_archive:raise BadArchive('Compressed ZIP exceeds 64 MiB budget')
         if len(info)>max_members or sum(f.file_size for f in info)>max_total:
@@ -149,7 +149,8 @@ def preflight(stage):
     changes=[line for line in run(['git','status','--porcelain=v1','-z','--untracked-files=all'],cwd=ROOT).stdout.split('\0') if line]
     for line in changes:
         name=line[3:]  # NUL-delimited --porcelain -z paths are unquoted, even with spaces
-        if line.startswith('?? ') and (name.startswith(('uploads/','updates/','.free-lab/')) or name=='.DS_Store'):continue
+        if line.startswith('?? ') and (name.startswith(('uploads/','updates/','.free-lab/','videos/')) or name=='.DS_Store'):continue
+        if name.startswith('videos/'):continue  # Optional public explainers are synced independently.
         if name=='watch-free-lab.sh' and not name.startswith(' D') and (ROOT/name).is_file() and (ROOT/name).read_bytes()==(stage/'watch-free-lab.sh').read_bytes():continue
         raise Failure('Local worktree has unrelated modifications. Commit/stash first: '+line)
     remote=run(['git','ls-remote','origin','refs/heads/main'],cwd=ROOT,timeout=65).stdout.strip()
@@ -310,6 +311,37 @@ journalctl -u free-lab -n 22 --no-pager -o cat || true
     say('Read-only Ubuntu diagnostics for free-lab service','STEP')
     print(ssh(script,timeout=50))
 
+def sync_videos():
+    # Explicit media-only command. Never touch Python, user data, app code or Git.
+    source=ROOT/'videos'
+    if not source.is_dir():raise Failure('Expected a videos/ directory at the repository root')
+    if shutil.which('rsync') is None:raise Failure('rsync is required for --sync-videos')
+    games={'chain_lab','cube_lab','five_note','hand_harmony','number_flow','shape_garden',
+           'shape_sort','spatial_frames','throw_lab','thumb_string'}
+    files=[];total=0
+    for path in source.rglob('*'):
+        if path.is_symlink():raise Failure('Media symlinks are not allowed: '+str(path))
+        if not path.is_file():continue
+        rel=path.relative_to(source)
+        valid=(len(rel.parts)==1 and rel.name=='hls.min.js') or (
+            rel.parts[0] in games and (
+                len(rel.parts)==2 and rel.name=='video.mp4' or
+                len(rel.parts)==3 and rel.parts[1]=='video_hls' and
+                (rel.name=='index.m3u8' or rel.suffix in ('.ts','.m4s','.mp4'))))
+        if not valid:raise Failure('Unsupported video asset path: '+str(rel))
+        if path.stat().st_size>512*1024*1024:raise Failure('Oversized media asset: '+str(rel))
+        total+=path.stat().st_size;files.append(rel)
+    if total>2*1024*1024*1024:raise Failure('Media directory exceeds 2 GiB safety limit')
+    if not files:raise Failure('No HLS manifests, segments or videos in videos/')
+    say(f'Syncing {len(files)} public media files ({total//1024} KiB) outside the release archive','STEP')
+    ssh('install -d -m 755 /var/www/free-lab.cam/videos',timeout=35)
+    remote=HOST+':/var/www/free-lab.cam/videos/'
+    cmd=['rsync','-a','--delete','--partial','--delay-updates','--chmod=D755,F644',
+         '-e',f'ssh -p {PORT} -o BatchMode=yes -o StrictHostKeyChecking=yes',
+         str(source)+'/',remote]
+    run(cmd,timeout=300)
+    say('HLS assets published to https://free-lab.cam/videos/ without a software release','PASS')
+
 def mark_deployed(v):
     tmp=STATE/'deployed.json.new'
     tmp.write_text(json.dumps({'version':v,'utc':dt.datetime.now(dt.timezone.utc).isoformat(),'url':URL},indent=2)+'\n')
@@ -333,17 +365,33 @@ def release(file,dry_run):
         mark_deployed(v)
         say(f'RELEASE COMPLETE v{v} — {URL}','PASS')
 
+def reload_if_upgraded(args):
+    # The watcher file is installed only after a successful, fully validated release.
+    # A long-running Python process otherwise retains the previous validator in memory.
+    if args.once or args.dry_run:return
+    script=ROOT/'watch-free-lab.sh'
+    try:
+        current=script.read_text()
+        match=re.search(r"^VERSION='(\d+\.\d+\.\d+)'",current,re.M)
+        if match and version_tuple(match.group(1))>version_tuple(VERSION):
+            say('Watcher upgraded to '+match.group(1)+' — restarting with new validator','STEP')
+            os.execv(str(script),[str(script),'--interval',str(args.interval)])
+    except OSError as e:
+        say('Watcher reload deferred: '+str(e),'WARN')
+
 def main():
     global LOG
     p=argparse.ArgumentParser(description='FREE LAB secure release watcher')
     opts=p.add_mutually_exclusive_group()
-    for opt in ('once','dry-run','status','tail','diagnose','rollback'):opts.add_argument('--'+opt,action='store_true')
+    for opt in ('once','dry-run','status','tail','diagnose','rollback','sync-videos'):opts.add_argument('--'+opt,action='store_true')
     p.add_argument('--interval',type=int,default=3)
     args=p.parse_args()
     if args.interval<1:p.error('--interval must be 1+')
     for folder in (UPDATES,UPLOADS,STATE,STATE/'logs',UPDATES/'processed',UPDATES/'rejected',UPDATES/'superseded'):
         folder.mkdir(parents=True,exist_ok=True)
     STATE.chmod(0o700)
+    if args.sync_videos:
+        sync_videos();return 0
     if args.status:
         say('Watcher '+VERSION+' | last verified '+last_version())
         try:say('Public health: '+str(json.loads(public_get('api/health'))),'PASS')
@@ -408,6 +456,7 @@ def main():
                     next_try[str(f)]=time.time()+90
                     say('ZIP retained. Network/deploy can be retried; server may be updated before GitHub.','WARN')
             say('=== RELEASE FINISHED '+f.name+' ===','STEP');spacing();LOG=None
+            if not had_error:reload_if_upgraded(args)
         if args.once or args.dry_run:return 1 if had_error else 0
         time.sleep(args.interval)
 

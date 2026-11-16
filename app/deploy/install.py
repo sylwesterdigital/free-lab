@@ -11,6 +11,7 @@ VAULT_KEY=Path('/etc/free-lab-vault.key')
 BASE=Path('/var/www/free-lab.cam')
 RELEASES=BASE/'releases'
 CURRENT=BASE/'current'
+VIDEOS=BASE/'videos'  # Persistent public HLS/MP4, outside versioned releases.
 DATA=Path('/var/lib/free-lab')
 VENV=Path('/opt/free-lab/venv')
 SITE=Path('/etc/nginx/sites-available/free-lab.cam')
@@ -360,6 +361,15 @@ def install(stage,version):
             if not file.is_file() or hashlib.sha256(file.read_bytes()).hexdigest()!=digest:raise RuntimeError('Existing release collision: '+name)
     else:shutil.copytree(stage/'app',dest,ignore=shutil.ignore_patterns('__pycache__','*.pyc','.venv','var'))
     os.chmod(dest,0o755)
+    # Video clips are maintained independently of deployments. Keep one public,
+    # restricted media directory and link it into every release's static root.
+    VIDEOS.mkdir(parents=True,exist_ok=True)
+    os.chmod(VIDEOS,0o755)
+    link=dest/'frontend'/'videos'
+    if link.is_symlink():
+        if link.resolve()!=VIDEOS.resolve():raise RuntimeError('Unexpected videos symlink in release')
+    elif link.exists():raise RuntimeError('Release video directory collides with persistent static media')
+    else:link.symlink_to(VIDEOS,target_is_directory=True)
     VENV.parent.mkdir(parents=True,exist_ok=True)
     if not (VENV/'bin/python').exists():run('python3','-m','venv',str(VENV),timeout=80)
     run(str(VENV/'bin/python'),'-m','pip','install','--disable-pip-version-check','-r',str(dest/'requirements.txt'),timeout=250)

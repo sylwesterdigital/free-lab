@@ -1,21 +1,58 @@
 {
-  "version": "0.10.57",
-  "title": "FREELAB v0.10.57 — Agency spatial UI and clean navigation",
+  "version": "0.10.60",
+  "title": "FREELAB v0.10.60 \u2014 Remote-install-safe test suite",
   "datetime": "2026-11-16",
   "changes": [
-    "Simplified Agency navigation and removed unused left-controller Experimental selector from My Stuff and shipped assets.",
-    "Enlarged Agency board and placed a subdued SELECT AN ACTIVITY prompt within the panel; icons are 80% of previous dimensions and secondary navigation shares one depth below the board.",
-    "Spread Throw targets across the upper room space at 30% of prior dimensions with low-cost star-field glow; wrong-colour hits remove the projectile immediately with a red particle cue.",
-    "Moved the AGENCY return control to the right periphery, separated the Number Flow answers, and placed semi-transparent timer and score indicators farther from the tabletop.",
-    "Restored private/public room selection before XR entry, retained depth request, and made camera and voice prompts closer and less intrusive.",
-    "Made Quest keyboard Enter/change/blur submit one question without requiring a second keypress.",
-    "Included an improved release watcher with a reasonable future archive budget while retaining strict SHA-256, unsafe-path, integrity and ZIP resource checks.",
-    "Preserved existing My Stuff data, private progress, headset graphics settings, and shared-server deployment safeguards."
+    "Make the video and Agency regression tests independent of the location of the release watcher, which is not installed beside the server application.",
+    "Verify watcher media synchronization only when testing the repository or release staging layout that actually contains the watcher.",
+    "Preserve all v0.10.59 gameplay, HLS explainer, Quest interactions, video syncing, source checksums and watcher v0.9.5 unchanged.",
+    "Maintain exact legacy watcher compatibility at 100 archive entries while retaining mandatory server-side Flask and unittest checks."
   ],
   "history": [
     {
+      "version": "0.10.59",
+      "title": "FREELAB v0.10.59 \u2014 Watcher-compatible release and self-update reliability",
+      "datetime": "2026-11-16",
+      "changes": [
+        "Preserve all v0.10.58 Agency XR features, HLS explainer support, real-camera frame capture, and stored game positions.",
+        "Consolidate media/Agency regression coverage in the existing Quest test module; maintain the complete test set.",
+        "Guarantee the release fits the old 100-entry watcher gate while retaining all application modules and the newer watcher.",
+        "Add automatic reload for future watcher upgrades after successful deployment; preserve archive safety budgets and SHA-256 checks.",
+        "Retain public video assets independently under /videos/ with --sync-videos support."
+      ]
+    },
+    {
+      "version": "0.10.58",
+      "title": "FREELAB v0.10.58 \u2014 Spatial Agency explainer media and interaction polish",
+      "datetime": "2026-11-16",
+      "changes": [
+        "Add first-use streamed explainer video on a rounded WebXR panel, with pause/start and a compact HOW TO PLAY button on subsequent visits.",
+        "Keep HLS and MP4 videos outside releases in a persistent /videos/ directory; provide watcher --sync-videos for independent updates.",
+        "Preview each Cube Lab creation in its final palette colour while the user draws the frame; retain the same colour on the falling cuboid.",
+        "Vary Throw Lab target sizes while keeping dispersed sky placement and incorrect-hit disappearance feedback.",
+        "Paint Spatial Frames camera crops directly onto rectangles before optional server saving; clarify camera permission and approximate calibration limitations.",
+        "Use five-finger MOVE artwork, room-locked manually positioned game tables, angled peripheral navigation, readable consistent controls and responsive hover appearance.",
+        "Remove decorative rings from shape-receiving bins and answer objects, keeping gameplay geometry uncluttered."
+      ]
+    },
+    {
+      "version": "0.10.57",
+      "title": "FREELAB v0.10.57 \u2014 Agency spatial UI and clean navigation",
+      "datetime": "2026-11-16",
+      "changes": [
+        "Simplified Agency navigation and removed unused left-controller Experimental selector from My Stuff and shipped assets.",
+        "Enlarged Agency board and placed a subdued SELECT AN ACTIVITY prompt within the panel; icons are 80% of previous dimensions and secondary navigation shares one depth below the board.",
+        "Spread Throw targets across the upper room space at 30% of prior dimensions with low-cost star-field glow; wrong-colour hits remove the projectile immediately with a red particle cue.",
+        "Moved the AGENCY return control to the right periphery, separated the Number Flow answers, and placed semi-transparent timer and score indicators farther from the tabletop.",
+        "Restored private/public room selection before XR entry, retained depth request, and made camera and voice prompts closer and less intrusive.",
+        "Made Quest keyboard Enter/change/blur submit one question without requiring a second keypress.",
+        "Included an improved release watcher with a reasonable future archive budget while retaining strict SHA-256, unsafe-path, integrity and ZIP resource checks.",
+        "Preserved existing My Stuff data, private progress, headset graphics settings, and shared-server deployment safeguards."
+      ]
+    },
+    {
       "version": "0.10.56",
-      "title": "FREELAB v0.10.56 — Gentle Agency flow and colour labs",
+      "title": "FREELAB v0.10.56 \u2014 Gentle Agency flow and colour labs",
       "datetime": "2026-11-16",
       "changes": [
         "Smooth scene crossfades with immediate input locking, a breathing gap after answers, two-hand collision prevention, and finger withdrawal before reactivation.",
@@ -29,7 +66,7 @@
     },
     {
       "version": "0.10.55",
-      "title": "FREELAB v0.10.55 — Agency XR navigation and gameplay rebuild",
+      "title": "FREELAB v0.10.55 \u2014 Agency XR navigation and gameplay rebuild",
       "datetime": "2026-11-16",
       "changes": [
         "Agency main navigation uses a wider, closer board with borderless, large activity icons and a single readable game name on hover.",
@@ -44,7 +81,7 @@
     },
     {
       "version": "0.10.55",
-      "title": "FREELAB v0.10.55 — Agency board scale, hover and routing polish",
+      "title": "FREELAB v0.10.55 \u2014 Agency board scale, hover and routing polish",
       "datetime": "2026-11-16",
       "changes": [
         "Widen Agency board, enlarge icon-first game targets and remove tiny under-icon captions.",
@@ -57,7 +94,7 @@
     },
     {
       "version": "0.10.53",
-      "title": "FREELAB v0.10.53 — XR entrance emphasis and unified Agency board",
+      "title": "FREELAB v0.10.53 \u2014 XR entrance emphasis and unified Agency board",
       "datetime": "2026-11-16",
       "changes": [
         "Increase XR entrance hover motion so MY STUFF and AGENCY scale and float forward more clearly as the user approaches or points.",
@@ -70,7 +107,7 @@
     },
     {
       "version": "0.10.50",
-      "title": "FREELAB v0.10.50 — premium spatial glass entrance",
+      "title": "FREELAB v0.10.50 \u2014 premium spatial glass entrance",
       "datetime": "2026-11-16",
       "changes": [
         "Replace opaque, muddy entrance cards with transparent spatial surfaces, luminous thick white rounded borders and one vivid mint-cyan accent, keeping passthrough visible.",
@@ -84,7 +121,7 @@
     },
     {
       "version": "0.10.49",
-      "title": "FREELAB v0.10.49 — clean XR entrance cards",
+      "title": "FREELAB v0.10.49 \u2014 clean XR entrance cards",
       "datetime": "2026-11-16",
       "changes": [
         "Replace the entrance sculpture clusters, arches, trays and floor rings with exactly two large upright rectangular panels inside the immersive WebXR session, matching the supplied two-card reference.",
@@ -97,7 +134,7 @@
     },
     {
       "version": "0.10.48",
-      "title": "FREELAB v0.10.48 — immersive XR entrance and spatial Agency",
+      "title": "FREELAB v0.10.48 \u2014 immersive XR entrance and spatial Agency",
       "datetime": "2026-11-16",
       "changes": [
         "Enter XR directly from the browser and choose MY STUFF or AGENCY only inside the immersive WebXR scene; preserve My Stuff camera, collections, capture and models.",
@@ -110,7 +147,7 @@
     },
     {
       "version": "0.10.47",
-      "title": "FREELAB v0.10.47 — macOS room thumbnail validation compatibility",
+      "title": "FREELAB v0.10.47 \u2014 macOS room thumbnail validation compatibility",
       "datetime": "2026-11-16",
       "changes": [
         "Resolve the room image storage root before security containment checks, avoiding false-negative thumbnails on macOS where /var resolves to /private/var.",
@@ -121,7 +158,7 @@
     },
     {
       "version": "0.10.45",
-      "title": "FREELAB v0.10.45 — spatial room cards, previews and session analytics",
+      "title": "FREELAB v0.10.45 \u2014 spatial room cards, previews and session analytics",
       "datetime": "2026-11-16",
       "changes": [
         "Spatial Rooms now use image-backed desktop cards, with a privacy-safe patterned backdrop when no image has been shared to a room.",
@@ -134,7 +171,7 @@
     },
     {
       "version": "0.10.44",
-      "title": "FREELAB v0.10.44 — stable first-open desktop 3D aspect ratio",
+      "title": "FREELAB v0.10.44 \u2014 stable first-open desktop 3D aspect ratio",
       "datetime": "2026-11-15",
       "changes": [
         "Desktop 3D viewer now sizes its WebGL drawing buffer from the visible viewer viewport instead of stale canvas client dimensions; this fixes squashed models that only recovered after manually resizing the browser.",
@@ -146,7 +183,7 @@
     },
     {
       "version": "0.10.42",
-      "title": "FREELAB v0.10.42 — direct XR grabbing and linked media archive",
+      "title": "FREELAB v0.10.42 \u2014 direct XR grabbing and linked media archive",
       "datetime": "2026-11-15",
       "changes": [
         "Desktop 3D viewer corrects tall GLB presentation by orienting Z-up geometry in a separate display-only pivot, preserving native axis proportions and removing the near top-down camera fit.",
@@ -159,7 +196,7 @@
     },
     {
       "version": "0.10.41",
-      "title": "FREELAB v0.10.41 — 3D texture and proportion fixes",
+      "title": "FREELAB v0.10.41 \u2014 3D texture and proportion fixes",
       "datetime": "2026-11-15",
       "changes": [
         "Protect per-triangle GLB UV coordinates when simplifying dense Quest geometry: welding positions no longer overwrites UV seams and texture-atlas mappings.",
@@ -171,7 +208,7 @@
     },
     {
       "version": "0.10.39",
-      "title": "FREELAB v0.10.39 — spatial XR model gizmos and library crash fix",
+      "title": "FREELAB v0.10.39 \u2014 spatial XR model gizmos and library crash fix",
       "datetime": "2026-11-15",
       "changes": [
         "Fixes the XR library crash caused by a static library heading entering the Bezier animation with undefined endpoints. Library pagination and returning to collection no longer break the render loop.",
@@ -184,7 +221,7 @@
     },
     {
       "version": "0.10.38",
-      "title": "FREELAB v0.10.38 — XR models now retain GPU parts; faster diagnostics and clearer library",
+      "title": "FREELAB v0.10.38 \u2014 XR models now retain GPU parts; faster diagnostics and clearer library",
       "datetime": "2026-11-15",
       "changes": [
         "Fixes the exact Quest MODEL_DRAW_SKIPPED parts:0 bug: previously the scene model referenced the same array used for temporary upload cleanup; clearing the temporary array also erased every drawable mesh. The model now takes its own array of GPU parts and releases them only on collection closure.",
@@ -197,7 +234,7 @@
     },
     {
       "version": "0.10.35",
-      "title": "FREELAB v0.10.35 — Tripo completion-to-XR delivery recovery",
+      "title": "FREELAB v0.10.35 \u2014 Tripo completion-to-XR delivery recovery",
       "datetime": "2026-11-15",
       "changes": [
         "New Tripo generation jobs are now followed by a bounded server-side monitor that saves completed GLBs immediately; headset and collection polling are not required to start private download before signed provider links expire.",
@@ -210,7 +247,7 @@
     },
     {
       "version": "0.10.34",
-      "title": "FREELAB v0.10.34 — 3D presets, model transforms and textured preview recovery",
+      "title": "FREELAB v0.10.34 \u2014 3D presets, model transforms and textured preview recovery",
       "datetime": "2026-11-15",
       "changes": [
         "XR-ready, Balanced and High-detail Tripo image-to-3D presets select a real P2 or H3.1 model version and triangle limit before submitting a paid task.",
@@ -223,10 +260,10 @@
     },
     {
       "version": "0.10.33",
-      "title": "FREELAB v0.10.33 — XR 3D preparation recovery and theater transforms",
+      "title": "FREELAB v0.10.33 \u2014 XR 3D preparation recovery and theater transforms",
       "datetime": "2026-11-15",
       "changes": [
-        "Cinematic Previous, Next and Close now share the exact same world-space transform and follow the photograph’s rotation; one evenly spaced row sits below its bottom edge, outside the image.",
+        "Cinematic Previous, Next and Close now share the exact same world-space transform and follow the photograph\u2019s rotation; one evenly spaced row sits below its bottom edge, outside the image.",
         "Generated GLBs up to 64 MB can be cached privately; large and dense models are converted to a bounded Quest preview using Blender without altering the original or submitting a second paid task.",
         "The Quest preview worker maintains a heartbeat so interrupted server workers no longer leave 3D generation permanently stuck on Preparing, and short preparation stages update the existing cube status.",
         "XR image-to-model previews throttle their own retry requests while the server prepares a model; retry and failure recovery remain available without paid regeneration.",
@@ -235,7 +272,7 @@
     },
     {
       "version": "0.10.32",
-      "title": "FREELAB v0.10.32 — Quest performance and 3D recovery",
+      "title": "FREELAB v0.10.32 \u2014 Quest performance and 3D recovery",
       "datetime": "2026-11-15",
       "changes": [
         "Tripo/AHOLO/Meshy provider status checks are now scheduled in bounded background workers instead of holding XR API requests open.",
@@ -247,7 +284,7 @@
     },
     {
       "version": "0.10.31",
-      "title": "FREELAB v0.10.31 — Tripo result recovery and uncluttered XR",
+      "title": "FREELAB v0.10.31 \u2014 Tripo result recovery and uncluttered XR",
       "datetime": "2026-11-15",
       "changes": [
         "Tripo v3 output handling accepts model_url, PBR, base model and nested legacy variants, including URL object forms; textured output is preferred.",
@@ -259,7 +296,7 @@
     },
     {
       "version": "0.10.30",
-      "title": "FREELAB v0.10.30 — 3D model pipeline diagnostics and recovery",
+      "title": "FREELAB v0.10.30 \u2014 3D model pipeline diagnostics and recovery",
       "datetime": "2026-11-14",
       "changes": [
         "Read-only 3D pipeline inspection shows generation, output URL eligibility, local GLB size and compression, Blender conversion, Quest geometry and placement stages.",
@@ -270,7 +307,7 @@
     },
     {
       "version": "0.10.29",
-      "title": "FREELAB v0.10.29 — Spatial 3D generation cubes and automatic XR model preparation",
+      "title": "FREELAB v0.10.29 \u2014 Spatial 3D generation cubes and automatic XR model preparation",
       "datetime": "2026-11-14",
       "changes": [
         "Every 3D generation task now appears as a small source-attached 3D cube with gently animated cyan, violet and pink gradient faces and illuminated edges.",
@@ -282,7 +319,7 @@
     },
     {
       "version": "0.10.28",
-      "title": "FREELAB v0.10.28 — Stationary theater controls at image bottom",
+      "title": "FREELAB v0.10.28 \u2014 Stationary theater controls at image bottom",
       "datetime": "2026-11-14",
       "changes": [
         "XR theater now displays three matching white circular controls in a single stationary left, right, close row directly along the image bottom edge.",
@@ -293,7 +330,7 @@
     },
     {
       "version": "0.10.27",
-      "title": "FREELAB v0.10.27 — Source-linked 3D pop-in and job visibility",
+      "title": "FREELAB v0.10.27 \u2014 Source-linked 3D pop-in and job visibility",
       "datetime": "2026-11-14",
       "changes": [
         "Each XR 3D generation request now creates a visible spatial job branch anchored to the selected source or segment, showing provider and task progress while generation runs in the background.",
@@ -306,20 +343,20 @@
     },
     {
       "version": "0.10.26",
-      "title": "FREELAB v0.10.26 — Tripo generation and Draco GLBs",
+      "title": "FREELAB v0.10.26 \u2014 Tripo generation and Draco GLBs",
       "datetime": "2026-11-14",
       "changes": [
         "Tripo v3 image-to-model generation now works with private image uploads and asynchronous job status, using the same source-linked collection as AHOLO and Meshy.",
         "Tripo Test now calls the read-only account balance API and checks real authentication and credits without generating or billing a model.",
         "Choose AHOLO, Meshy or Tripo from desktop/mobile Settings, the capture composer or the XR configuration panel; the preference follows the profile.",
         "The browser 3D viewer now configures a Three.js Draco loader for Draco-compressed avatars and generated GLB files.",
-        "XR refreshes the active source’s completed model previews periodically so jobs submitted on another device can appear beside their source image.",
+        "XR refreshes the active source\u2019s completed model previews periodically so jobs submitted on another device can appear beside their source image.",
         "Existing profile settings remain compatible through a non-destructive SQLite provider-choice extension."
       ]
     },
     {
       "version": "0.10.25",
-      "title": "FREELAB v0.10.25 — XR voice, text creation and avatar optimization",
+      "title": "FREELAB v0.10.25 \u2014 XR voice, text creation and avatar optimization",
       "datetime": "2026-11-14",
       "changes": [
         "Profile 3D avatar size limit increased to 4 MB. Files up to 16 MB can be inspected locally and optionally submitted to a separate opt-in Blender optimizer targeting 4 MB.",
@@ -333,7 +370,7 @@
     },
     {
       "version": "0.10.24",
-      "title": "FREELAB v0.10.24 — Textured XR models linked to source captures",
+      "title": "FREELAB v0.10.24 \u2014 Textured XR models linked to source captures",
       "datetime": "2026-11-14",
       "changes": [
         "XR-generated models now use a bounded texture-aware GLB decoder that preserves embedded base-colour images, material colour, UVs and scene-node transforms.",
@@ -346,7 +383,7 @@
     },
     {
       "version": "0.10.23",
-      "title": "FREELAB v0.10.23 — Upright framed photos, bounded crop and spatial grab",
+      "title": "FREELAB v0.10.23 \u2014 Upright framed photos, bounded crop and spatial grab",
       "datetime": "2026-11-14",
       "changes": [
         "Fixed upside-down FRAME photograph textures with correct top-to-bottom UV mapping for browser-camera images.",
@@ -359,7 +396,7 @@
     },
     {
       "version": "0.10.22",
-      "title": "FREELAB v0.10.22 — Inline editing, live models and spatial camera frames",
+      "title": "FREELAB v0.10.22 \u2014 Inline editing, live models and spatial camera frames",
       "datetime": "2026-11-14",
       "changes": [
         "Send in Capture Studio now edits or refines the selected image directly; no second text-entry modal. The gallery has its own inline editor.",
@@ -373,7 +410,7 @@
     },
     {
       "version": "0.10.22",
-      "title": "FREELAB v0.10.22 — Watcher-safe release identity",
+      "title": "FREELAB v0.10.22 \u2014 Watcher-safe release identity",
       "datetime": "2026-11-14",
       "changes": [
         "Repackaged the v0.10.20 UX hotfix under a unique v0.10.22 release identity so the watcher can pick it up.",
@@ -383,7 +420,7 @@
     },
     {
       "version": "0.10.20",
-      "title": "FREELAB v0.10.20 — Refine flow, spatial controls and packaging repair",
+      "title": "FREELAB v0.10.20 \u2014 Refine flow, spatial controls and packaging repair",
       "datetime": "2026-11-14",
       "changes": [
         "Refine image now opens a multiline image-quality editor rather than asking for an object to segment; named-object extraction remains a separate command.",
@@ -396,7 +433,7 @@
     },
     {
       "version": "0.10.19",
-      "title": "FREELAB v0.10.19 — Unified AI controls & reliable 3D",
+      "title": "FREELAB v0.10.19 \u2014 Unified AI controls & reliable 3D",
       "datetime": "2026-11-14",
       "changes": [
         "Desktop/mobile and gallery now use one in-page confirmation/entry overlay; no browser-native confirm, prompt or alert dialogs for AI and account actions.",
@@ -413,7 +450,7 @@
     },
     {
       "version": "0.10.18",
-      "title": "FREELAB v0.10.18 — Quest renderer and compact capture experience",
+      "title": "FREELAB v0.10.18 \u2014 Quest renderer and compact capture experience",
       "datetime": "2026-11-14",
       "changes": [
         "Quest immersive AR now prefers WebGL2, uses an XRWebGLLayer without unsupported DOM overlay, reduces compositor framebuffer scale and stops GPU work after context loss. Landing Three.js renderer is disabled in Quest Browser to prevent competing contexts.",
@@ -430,7 +467,7 @@
     },
     {
       "version": "0.10.17",
-      "title": "FREELAB v0.10.17 — XR controls, collaboration and profile management",
+      "title": "FREELAB v0.10.17 \u2014 XR controls, collaboration and profile management",
       "datetime": "2026-11-14",
       "changes": [
         "Development log now shows current release and scrollable previous release history.",
@@ -449,7 +486,7 @@
     },
     {
       "version": "0.10.16",
-      "title": "FREELAB v0.10.16 — Active nginx virtual host repair",
+      "title": "FREELAB v0.10.16 \u2014 Active nginx virtual host repair",
       "datetime": "2026-11-13",
       "changes": [
         "Fix ES module MIME on the nginx vhost that is actually loaded, even if sites-available differs from sites-enabled",
@@ -461,7 +498,7 @@
     },
     {
       "version": "0.10.15",
-      "title": "FREELAB v0.10.15 — Server-layout deployment fix",
+      "title": "FREELAB v0.10.15 \u2014 Server-layout deployment fix",
       "datetime": "2026-11-13",
       "changes": [
         "Correct deployment test to work without the repository-root watcher in Ubuntu release directories",
@@ -471,7 +508,7 @@
     },
     {
       "version": "0.10.14",
-      "title": "FREELAB v0.10.14 — Spatial rooms & capture studio",
+      "title": "FREELAB v0.10.14 \u2014 Spatial rooms & capture studio",
       "datetime": "2026-11-13",
       "changes": [
         "Fix nginx MIME for all ES modules; pre-deploy check catches broken room viewer",
@@ -483,7 +520,7 @@
     },
     {
       "version": "0.10.13",
-      "title": "Three.js Spatial Rooms · v0.10.13",
+      "title": "Three.js Spatial Rooms \u00b7 v0.10.13",
       "datetime": "2026-11-13 UTC",
       "changes": [
         "Replaced the canvas-based room mockup with a fullscreen, continuously rendered Three.js spatial viewer",

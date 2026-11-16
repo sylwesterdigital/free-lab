@@ -1,4 +1,4 @@
-"""Regression guards for v0.10.57. No network, headset, camera, or paid API calls."""
+"""Regression guards for v0.10.60. No network, headset, camera, or paid API calls."""
 import json
 import re
 import unittest
@@ -87,13 +87,13 @@ class QuestCompact118(unittest.TestCase):
 
  def test_release_versions(self):
   for name in ('version.json','frontend/version.json','changelog.json','frontend/changelog.json'):
-   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.57')
-  self.assertIn('room-viewer.mjs?v=0.10.57',ROOMS)
-  self.assertIn('xr.js?v=0.10.57',HTML)
+   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.60')
+  self.assertIn('room-viewer.mjs?v=0.10.60',ROOMS)
+  self.assertIn('xr.js?v=0.10.60',HTML)
 
-if __name__=='__main__': unittest.main()
 
-"""v0.10.57 Agency XR regression checks: independent labs, text aspect, focus and reachable play."""
+
+"""v0.10.60 Agency XR regression checks: independent labs, text aspect, focus and reachable play."""
 import unittest
 from pathlib import Path
 XR=(Path(__file__).resolve().parents[1]/'frontend/assets/xr.js').read_text()
@@ -119,7 +119,7 @@ class AgencySpatial55(unittest.TestCase):
         self.assertIn('agencyFollow',XR)
         self.assertIn('freezeForwardUntil',XR)
     def test_games_direct_and_reachable_with_single_agency_return(self):
-        self.assertIn("if(id.startsWith('agency-game:')){agencyGame=id.split(':')[1];agencyMode='free';agencyLevel=0;agencyStartGame()", XR)
+        self.assertIn("if(id.startsWith('agency-game:')){agencyGame=id.split(':')[1];agencyMode='free';agencyLevel=0;agencyShowExplainer(agencyGame,agencyStartGame)", XR)
         self.assertIn("agencyNavCard('agency-return','AGENCY'",XR)
         self.assertIn("agencyUiCard('agency-drag','MOVE'",XR)
         self.assertIn("agencyNode('agency-answer:'+value",XR)
@@ -141,3 +141,86 @@ class AgencySpatial55(unittest.TestCase):
             self.assertIn(key,SOUND)
         self.assertIn("cue(result.correct?'agency-correct':'agency-wrong')",XR)
 
+# XR explainer, spatial capture, and lab colour-preview regression coverage.
+import json
+import subprocess
+import unittest
+from pathlib import Path
+
+ROOT=Path(__file__).resolve().parents[1]
+XR=(ROOT/'frontend/assets/xr.js').read_text()
+PLAYER=(ROOT/'frontend/assets/agency-video.js').read_text()
+WATCH_PATH=ROOT.parent/'watch-free-lab.sh'
+INSTALL=(ROOT/'deploy/install.py').read_text()
+PAGE=(ROOT/'frontend/index.html').read_text()
+
+class AgencyMediaPlayback(unittest.TestCase):
+ def run_node(self,code):
+  r=subprocess.run(['node','-e',code],text=True,capture_output=True,timeout=25,cwd=ROOT)
+  self.assertEqual(r.returncode,0,r.stdout+'\n'+r.stderr)
+ def test_playlist_validation_and_user_first_play(self):
+  self.run_node(r'''const fs=require('fs'),vm=require('vm'),w={};
+const stored=new Map(),localStorage={getItem:k=>stored.get(k)||null,setItem:(k,v)=>stored.set(k,v)};
+const fetch=async(url,opts={})=>{
+ const valid=url==='/videos/shape_garden/video_hls/index.m3u8';
+ return {ok:true,headers:{get:()=>valid?'application/octet-stream':'text/html'},text:async()=>valid?'#EXTM3U\n#EXT-X-VERSION:3':'<!doctype html>'};
+};
+vm.runInNewContext(fs.readFileSync('frontend/assets/agency-video.js','utf8'),{window:w,localStorage,fetch,document:{},console});
+(async()=>{
+ const a=w.FreeLabAgencyMedia;
+ if(a.folder('math')!=='number_flow'||a.folder('throw')!=='throw_lab')throw Error('Wrong published media folder');
+ const first=await a.sources('shapes');
+ if(!first.hls?.endsWith('/index.m3u8')||first.mp4)throw Error('HLS signature or MP4 HTML fallback not checked');
+ const missing=await a.sources('math');if(missing.hls||missing.mp4)throw Error('SPA HTML mistaken for an HLS playlist');
+ if(a.visited('shapes',42))throw Error('Explainer should be unseen at first login');
+ a.remember('shapes',42);if(!a.visited('shapes',42)||a.visited('shapes',43))throw Error('Per-user explainer memory broken');
+})().catch(e=>{console.error(e);process.exit(1)});''')
+ def test_cube_preview_consistent_colour(self):
+  self.run_node(r'''const fs=require('fs'),vm=require('vm'),w={};
+vm.runInNewContext(fs.readFileSync('frontend/assets/frame-games.js','utf8'),{window:w});
+const engine=new w.FreeLabFrameGames.Engine();engine.setMode('cubes');
+const rect=(id,y)=>({id,width:.30,height:.30,corners:[[-.15,y+.15,0],[.15,y+.15,0],[.15,y-.15,0],[-.15,y-.15,0]]});
+for(let i=0;i<14;i++){
+ const before=engine.peekColor(),f=rect(i,1);engine.onFrame(f,'cubes',i*100);
+ if(f.color!==before||engine.boxes.at(-1).color!==before)throw Error('Preview and created cube colour differ');
+ if(!w.FreeLabFrameGames.PALETTE.includes(before))throw Error('Invalid palette');
+}
+''')
+ def test_video_overlay_navigation_and_hover(self):
+  self.assertIn('agency-video.js?v=0.10.60',PAGE)
+  self.assertIn('agencyShowExplainer(agencyGame,agencyStartGame)',XR)
+  for token in ('agencyVideoDismiss()',"'agency-video-screen'","'agency-video-play'","'agency-video-skip'", "'agency-howto'", 'agencyControlsReact(frame,t)',"agencyScreen='explainer'", 'agencySession.startedAt+=Date.now()-e.shownAt'):
+   self.assertIn(token,XR)
+  self.assertIn("video.currentTime/video.duration",XR)
+  self.assertIn("agencyUiCard('agency-drag','MOVE'",XR)
+  self.assertIn("const ghost=live?window.FreeLabFrameGames.boxFromFrame",XR)
+  self.assertIn('if(f.manual)return',XR)
+  self.assertIn('angle:x>.60?-.20:x<-.60?.20:0',XR)
+  self.assertNotIn('agencyRing(vp,[x,y+.045,z]',XR)
+ def test_media_lives_outside_release_and_is_synced_independently(self):
+  # Tests also run against /var/www/.../releases/vX.Y.Z, where only the app
+  # is installed. The watcher belongs to the ZIP and local repo, not this tree.
+  self.assertIn("VIDEOS=BASE/'videos'",INSTALL)
+  self.assertIn("link.symlink_to(VIDEOS,target_is_directory=True)",INSTALL)
+  self.assertIn('hls.js@1.7.4',PLAYER)
+  self.assertIn('/videos/hls.min.js',PLAYER)
+  self.assertIn('/videos/<activity>/video_hls/index.m3u8', (ROOT/'README.md').read_text())
+ def test_bundled_watcher_media_sync_when_available(self):
+  if not WATCH_PATH.is_file():
+   self.skipTest('The release watcher is shipped outside the server application directory')
+  watcher=WATCH_PATH.read_text()
+  self.assertIn('def sync_videos():',watcher)
+  self.assertIn('args.sync_videos',watcher)
+  self.assertIn("VERSION='0.9.5'",watcher)
+  self.assertIn("'--delete'",watcher)
+  self.assertIn(':/var/www/free-lab.cam/videos/',watcher)
+ def test_spatial_photo_visible_prior_to_server_write(self):
+  app=(ROOT/'frontend/assets/app.js').read_text()
+  self.assertIn('function captureXRFrame(crop)',app)
+  self.assertIn('window.FreeLab.captureXRFrame(region)',XR)
+  self.assertIn('framePhotos.push({frame,texture:tex,buffer,captureId:null})',XR)
+  self.assertIn('window.FreeLab.saveXRFrame({image})',XR)
+  self.assertIn('drawFramePhotos(vp)',XR)
+  self.assertIn('framePhotoBusy=false',XR)
+
+if __name__ == "__main__": unittest.main()

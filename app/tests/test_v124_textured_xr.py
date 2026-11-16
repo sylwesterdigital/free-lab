@@ -1,4 +1,4 @@
-"""v0.10.57: models remain attached to saved sources; bounded textured GLB previews.
+"""v0.10.60: models remain attached to saved sources; bounded textured GLB previews.
 No AI requests, no provider costs and no remote network.
 """
 import io,json,math,struct,unittest

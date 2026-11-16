@@ -92,6 +92,7 @@ class Engine{
  clear(){this.boxes=[];this.links=[];this.throws=[];this.mode='off';this.lastTime=null;this.floorY=0;this.events=[];this.targets=[];this.score=0;this.colorIndex=0;this.targetSeed=0;}
  setMode(m){if(m!==this.mode){this.boxes=[];this.links=[];this.throws=[];this.targets=[];this.score=0;this.colorIndex=0;}this.mode=m;this.lastTime=null;}
  setTargets(targets){this.targets=Array.isArray(targets)?targets.slice(0,8).map(t=>({...t,center:t.center.slice(),half:(t.half||[.07,.07,.05]).slice()})):[];}
+ peekColor(){return colorFor(this.colorIndex);}
  nextColor(){return colorFor(this.colorIndex++);}
 
  setFloor(y){if(Number.isFinite(y))this.floorY=y;}
