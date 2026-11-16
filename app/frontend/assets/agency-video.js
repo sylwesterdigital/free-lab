@@ -22,13 +22,21 @@ async function hlsEngine(){if(window.Hls?.isSupported?.())return window.Hls;
  if(!library)library=(async()=>{try{await script('/videos/hls.min.js');}catch{await script('https://cdn.jsdelivr.net/npm/hls.js@1.7.4/dist/hls.min.js');}
   if(!window.Hls?.isSupported?.())throw Error('HLS decoder not supported on this browser');return window.Hls;})();
  try{return await library;}catch(e){library=null;throw e;}}
-function stop(){if(!active)return;const s=active;active=null;try{s.hls?.destroy();}catch{}try{s.video.pause();s.video.removeAttribute('src');s.video.load();}catch{}s.video.remove();}
+function stop(){if(!active)return;const s=active;active=null;if(s.frameCallbackHandle!==null){try{s.video.cancelVideoFrameCallback?.(s.frameCallbackHandle);}catch{}}try{s.hls?.destroy();}catch{}try{s.video.pause();s.video.removeAttribute('src');s.video.load();}catch{}s.video.remove();}
 async function play(activity,available,{onEnd=()=>{},onError=()=>{}}={}){
  stop();const video=document.createElement('video');video.setAttribute('playsinline','');video.setAttribute('webkit-playsinline','');video.playsInline=true;video.preload='auto';video.crossOrigin='anonymous';video.loop=false;video.controls=false;
  // Only one decoder exists at a time. Quest renders these decoded frames into
  // WebGL; the underlying media element must not capture controller input.
  Object.assign(video.style,{position:'fixed',width:'2px',height:'2px',opacity:'0.001',pointerEvents:'none',left:'0',top:'0'});document.body.append(video);
- const state={video,hls:null,activity,ready:false,waitingForTap:false,onEnd,onError,usedMp4:false};active=state;
+ const state={video,hls:null,activity,ready:false,waitingForTap:false,onEnd,onError,usedMp4:false,frameCallbackEnabled:typeof video.requestVideoFrameCallback==='function',frameSerial:0,frameCallbackHandle:null};active=state;
+ if(state.frameCallbackEnabled){
+  const decoded=(_time,metadata)=>{
+   if(active!==state)return;
+   state.frameSerial=metadata?.presentedFrames||state.frameSerial+1;
+   state.frameCallbackHandle=video.requestVideoFrameCallback(decoded);
+  };
+  state.frameCallbackHandle=video.requestVideoFrameCallback(decoded);
+ }
  video.onended=()=>{if(active===state)onEnd();};
  const useMp4=()=>{if(!available.mp4||state.usedMp4)return false;
   state.usedMp4=true;state.hls?.destroy();state.hls=null;video.src=available.mp4;video.load();return true;};

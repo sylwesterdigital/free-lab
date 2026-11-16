@@ -1,3 +1,17 @@
+## v0.10.62 — XR video performance and cleanup
+
+Agency HOW TO PLAY videos now use a decoded video frame transferred directly
+from the HTMLVideoElement to a **reused WebGL video texture**. With
+`requestVideoFrameCallback()` or decoded-video frame counters, each frame
+uploads at most once; there is no artificial 12.5-fps video cap. The rounded
+video mask uses the GPU shader, while border, status and progress elements
+render separately. At the end of playback, exit or retry, all player surfaces
+are removed at once (no transparent geometry remains to cover gameplay).
+Video files remain independent from application releases under
+`/videos/<activity>/video_hls/index.m3u8` or `/videos/<activity>/video.mp4`.
+Browser/headset capabilities and stream encoding still determine achievable
+playback rate. Quest hardware tests are required for a performance guarantee.
+
 ## v0.10.61 — Responsive XR HOW TO PLAY
 
 The explainer panel now opens on selection, even if media is not yet published.

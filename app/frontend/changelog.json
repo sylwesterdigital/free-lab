@@ -1,17 +1,33 @@
 {
-  "version": "0.10.61",
-  "title": "FREELAB v0.10.61 — Reliable HOW TO PLAY explainers",
+  "version": "0.10.62",
+  "title": "FREELAB v0.10.62 — Smooth XR video texture playback and clean dismissal",
   "datetime": "2026-11-16",
   "changes": [
-    "Open the HOW TO PLAY XR panel immediately upon selection instead of silently waiting on media availability.",
-    "Show a legible VIDEO NOT PUBLISHED message and a RETRY VIDEO control when no HLS playlist or MP4 is available.",
-    "Keep games playable with missing optional media; automatically skip missing first-visit clips without marking them as watched.",
-    "Surface browser playback errors on the video panel and allow replay/retry without leaving XR.",
-    "Wait for HLS.js playlist readiness before playback and fall back to the MP4 if available when HLS fails.",
-    "Keep explainer videos independent under persistent /videos/<activity>/video_hls/index.m3u8 and synchronize with --sync-videos.",
-    "Preserve all game controls, backend data, watcher self-update and the old-watcher-compatible archive size."
+    "Replace 12.5 fps Canvas compositing with direct HTMLVideoElement-to-WebGL texture transfers.",
+    "Update reusable GPU textures only on new decoded video frames, using browser frame callbacks and playback quality fallback.",
+    "Draw player border, error/status information and progress separately, without re-compositing the video per frame.",
+    "Clip video pixels to a rounded player surface in the GPU shader.",
+    "Remove all player geometry immediately on playback completion, exit or retry, and delete retained GPU textures.",
+    "Prevent invisible or fading Agency cards from writing into the depth buffer and masking game text.",
+    "Cancel decoded-frame callbacks on player shutdown; release cards on XR session exit.",
+    "Add automated GPU frame pacing, media callback cleanup and player teardown regression coverage.",
+    "Keep video assets outside release ZIP at /videos/<activity>/video_hls/index.m3u8, retaining the watcher-compatible 100-entry archive."
   ],
   "history": [
+    {
+      "version": "0.10.61",
+      "title": "FREELAB v0.10.61 — Reliable HOW TO PLAY explainers",
+      "datetime": "2026-11-16",
+      "changes": [
+        "Open the HOW TO PLAY XR panel immediately upon selection instead of silently waiting on media availability.",
+        "Show a legible VIDEO NOT PUBLISHED message and a RETRY VIDEO control when no HLS playlist or MP4 is available.",
+        "Keep games playable with missing optional media; automatically skip missing first-visit clips without marking them as watched.",
+        "Surface browser playback errors on the video panel and allow replay/retry without leaving XR.",
+        "Wait for HLS.js playlist readiness before playback and fall back to the MP4 if available when HLS fails.",
+        "Keep explainer videos independent under persistent /videos/<activity>/video_hls/index.m3u8 and synchronize with --sync-videos.",
+        "Preserve all game controls, backend data, watcher self-update and the old-watcher-compatible archive size."
+      ]
+    },
     {
       "version": "0.10.60",
       "title": "FREELAB v0.10.60 — Remote-install-safe test suite",

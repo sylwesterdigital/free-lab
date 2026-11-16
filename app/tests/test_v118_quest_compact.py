@@ -1,4 +1,4 @@
-"""Regression guards for v0.10.61. No network, headset, camera, or paid API calls."""
+"""Regression guards for v0.10.62. No network, headset, camera, or paid API calls."""
 import json
 import re
 import unittest
@@ -87,13 +87,13 @@ class QuestCompact118(unittest.TestCase):
 
  def test_release_versions(self):
   for name in ('version.json','frontend/version.json','changelog.json','frontend/changelog.json'):
-   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.61')
-  self.assertIn('room-viewer.mjs?v=0.10.61',ROOMS)
-  self.assertIn('xr.js?v=0.10.61',HTML)
+   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.62')
+  self.assertIn('room-viewer.mjs?v=0.10.62',ROOMS)
+  self.assertIn('xr.js?v=0.10.62',HTML)
 
 
 
-"""v0.10.61 Agency XR regression checks: independent labs, text aspect, focus and reachable play."""
+"""v0.10.62 Agency XR regression checks: independent labs, text aspect, focus and reachable play."""
 import unittest
 from pathlib import Path
 XR=(Path(__file__).resolve().parents[1]/'frontend/assets/xr.js').read_text()
@@ -185,10 +185,10 @@ let checks=0,launches=0,paints=0;
 const media={visited:()=>false,stop:()=>{},remember:()=>{},urls:()=>({hls:'/videos/shape_garden/video_hls/index.m3u8'}),
  sources:async()=>{checks++;return {hls:null,mp4:null};}};
 const ctx={window:{FreeLabAgencyMedia:media},session:{},xrExperience:'agency',agencyScreen:'play',
- agencyExplainer:null,agencyExplainerToken:0,agencyVideoFrameAt:0,agencyLock:()=>{},
+ agencyExplainer:null,agencyExplainerToken:0,gl:null,agencyCards:[],agencyLock:()=>{},
  agencyBuild:()=>{paints++;},console,Date,performance:{now:()=>10}};
 vm.createContext(ctx);vm.runInContext(code,ctx);
-ctx.agencyBuildVideoCards=()=>{paints++;};
+ctx.agencyBuildVideoCards=()=>{paints++;};ctx.agencyVideoUpdateStatus=()=>{paints++;};
 (async()=>{
  ctx.agencyShowExplainer('shapes');
  if(paints!==1||ctx.agencyScreen!=='explainer')throw Error('Missing immediate XR response to HOW TO PLAY');
@@ -214,6 +214,66 @@ ctx.agencyBuildVideoCards=()=>{paints++;};
   self.assertIn('returnScreen=launch?null:agencyScreen',XR)
   self.assertIn("if(launch&&media?.visited(activity,agencyVideoUser()))",XR)
   self.assertIn("if(entry.launch){agencyExplainer=null;agencyExplainerToken++;entry.launch();return;}",XR)
+ def test_gpu_video_updates_only_for_new_decoded_frames(self):
+  # The XR render loop may run at 72/90 Hz while the source is 30 fps.
+  # A decoded frame is uploaded once; the texture is reused for the next.
+  self.run_node(r'''const fs=require('fs'),vm=require('vm');
+const full=fs.readFileSync('frontend/assets/xr.js','utf8');
+const code=full.slice(full.indexOf('function agencyVideoFrame(){'),full.indexOf('function agencyVideoProgress('));
+let alloc=0,updates=0,created=0,deleted=0;
+const video={readyState:4,videoWidth:1280,videoHeight:720,currentTime:.5,getVideoPlaybackQuality:()=>({totalVideoFrames:1})};
+const media={video,frameCallbackEnabled:true,frameSerial:1};
+const card={id:'agency-video-image',front:null,back:null,resources:[],visible:false};
+const gl={TEXTURE_2D:3553,TEXTURE_MIN_FILTER:10241,TEXTURE_MAG_FILTER:10240,LINEAR:9729,
+ TEXTURE_WRAP_S:10242,TEXTURE_WRAP_T:10243,CLAMP_TO_EDGE:33071,RGBA:6408,UNSIGNED_BYTE:5121,
+ createTexture:()=>{created++;return {id:created};},bindTexture:()=>{},texParameteri:()=>{},
+ texImage2D:()=>alloc++,texSubImage2D:()=>updates++,deleteTexture:()=>deleted++};
+const ctx={agencyExplainer:{state:'playing'},gl,agencyCards:[card],window:{FreeLabAgencyMedia:{current:media}},
+ agencyFreeCards:xs=>xs.forEach(x=>(x.resources||[]).forEach(t=>gl.deleteTexture(t))),agencyVideoUpdateStatus:()=>{}};
+vm.createContext(ctx);vm.runInContext(code,ctx);
+ctx.agencyVideoFrame();if(alloc!==1||created!==1||updates!==0||!card.visible)throw Error('Initial video frame not uploaded');
+ctx.agencyVideoFrame();if(alloc!==1||updates!==0)throw Error('Redundant upload without new decoded frame');
+media.frameSerial=2;video.getVideoPlaybackQuality=()=>({totalVideoFrames:2});ctx.agencyVideoFrame();
+if(alloc!==1||updates!==1)throw Error('Expected reused GPU texture for decoded frame');
+video.videoWidth=640;video.videoHeight=360;ctx.agencyVideoFrame();
+if(alloc!==2||updates!==1)throw Error('Resolution switch must reallocate texture');
+const second={readyState:4,videoWidth:640,videoHeight:360,currentTime:0.5};media.video=second;media.frameSerial=0;
+ctx.agencyVideoFrame();if(created!==2||deleted!==1||alloc!==3)throw Error('Video switch retained stale GPU texture');
+ctx.agencyExplainer=null;ctx.agencyVideoFrame();if(alloc!==3)throw Error('Uploads persisted after explainer exit');
+''')
+ def test_video_surface_removed_without_depth_ghost(self):
+  self.run_node(r'''const fs=require('fs'),vm=require('vm');
+const src=fs.readFileSync('frontend/assets/xr.js','utf8');
+const code=src.slice(src.indexOf('function agencyFreeCards('),src.indexOf('function agencyPaintTransition('));
+const released=[];
+const game={id:'agency-head',front:'title',resources:['title'],alpha:1};
+const video={id:'agency-video-image',front:'movie',resources:['movie'],alpha:1};
+const border={id:'agency-video-border',front:'edge',resources:['edge'],alpha:1};
+const ctx={gl:{deleteTexture:t=>released.push(t)},performance:{now:()=>100},agencyFadingCards:[],
+ agencyCards:[video,border,game],agencyNodes:[{}],entranceHover:null,agencyHoverId:null,agencyHoverInfo:null};
+vm.createContext(ctx);vm.runInContext(code,ctx);ctx.agencyClearCards();
+if(!released.includes('movie')||!released.includes('edge'))throw Error('Video GPU resources not released at dismissal');
+if(ctx.agencyFadingCards.some(e=>e.card.id.startsWith('agency-video-')))throw Error('Invisible video stayed in transition');
+if(ctx.agencyFadingCards.length!==1||ctx.agencyFadingCards[0].card.id!=='agency-head')throw Error('Other scene fade broken');
+if(ctx.agencyCards.length||ctx.agencyNodes.length)throw Error('Dismissed player retains scene objects');
+''')
+  self.assertIn('if(color.a*uOpacity<.012)discard',XR)
+  self.assertIn("if(c.kind==='agency')gl.depthMask(false)",XR)
+ def test_decoder_callback_cancelled_on_media_stop(self):
+  self.run_node(r'''const fs=require('fs'),vm=require('vm');
+const script=fs.readFileSync('frontend/assets/agency-video.js','utf8');let callback=null,canceled=false,paused=false;
+const video={style:{},setAttribute:()=>{},load:()=>{},play:async()=>{},pause:()=>{paused=true;},remove:()=>{},
+ requestVideoFrameCallback:fn=>{callback=fn;return 9;},cancelVideoFrameCallback:id=>{if(id!==9)throw Error('Wrong callback');canceled=true;},
+ canPlayType:()=>''};
+const win={};const ctx={window:win,document:{body:{append:()=>{}},createElement:()=>video},localStorage:{},console};
+vm.runInNewContext(script,ctx);
+(async()=>{const a=win.FreeLabAgencyMedia;
+ const state=await a.play('shapes',{hls:null,mp4:'/videos/shape_garden/video.mp4'});
+ if(!state?.ready||!state.frameCallbackEnabled||!callback)throw Error('Decoded-frame callback missing');
+ callback(0,{presentedFrames:7});if(state.frameSerial!==7)throw Error('Frame callback did not update serial');
+ a.stop();if(!canceled||!paused||a.current!==null)throw Error('Decoder callback or media survived stop');
+})().catch(e=>{console.error(e);process.exitCode=1});
+''')
  def test_cube_preview_consistent_colour(self):
   self.run_node(r'''const fs=require('fs'),vm=require('vm'),w={};
 vm.runInNewContext(fs.readFileSync('frontend/assets/frame-games.js','utf8'),{window:w});
@@ -226,11 +286,15 @@ for(let i=0;i<14;i++){
 }
 ''')
  def test_video_overlay_navigation_and_hover(self):
-  self.assertIn('agency-video.js?v=0.10.61',PAGE)
+  self.assertIn('agency-video.js?v=0.10.62',PAGE)
   self.assertIn('agencyShowExplainer(agencyGame,agencyStartGame)',XR)
   for token in ('agencyVideoDismiss()',"'agency-video-screen'","'agency-video-play'","'agency-video-skip'", "'agency-howto'", 'agencyControlsReact(frame,t)',"agencyScreen='explainer'", 'agencySession.startedAt+=Date.now()-e.shownAt'):
    self.assertIn(token,XR)
   self.assertIn("video.currentTime/video.duration",XR)
+  self.assertIn("gl.texSubImage2D",XR)
+  self.assertIn("requestVideoFrameCallback(decoded)",PLAYER)
+  self.assertNotIn("t-agencyVideoFrameAt<80",XR)
+  self.assertNotIn("ctx.drawImage(video",XR)
   self.assertIn("agencyUiCard('agency-drag','MOVE'",XR)
   self.assertIn("const ghost=live?window.FreeLabFrameGames.boxFromFrame",XR)
   self.assertIn('if(f.manual)return',XR)

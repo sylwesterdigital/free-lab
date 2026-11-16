@@ -80,7 +80,7 @@ class TestSamCutouts109(unittest.TestCase):
   self.assertIn('object_boxes=prompt_boxes',back)
   self.assertIn('cutouts:Boolean(cutouts)',ui)
   self.assertIn("if(!cutout||back)panelSkin",xr)
-  self.assertIn('if(color.a<.012)discard',xr)
+  self.assertIn('if(color.a*uOpacity<.012)discard',xr)
   self.assertIn('meta-sam-parser==0.2.0',(ROOT/'requirements.txt').read_text())
 
 if __name__=='__main__':unittest.main()

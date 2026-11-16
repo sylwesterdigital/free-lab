@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.61",
-  "description": "Reliable XR video explainers: visible missing-media status, retry, and HLS/MP4 playback readiness"
+  "version": "0.10.62",
+  "description": "Direct GPU decoded-frame video textures in XR, no 12.5 fps cap, complete scene teardown after playback"
 }
