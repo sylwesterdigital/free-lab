@@ -85,7 +85,8 @@ class SpatialXRTests(unittest.TestCase):
         self.assertNotIn("FreeLabSound?.play?.('type')",XR)
         self.assertIn('mascotPointer.flightQ=quatSlerp',XR)
         self.assertIn("'Welcome to FreeLab! Your room is ready to explore.'",XR)
-        self.assertIn("'Agency activity ready. Home returns to Agency.'",XR)
+        self.assertIn("function agencyEnterLab(mode)",XR)
+        self.assertIn("agencyNavCard('agency-return','AGENCY'",XR)
     def test_old_library_pages_and_frame_touch(self):
         self.assertIn('galleryPage*8',XR)
         self.assertIn("gallerynav'+direction",XR)

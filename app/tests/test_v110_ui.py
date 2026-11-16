@@ -1,4 +1,4 @@
-"""XR v0.10.54: persistent visual preferences, image modes and spatial lineage."""
+"""XR v0.10.55: persistent visual preferences, image modes and spatial lineage."""
 import io,subprocess,unittest
 from pathlib import Path
 from PIL import Image
@@ -28,14 +28,15 @@ class UX110(unittest.TestCase):
   for v in ("['config','⚙']",'configTexture()',"case 'config':return showConfig()",'function configHit(hit)',"card.kind==='config'",'refreshToolbar()',"case 'themerandom'",'function cardBack(c)'):
    self.assertIn(v,XR)
  def test_switches_affect_real_backend_and_rendering(self):
-  for flag in ('borders','backgrounds','mascot','experimental','masked','voice'):
+  for flag in ('borders','backgrounds','mascot','masked','voice'):
    self.assertIn("['"+flag+"'",XR)
   self.assertIn('const payload={recognize:true,cutouts:Boolean(cutouts)',APP)
   self.assertIn('cutouts:Boolean(cutouts)',APP)
   self.assertIn("v.get('cutouts') is not False",BACK)
   self.assertIn('sam.rectangle_jpeg(photo,region)',BACK)
   self.assertIn('uiSettings.voice!==false',XR)
-  self.assertIn('uiSettings.experimental===false',XR)
+  self.assertIn('function agencyEnterLab(mode)',XR)
+  self.assertNotIn("['experimental','Experimental modes']", XR)
  def test_two_image_rendering_modes_from_sam(self):
   im=Image.new('RGBA',(8,8),(240,12,24,255))
   region={'box':[1,1,6,6],'image_size':(8,8),'width':5,'height':5,'raster':bytes([0]+[255]*24)}

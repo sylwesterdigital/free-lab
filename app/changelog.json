@@ -1,16 +1,31 @@
 {
-  "version": "0.10.54",
-  "title": "FREELAB v0.10.54 — Agency board scale, hover and routing polish",
+  "version": "0.10.55",
+  "title": "FREELAB v0.10.55 — Agency XR navigation and gameplay rebuild",
   "datetime": "2026-11-16",
   "changes": [
-    "Widen Agency board, enlarge icon-first game targets and remove tiny under-icon captions.",
-    "Preserve the AGENCY heading and Play. Focus. Feel good. subtitle without stretching or compressing text.",
-    "Increase proximity/hover scaling and add dynamic icon focus borders with hover-based activity description.",
-    "Improve controller and hand ray visibility with soft pastel sampled gradients and brighter endpoints.",
-    "Keep experimental lab sessions under Agency navigation, with Home returning to Agency and My Stuff leaving the lab.",
-    "Retain the previous v0.10.53 board and existing private data and deployment protections."
+    "Agency main navigation uses a wider, closer board with borderless, large activity icons and a single readable game name on hover.",
+    "World-space typography now retains original width-to-height proportions; icons gain an illuminated outline only on hover.",
+    "Agency navigation eases with head turns but stays still during forward movement and hand/controller interaction.",
+    "Shape Garden, Number Flow and Hand Harmony open directly and place their interactive elements closer to the hands with clear face-on labels.",
+    "MOVE handle lets the user relocate the activity layout; objects can be rotated during a grab, released or tossed, with distinct positive and corrective audio feedback.",
+    "Hand Harmony spawns smaller targets at varied reachable locations; game navigation uses AGENCY rather than My Stuff or misleading Finish links.",
+    "Experimental labs now render in a dedicated Agency session view without My Stuff UI or the left-controller experiment selector.",
+    "All existing private My Stuff captures, collections, AI providers and server data are preserved. Quest hardware acceptance remains necessary."
   ],
   "history": [
+    {
+      "version": "0.10.55",
+      "title": "FREELAB v0.10.55 — Agency board scale, hover and routing polish",
+      "datetime": "2026-11-16",
+      "changes": [
+        "Widen Agency board, enlarge icon-first game targets and remove tiny under-icon captions.",
+        "Preserve the AGENCY heading and Play. Focus. Feel good. subtitle without stretching or compressing text.",
+        "Increase proximity/hover scaling and add dynamic icon focus borders with hover-based activity description.",
+        "Improve controller and hand ray visibility with soft pastel sampled gradients and brighter endpoints.",
+        "Keep experimental lab sessions under Agency navigation, with Home returning to Agency and My Stuff leaving the lab.",
+        "Retain the previous v0.10.53 board and existing private data and deployment protections."
+      ]
+    },
     {
       "version": "0.10.53",
       "title": "FREELAB v0.10.53 — XR entrance emphasis and unified Agency board",

@@ -72,14 +72,14 @@ if(w.FreeLabLabSelector.input([{handedness:'right',gamepad:{mapping:'xr-standard
 ''')
 
     def test_integration_menu_near_controller_and_frozen_frames(self):
-        for token in ('pollLabSelector(frame,t,pose)', 'pollFrameLab(frame,t)', 'drawSpatialFrames(vp,t,pose)',
-                      'window.FreeLabFrameLab.Experiment()', 'window.FreeLabLabSelector.Selector()',
+        for token in ('renderAgencyLab(t,frame,pose)', 'pollFrameLab(frame,t)', 'drawSpatialFrames(vp,t,pose)',
+                      'window.FreeLabFrameLab.Experiment()', 'agencyEnterLab(mode)',
                       "frame.getJointPose?.(src.hand.get(jointName),refSpace)",
                       "labMenu.q=quatY(cameraYaw(pose))",'for(const f of frameLab.frames)',
                       "window.FreeLab?.pref?.('frameHoldSeconds')",'gl.TRIANGLE_STRIP'):
             self.assertIn(token,XR)
-        self.assertIn('lab-selector.js?v=0.10.54',PAGE)
-        self.assertIn('frame-lab.js?v=0.10.54',PAGE)
+        self.assertIn('lab-selector.js?v=0.10.55',PAGE)
+        self.assertIn('frame-lab.js?v=0.10.55',PAGE)
         self.assertIn('id="pref-frameHoldSeconds"',PAGE)
         for name in ('frame-lab.js','lab-selector.js'):
             self.assertNotIn('fetch(', (ROOT/'frontend/assets'/name).read_text())
