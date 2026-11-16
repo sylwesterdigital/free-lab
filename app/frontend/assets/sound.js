@@ -1,5 +1,5 @@
 /* FREELAB 0.7 — original procedural audio, no assets or external calls. */
-(()=>{'use strict';let ctx=null,lastHover=0,enabled=true,arrivalQueued=false;let stringVoice=null;const fingerVoices=new Map();
+(()=>{'use strict';let ctx=null,lastHover=0,lastHoverOut=0,lastChoose=0,enabled=true,arrivalQueued=false;let stringVoice=null;const fingerVoices=new Map();
 function unlock(){if(!enabled)return false;try{if(!ctx)ctx=new (window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume().then(()=>{if(arrivalQueued){arrivalQueued=false;play('arrival');}}).catch(()=>{});return true;}catch{return false;}}
 function note(hz,when,seconds=0.16,volume=.06,type='sine',slide=1){if(!ctx||ctx.state!=='running')return;
  const o=ctx.createOscillator(),g=ctx.createGain(),f=ctx.createBiquadFilter();o.type=type;o.frequency.setValueAtTime(hz,when);if(slide!==1)o.frequency.exponentialRampToValueAtTime(Math.max(45,hz*slide),when+seconds);f.type='lowpass';f.frequency.value=2500;o.connect(f);f.connect(g);g.connect(ctx.destination);
@@ -71,6 +71,8 @@ function fingerSnap(id){fingerStop(id);if(!enabled||!ctx||ctx.state!=='running')
  noiseBurst(0,.085,.035,2100);note(440,ctx.currentTime+.01,.21,.027,'sine',.84);
 }
 function hover(){const now=performance.now();if(now-lastHover<140)return;lastHover=now;play('hover');}
+function hoverOut(){const now=performance.now();if(now-lastHoverOut<140)return;lastHoverOut=now;play('release');}
+function choose(){const now=performance.now();if(now-lastChoose<180)return;lastChoose=now;play('enter');}
 document.addEventListener('pointerdown',unlock,{passive:true});document.addEventListener('keydown',unlock,{passive:true});
-window.FreeLabSound={unlock,play,hover,stringStart,stringUpdate,stringStop,stringSnap,stringAttach,fingerAttach,fingerUpdate,fingerStop,fingerSnap,fingersStopAll,setEnabled:v=>{enabled=Boolean(v);if(!enabled){stringStop();fingersStopAll();}},getEnabled:()=>enabled};
+window.FreeLabSound={unlock,play,hover,hoverOut,choose,stringStart,stringUpdate,stringStop,stringSnap,stringAttach,fingerAttach,fingerUpdate,fingerStop,fingerSnap,fingersStopAll,setEnabled:v=>{enabled=Boolean(v);if(!enabled){stringStop();fingersStopAll();}},getEnabled:()=>enabled};
 })();

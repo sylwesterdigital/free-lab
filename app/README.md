@@ -383,6 +383,6 @@ No database, backend, nginx or watcher changes. The downloadable ZIP is suitable
 for the normal *local* watcher validation, but final headset visual/performance
 acceptance remains required.
 
-## v0.10.52 — headset graphics quality controls
+## v0.10.53 — headset graphics quality controls
 
 Settings → Experience → Graphics quality controls framebuffer scale (0.8×, 1.0×, 1.2×, 1.5×, 2.0×), XR antialiasing and fixed foveation. Use Balanced by default; higher scales use considerably more GPU and memory and may reduce frame rate. Settings persist in the current browser only, with strict input validation. Foveation changes can take effect during an immersive XR session when supported; framebuffer scaling and AA are applied when **re-entering XR**. The existing in-headset My Stuff CONFIG panel includes an XR GRAPHICS submenu for in-session experimentation. A browser may cap requested scaling and ignore unsupported foveation; use the diagnostic framebuffer dimensions to verify actual behavior. If a graphics layer cannot be allocated, a safe lower-resolution layer is tried; no server or model API call is involved. Device-specific visual sharpness, thermal throttling and frame timing must be tested on the target headset.
