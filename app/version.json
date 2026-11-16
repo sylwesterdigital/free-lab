@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.50",
-  "description": "Premium glass-outline XR entrance with proximity-reactive typography, inertia follow and warm audio"
+  "version": "0.10.51",
+  "description": "Configurable WebXR render quality, antialiasing and foveation with device-safe fallback"
 }

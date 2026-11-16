@@ -5,9 +5,11 @@
 */
 (()=>{'use strict';
 let gl,canvas,program,lineProgram,quad,rayBuffer,refSpace,session,root,poseReady=false,floorReference=false;
+let xrGraphicsRequested=null,xrGraphicsApplied=null,xrGraphicsFailures=[],xrGraphicsDefaultFoveation=null;
+
 let pending3dJobs=[],galleryPage=0,darkroom=null,darkBackdrop=null,darkClose=null,darkFloor=null,descriptionContext=null,descriptionQuestionMode=false,frameTouch=null,frameErase=null,lastMascotQuip=0,statusBorn=0,jobProvider='auto';
 let meshUniforms=null,meshProgram=null,meshJobProgram=null,meshWhite=null,meshGeneration=0,meshSyncAt=0,meshSyncBusy=false;
-let configPanel=null,configShowing=false,config3DChoice='aholo',config3DAvailable=false,uiSettings=window.FreeLabXRUI?.read?.()||{},lastConfigTick=0,mascotTrailAt=0;
+let configPanel=null,configShowing=false,configPage='personalize',config3DChoice='aholo',config3DAvailable=false,uiSettings=window.FreeLabXRUI?.read?.()||{},lastConfigTick=0,mascotTrailAt=0;
 let toolbar=null,editbar=null,statusCard=null,cloud=null,clouds=[],cards=[],zones=[],selected=null,held=null,selectedMesh=null,meshTools=null,meshGizmoMode="move";
 let branchFocusId=null,branchPage=0; // Parent-based tree browsing, no fixed generation/depth limit.
 let imageMenuOpen=false,voiceBadge=null,voicePhase='idle',voiceMessage='',voiceUntil=0,voicePending=null,voiceOk=null,voiceCancel=null,voiceResultStamp=0;
@@ -141,7 +143,7 @@ function inverse(m){const a=m[0],b=m[4],c=m[8],d=m[1],e=m[5],f=m[9],g=m[2],h=m[6
  const x=m[12],y=m[13],z=m[14];return new Float32Array([A,E,I,0,B,G,J,0,C,H,K,0,-A*x-B*y-C*z,-E*x-G*y-H*z,-I*x-J*y-K*z,1]);}
 function compile(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
 function shader(v,f){const p=gl.createProgram();gl.attachShader(p,compile(gl.VERTEX_SHADER,v));gl.attachShader(p,compile(gl.FRAGMENT_SHADER,f));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(p));return p;}
-function setup(){canvas=document.createElement('canvas');canvas.width=16;canvas.height=16;gl=canvas.getContext('webgl2',{alpha:true,antialias:false,premultipliedAlpha:true,depth:true,xrCompatible:true,powerPreference:'high-performance'})||canvas.getContext('webgl',{alpha:true,antialias:false,premultipliedAlpha:true,depth:true,xrCompatible:true});if(!gl)throw Error('WebGL unavailable for XR');canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();xr3D('XR_WEBGL_CONTEXT_LOST',{jobs:meshPreviews.filter(m=>m.parts?.length).map(m=>m.jobId)},'error');window.FreeLab?.traceEvent?.('XR GPU context lost; immersive session will be ended safely','error');try{session?.end();}catch{}},{once:false});program=shader(V,F);lineProgram=shader(LV,LF);mascotProgram=shader(MV,MF);meshProgram=shader(XMV,XMF);meshJobProgram=shader(JBV,JBF);strandProgram=shader(STRAND_V,STRAND_F);strandBuffer=gl.createBuffer();initializeMascotSphere();
+function setup(){canvas=document.createElement('canvas');canvas.width=16;canvas.height=16;gl=canvas.getContext('webgl2',{alpha:true,antialias:xrGraphicsRequested?.antialias!==false,premultipliedAlpha:true,depth:true,xrCompatible:true,powerPreference:'high-performance'})||canvas.getContext('webgl',{alpha:true,antialias:xrGraphicsRequested?.antialias!==false,premultipliedAlpha:true,depth:true,xrCompatible:true});if(!gl)throw Error('WebGL unavailable for XR');canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();xr3D('XR_WEBGL_CONTEXT_LOST',{jobs:meshPreviews.filter(m=>m.parts?.length).map(m=>m.jobId)},'error');window.FreeLab?.traceEvent?.('XR GPU context lost; immersive session will be ended safely','error');try{session?.end();}catch{}},{once:false});program=shader(V,F);lineProgram=shader(LV,LF);mascotProgram=shader(MV,MF);meshProgram=shader(XMV,XMF);meshJobProgram=shader(JBV,JBF);strandProgram=shader(STRAND_V,STRAND_F);strandBuffer=gl.createBuffer();initializeMascotSphere();
  const a=[-.5,-.5,0,0,1,.5,-.5,0,1,1,-.5,.5,0,0,0,-.5,.5,0,0,0,.5,-.5,0,1,1,.5,.5,0,1,0];
  quad=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,quad);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(a),gl.STATIC_DRAW);rayBuffer=gl.createBuffer();
  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.disable(gl.CULL_FACE);
@@ -305,7 +307,7 @@ function toolbarTexture(kind){
  return texture(c);
 }
 const configSwitches=[['borders','Borders'],['backgrounds','Panel backgrounds'],['mascot','Flying mascot'],['experimental','Experimental modes'],['masked','Transparent SAM cutouts'],['voice','Voice features']];
-function configTexture(){const [c,ctx]=canvas2d(770,970),p=uiPalette();panelSkin(ctx,c.width,c.height,38);
+function configTexture(){if(configPage==='graphics')return graphicsTexture();const [c,ctx]=canvas2d(770,970),p=uiPalette();panelSkin(ctx,c.width,c.height,38);
  text(ctx,'XR  /  PERSONALIZE',36,62,26,p.muted,700);text(ctx,'×',720,65,48,p.accent,650,'center');
  text(ctx,'THEME',43,135,25,p.text,670);text(ctx,uiSettings.generated?'GENERATED':uiSettings.theme.toUpperCase(),450,135,25,p.accent,700);
  text(ctx,'◀',615,135,30,p.accent,700,'center');text(ctx,'▶',710,135,30,p.accent,700,'center');
@@ -324,17 +326,37 @@ function configTexture(){const [c,ctx]=canvas2d(770,970),p=uiPalette();panelSkin
  text(ctx,'PROCESSING ANIMATION',43,841,25,p.text,670);
  text(ctx,(uiSettings.processing||'spin').toUpperCase(),430,887,26,p.accent,670);
  text(ctx,'◀',610,888,30,p.accent,700,'center');text(ctx,'▶',702,888,30,p.accent,700,'center');
- text(ctx,'Changes save automatically in this headset browser',38,938,19,p.muted,480);
+ text(ctx,'XR GRAPHICS  /  RESOLUTION  /  ANTIALIASING     ›',38,941,23,p.accent,690);
+ return texture(c);
+}
+function graphicsTexture(){
+ const [c,ctx]=canvas2d(770,970),p=uiPalette(),q=xrGraphicsRead(),info=xrGraphicsDiagnostics();panelSkin(ctx,c.width,c.height,38);
+ text(ctx,'XR  /  GRAPHICS',38,65,30,p.text,700);text(ctx,'×',720,65,48,p.accent,650,'center');
+ text(ctx,'QUALITY FOR YOUR HEADSET',42,133,23,p.muted,620);
+ const choices=['performance','balanced','quality','ultra','extreme','custom'];
+ const values=[['PRESET',q.preset.toUpperCase(),'graphicspreset'],['RESOLUTION',q.scale.toFixed(1)+'×','graphicsscale'],
+  ['ANTIALIASING',q.antialias?'ON':'OFF','graphicsaa'],['FOVEATION',q.foveation.toUpperCase(),'graphicsfoveation']];
+ values.forEach(([label,value],i)=>{const y=236+i*144;
+  text(ctx,label,42,y,24,p.text,700);text(ctx,value,42,y+48,28,p.accent,750);
+  text(ctx,'◀',607,y+42,36,p.accent,650,'center');text(ctx,'▶',705,y+42,36,p.accent,650,'center');
+  if(i<3){ctx.beginPath();ctx.moveTo(42,y+83);ctx.lineTo(722,y+83);ctx.strokeStyle=p.edge;ctx.globalAlpha=.27;ctx.stroke();ctx.globalAlpha=1;}
+ });
+ text(ctx,'ACTIVE FRAMEBUFFER',42,822,22,p.muted,700);
+ text(ctx,info.active?info.framebufferWidth+' × '+info.framebufferHeight+' px / AA '+(info.antialias?'ON':'OFF'):'XR framebuffer unavailable',42,857,23,p.text,620);
+ text(ctx,'Resolution / AA: exit and re-enter XR to apply',42,896,21,p.muted,560);
+ text(ctx,'‹  BACK TO PERSONALIZATION',42,944,23,p.accent,690);
  return texture(c);
 }
 function refreshConfig(){if(!configPanel||!gl)return;const old=configPanel.front;configPanel.front=configTexture();configPanel.back=configPanel.front;if(old)gl.deleteTexture(old);}
-function showConfig(){configShowing=!configShowing;
+function showConfig(){configShowing=!configShowing;if(configShowing)configPage='personalize';
  if(configShowing&&!configPanel){const m=latestPose?.transform.matrix;const pos=latestPose?point(poseForwardAnchor(latestPose,1.05,-.08),[0,0,0]):[0,1.3,-1];const q=latestPose?lookingQuat(pos,[m[12],m[13],m[14]]):[0,0,0,1];const tex=configTexture();
   configPanel={id:'xr-config',kind:'config',pos,q,size:[.66,.83],scale:1,visible:true,front:tex,back:tex,resources:[tex]};}
  if(configPanel)configPanel.visible=configShowing;
  if(configShowing){refreshConfig();window.FreeLab?.get3DPreference?.().then(p=>{if(!configShowing)return;config3DChoice=['aholo','meshy','tripo'].includes(p.provider)?p.provider:'aholo';config3DAvailable=Boolean(p.available?.[config3DChoice]);refreshConfig();}).catch(()=>{});}
 }
 function configHit(hit){const x=(hit.x+.5)*770,y=(.5-hit.y)*970;
+ if(configPage==='graphics'){if(y<95)return x>645?'configclose':null;if(y>910)return 'graphicsback';for(let i=0;i<4;i++){const top=190+i*144;if(y>=top&&y<top+102)return x>645?['graphicspresetnext','graphicsscalenext','graphicsaanext','graphicsfoveationnext'][i]:x>550?['graphicspresetprev','graphicsscaleprev','graphicsaaprev','graphicsfoveationprev'][i]:null;}return null;}
+ if(y>922)return 'configgraphics';
  if(y<90)return x>645?'configclose':null;
  if(y>=95&&y<174)return x>650?'themenext':x>565?'themeprev':null;
  if(y>=178&&y<250)return 'themerandom';
@@ -2983,11 +3005,24 @@ function renderCinema(frame,pose){
   gl.enable(gl.DEPTH_TEST);
  }
 }
+function graphicsCycle(id){
+ const gfx=window.FreeLabXRGraphics;if(!gfx)return;
+ const q=gfx.read(),step=id.endsWith('prev')?-1:1;
+ const key=id.startsWith('graphicspreset')?'preset':id.startsWith('graphicsscale')?'scale':id.startsWith('graphicsaa')?'antialias':'foveation';
+ const values=key==='preset'?['performance','balanced','quality','ultra','extreme']:key==='scale'?gfx.scales:key==='antialias'?[false,true]:gfx.foveations;
+ const current=values.indexOf(q[key]),value=values[(current+step+values.length)%values.length];
+ const next=gfx.save({[key]:value});
+ if(key==='foveation'){const status=xrApplyFoveation(next.foveation);setStatus('FOVEATION · '+status,4500);}
+ else setStatus('XR GRAPHICS · '+next.scale+'× · AA '+(next.antialias?'ON':'OFF')+' · RE-ENTER XR TO APPLY',6000);
+ refreshConfig();
+}
 async function action(id){const t=performance.now();if(t-lastAction<200)return;lastAction=t;
  if(busy&&['capture','extract','segment','voice','refine','prompt','describe','3d','submit3d','apply'].includes(id))return;
  switch(id){case 'home':agencyEnter('entrance');return;case 'capture':return makeCapture();case 'extract':return runExtract();
  case 'describe':return describeSelected();case 'descriptionclose':hideDescription();return;case 'descriptionask':return descriptionAskKeyboard();case 'descriptionretry':return askDescription('');case 'descriptionvoice':if(descriptionContext){descriptionQuestionMode=true;return voicePrompt();}return;
- case 'config':return showConfig();case 'configclose':configShowing=false;if(configPanel)configPanel.visible=false;return;
+ case 'config':return showConfig();case 'configgraphics':configPage='graphics';refreshConfig();return;case 'graphicsback':configPage='personalize';refreshConfig();return;
+ case 'graphicspresetnext':case 'graphicspresetprev':case 'graphicsscalenext':case 'graphicsscaleprev':case 'graphicsaanext':case 'graphicsaaprev':case 'graphicsfoveationnext':case 'graphicsfoveationprev':return graphicsCycle(id);
+ case 'configclose':configShowing=false;if(configPanel)configPanel.visible=false;return;
  case 'themenext':return cycleSetting('theme',1);case 'themeprev':return cycleSetting('theme',-1);
  case 'themerandom':uiSettings.generated=window.FreeLabXRUI.generate();return uiUpdate('generated',uiSettings.generated);
  case 'config3dnext':case 'config3dprev':{const choices=['aholo','meshy','tripo'],i=choices.indexOf(config3DChoice);const value=choices[(i+(id==='config3dprev'?-1:1)+choices.length)%choices.length];return window.FreeLab?.save3DPreference?.(value).then(p=>{config3DChoice=p.provider;return window.FreeLab.get3DPreference().then(result=>{config3DAvailable=Boolean(result.available?.[config3DChoice]);refreshConfig();setStatus('3D MODEL · '+config3DChoice.toUpperCase()+(config3DAvailable?' READY':' NO KEY'),5000);});}).catch(e=>setStatus('3D settings · '+e.message,8000));}
@@ -3016,10 +3051,47 @@ async function action(id){const t=performance.now();if(t-lastAction<200)return;l
  case 'follow':return toggleFollow();case 'gallery':galleryPage=0;return openGallery(0);
  case 'exit':held=null;return darkroom?closeDarkroom():session?.end();}}
 
-async function start(options={}){if(session)return;xrExperience='entrance';agencyScreen='lobby';agencySession=null;agencyChosen=null;agencyGrab=null;agencyRefreshSecond=-1;agencyRoot=null;entranceFollow=null;uiSettings=window.FreeLabXRUI?.read?.()||uiSettings;if(!navigator.xr)throw Error('WebXR is not available. Use Enter 3D for the browser viewer.');
+function xrGraphicsRead(){return window.FreeLabXRGraphics?.read?.()||{preset:'balanced',scale:1,antialias:true,foveation:'auto'};}
+function xrApplyFoveation(choice,overrideLayer=null){
+ const layer=overrideLayer||session?.renderState?.baseLayer;
+ if(!layer)return 'XR not active';
+ if(choice==='auto'){if(typeof layer.fixedFoveation==='number'&&typeof xrGraphicsDefaultFoveation==='number'){try{layer.fixedFoveation=xrGraphicsDefaultFoveation;return 'Restored browser default';}catch{return 'Restore not supported; re-enter XR';}}return 'Browser default';}
+ if(typeof layer.fixedFoveation!=='number')return 'Not supported by this browser';
+ const value=window.FreeLabXRGraphics?.foveationValue?.(choice);
+ if(typeof value!=='number')return 'Invalid foveation choice';
+ try{layer.fixedFoveation=value;return typeof layer.fixedFoveation==='number'?'Applied '+layer.fixedFoveation.toFixed(2):'Not supported by this browser';}
+ catch(e){return 'Foveation rejected: '+String(e?.message||e).slice(0,90);}
+}
+function xrGraphicsDiagnostics(){
+ const layer=session?.renderState?.baseLayer;
+ return {active:Boolean(layer),requested:xrGraphicsRequested||xrGraphicsRead(),appliedScale:xrGraphicsApplied?.scale||null,
+  framebufferWidth:layer?.framebufferWidth||0,framebufferHeight:layer?.framebufferHeight||0,
+  antialias:layer?.antialias===true,foveation:typeof layer?.fixedFoveation==='number'?layer.fixedFoveation:'unsupported',
+  fallback:!!xrGraphicsApplied?.fallback,failures:xrGraphicsFailures.slice()};
+}
+function xrCreateGraphicsLayer(){
+ const q=xrGraphicsRequested||xrGraphicsRead();xrGraphicsFailures=[];
+ // Try the exact requested configuration first, then a safe fallback if the headset declines memory allocation.
+ const attempts=[{scale:q.scale,antialias:q.antialias},{scale:1,antialias:q.antialias},{scale:.8,antialias:false}];
+ for(const [index,attempt] of attempts.entries()){
+  if(index&&attempt.scale===attempts[index-1].scale&&attempt.antialias===attempts[index-1].antialias)continue;
+  try{
+   const layer=new XRWebGLLayer(session,gl,{alpha:true,antialias:attempt.antialias,depth:true,stencil:false,framebufferScaleFactor:attempt.scale});
+   session.updateRenderState({baseLayer:layer});
+   xrGraphicsApplied={...attempt,fallback:index!==0};
+   xrGraphicsDefaultFoveation=typeof layer.fixedFoveation==='number'?layer.fixedFoveation:null;
+   const foveation=xrApplyFoveation(q.foveation,layer);
+   xr3D('XR_GRAPHICS_APPLIED',{preset:q.preset,requestedScale:q.scale,appliedScale:attempt.scale,antialiasRequested:q.antialias,antialiasActual:layer.antialias,
+    foveation,framebuffer:[layer.framebufferWidth,layer.framebufferHeight],fallback:index!==0});
+   return;
+  }catch(e){xrGraphicsFailures.push(String(e?.message||e).slice(0,140));}
+ }
+ throw Error('Headset could not allocate an XR graphics layer: '+xrGraphicsFailures.join(' / '));
+}
+async function start(options={}){if(session)return;xrExperience='entrance';agencyScreen='lobby';agencySession=null;agencyChosen=null;agencyGrab=null;agencyRefreshSecond=-1;agencyRoot=null;entranceFollow=null;xrGraphicsRequested=xrGraphicsRead();xrGraphicsApplied=null;xrGraphicsFailures=[];xrGraphicsDefaultFoveation=null;uiSettings=window.FreeLabXRUI?.read?.()||uiSettings;if(!navigator.xr)throw Error('WebXR is not available. Use Enter 3D for the browser viewer.');
  // Request the immersive session synchronously from the user's click; do not await GPU setup first.
  session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:options.requireDepth?['local','depth-sensing']:['local'],optionalFeatures:['local-floor','hand-tracking'],...(options.requireDepth?{depthSensing:{usagePreference:['cpu-optimized','gpu-optimized'],dataFormatPreference:['luminance-alpha','float32']}}:{})});
- try{setup();stringLab=new window.FreeLabStringLab.Experiment();stringLabState=null;rightStickDown=false;fingerLab=new window.FreeLabFingerLab.Experiment();fingerLabState=null;leftStickDown=false;frameLab=new window.FreeLabFrameLab.Experiment();frameLabState=null;frameGames=new window.FreeLabFrameGames.Engine();triangleLab=new window.FreeLabShapeSort.TriangleDraw();labSelector=new window.FreeLabLabSelector.Selector();labMenu=null;labMenuIndex=-1;await gl.makeXRCompatible();xrDomOverlay=false;session.updateRenderState({baseLayer:new XRWebGLLayer(session,gl,{alpha:true,antialias:false,depth:true,stencil:false,framebufferScaleFactor:.8})});xr3D('XR_SESSION_RENDER_STATE',{depthRequested:Boolean(options.requireDepth),framebufferWidth:session.renderState.baseLayer?.framebufferWidth,framebufferHeight:session.renderState.baseLayer?.framebufferHeight,framebufferStatus:gl.checkFramebufferStatus(gl.FRAMEBUFFER),gpu:xrGLErrors()});
+ try{setup();stringLab=new window.FreeLabStringLab.Experiment();stringLabState=null;rightStickDown=false;fingerLab=new window.FreeLabFingerLab.Experiment();fingerLabState=null;leftStickDown=false;frameLab=new window.FreeLabFrameLab.Experiment();frameLabState=null;frameGames=new window.FreeLabFrameGames.Engine();triangleLab=new window.FreeLabShapeSort.TriangleDraw();labSelector=new window.FreeLabLabSelector.Selector();labMenu=null;labMenuIndex=-1;await gl.makeXRCompatible();xrDomOverlay=false;xrCreateGraphicsLayer();xr3D('XR_SESSION_RENDER_STATE',{depthRequested:Boolean(options.requireDepth),framebufferWidth:session.renderState.baseLayer?.framebufferWidth,framebufferHeight:session.renderState.baseLayer?.framebufferHeight,framebufferStatus:gl.checkFramebufferStatus(gl.FRAMEBUFFER),gpu:xrGLErrors()});
  try{refSpace=await session.requestReferenceSpace('local-floor');floorReference=true;}catch{refSpace=await session.requestReferenceSpace('local');floorReference=false;}poseReady=false;agencyRoot=null;depthChecked=false;depthState=depthEnabled()?'Requested and enabled; checking data…':'Not supplied by headset/browser';depthProbeAt=0;depthLastReport='';depthBinding=null;
  session.addEventListener('selectstart',e=>{lastNative.set(e.inputSource,performance.now());if(xrExperience!=='stuff'){agencyPointerStart(e.frame,e.inputSource);return;}if(e.inputSource.handedness==='left'&&labSelector?.open)return;grabStart(e.frame,e.inputSource);});
  session.addEventListener('selectend',e=>{lastNative.set(e.inputSource,performance.now());if(xrExperience!=='stuff'){agencyPointerEnd(e.frame,e.inputSource);return;}if(e.inputSource.handedness==='left'&&labSelector?.open)return;grabEnd(e.inputSource,e.frame);});
@@ -3043,7 +3115,7 @@ async function start(options={}){if(session)return;xrExperience='entrance';agenc
 
  }catch(error){const failed=session;session=null;try{await failed?.end();}catch{}window.FreeLab?.traceEvent?.('XR entry failed: '+error.message,'error');throw error;}
 }
-window.FreeLabXR={start,isRunning:()=>!!session};
+window.FreeLabXR={start,isRunning:()=>!!session,getGraphicsDiagnostics:xrGraphicsDiagnostics,applyGraphicsFoveation:xrApplyFoveation};
 window.FreeLabXR.isListening=()=>voicePhase!=='idle';
 window.FreeLabXR.get3DDiagnostics=()=>window.FreeLabXR3DDiagnostics.getLog();
 })();

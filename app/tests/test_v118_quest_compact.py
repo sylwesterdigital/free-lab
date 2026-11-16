@@ -1,4 +1,4 @@
-"""Regression guards for v0.10.50. No network, headset, camera, or paid API calls."""
+"""Regression guards for v0.10.51. No network, headset, camera, or paid API calls."""
 import json
 import re
 import unittest
@@ -40,7 +40,7 @@ class QuestCompact118(unittest.TestCase):
  def test_quest_gpu_safety(self):
   self.assertIn("getContext('webgl2'",XR)
   self.assertIn("webglcontextlost",XR)
-  self.assertIn("new XRWebGLLayer(session,gl,{alpha:true,antialias:false,depth:true,stencil:false,framebufferScaleFactor:.8})",XR)
+  self.assertIn("new XRWebGLLayer(session,gl,{alpha:true,antialias:attempt.antialias,depth:true,stencil:false,framebufferScaleFactor:attempt.scale})",XR)
   self.assertIn('gl.isContextLost()',XR)
   self.assertIn('/OculusBrowser|Quest|Oculus/i.test(navigator.userAgent)',(ROOT/'frontend/assets/scene.mjs').read_text())
 
@@ -87,8 +87,8 @@ class QuestCompact118(unittest.TestCase):
 
  def test_release_versions(self):
   for name in ('version.json','frontend/version.json','changelog.json','frontend/changelog.json'):
-   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.50')
-  self.assertIn('room-viewer.mjs?v=0.10.50',ROOMS)
-  self.assertIn('xr.js?v=0.10.50',HTML)
+   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.51')
+  self.assertIn('room-viewer.mjs?v=0.10.51',ROOMS)
+  self.assertIn('xr.js?v=0.10.51',HTML)
 
 if __name__=='__main__': unittest.main()

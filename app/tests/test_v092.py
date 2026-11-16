@@ -35,7 +35,7 @@ class XR092(unittest.TestCase):
   self.assertIn('return applyPrompt()',XR)
  def test_direct_grab_relative_to_ray_world_pose(self):
   script=r'''const vm=require('vm'),fs=require('fs'),src=fs.readFileSync('frontend/assets/xr.js','utf8').replace(
- 'window.FreeLabXR={start,isRunning:()=>!!session};',
+ 'window.FreeLabXR={start,isRunning:()=>!!session,getGraphicsDiagnostics:xrGraphicsDiagnostics,applyGraphicsFoveation:xrApplyFoveation};',
  `window.FreeLabXR={attachGrab,advanceGrab,buttonFromHit,syncTrackedUI,rootPos,baseFor,
   setRoot:(m)=>{root=m;rootYaw=0;},setCloud:(m)=>{cloud=m;},setHeld:(m)=>{held=m;},setLatestPose:(p)=>{latestPose=p;},
   setToolbar:(t,follow)=>{toolbar=t;followMode=follow;}, getToolbar:()=>toolbar};`);

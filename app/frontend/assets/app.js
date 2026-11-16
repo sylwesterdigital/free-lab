@@ -1,5 +1,35 @@
 /* FREELAB Spatial Cloud 0.9.1 — camera and model calls explicitly opt-in. */
 (()=>{'use strict';
+/* XR_GRAPHICS_BEGIN — browser-local, whitelist-validated graphics preferences. */
+(function(){
+ const key='freelab-xr-graphics-v1';
+ const presets=Object.freeze({
+  performance:{scale:.8,antialias:false,foveation:'high'},
+  balanced:{scale:1,antialias:true,foveation:'auto'},
+  quality:{scale:1.2,antialias:true,foveation:'low'},
+  ultra:{scale:1.5,antialias:true,foveation:'off'},
+  extreme:{scale:2,antialias:true,foveation:'off'}
+ });
+ const scales=[.8,1,1.2,1.5,2],foveations=['auto','off','low','medium','high'];
+ const defaults={preset:'balanced',...presets.balanced};
+ function sanitize(raw){
+  if(!raw||typeof raw!=='object')return {...defaults};
+  if(Object.hasOwn(presets,raw.preset))return {preset:raw.preset,...presets[raw.preset]};
+  if(raw.preset!=='custom')return {...defaults};
+  return {preset:'custom',scale:scales.includes(Number(raw.scale))?Number(raw.scale):1,
+   antialias:typeof raw.antialias==='boolean'?raw.antialias:true,
+   foveation:foveations.includes(raw.foveation)?raw.foveation:'auto'};
+ }
+ function read(){try{return sanitize(JSON.parse(localStorage.getItem(key)));}catch{return {...defaults};}}
+ function save(next){const previous=read();const input={...previous,...next};
+  if(Object.hasOwn(presets,next?.preset))Object.assign(input,presets[next.preset]);
+  else if(next?.preset==='custom'||['scale','antialias','foveation'].some(k=>Object.hasOwn(next||{},k)))input.preset='custom';
+  const value=sanitize(input);try{localStorage.setItem(key,JSON.stringify(value));}catch{}return value;
+ }
+ function foveationValue(choice){return {off:0,low:1/3,medium:2/3,high:1}[choice];}
+ window.FreeLabXRGraphics=Object.freeze({read,save,sanitize,presets,scales,foveations,foveationValue});
+})();
+/* XR_GRAPHICS_END */
 const $=id=>document.getElementById(id);
 const state={user:null,config:null,objects:[],models:[],mediaFilter:'all',tab:'mine',stream:null,micStream:null,snapshot:null,snapshotOrigin:null,xr:null,sessionKeys:new Map()};
 const trace=[];const TRACE_MAX=80;
@@ -357,6 +387,27 @@ async function init(){
  $('loadElevenVoices')?.addEventListener('click',async()=>{const result=$('voiceLookupResult');result.textContent='Checking saved ElevenLabs credential…';try{const data=await loadElevenVoices();const choices=$('pref-speechVoiceId');choices.replaceChildren();choices.append(new Option('Select voice',''));for(const v of data.voices||[])choices.append(new Option(v.name,v.id));choices.value=pref('speechVoiceId');result.textContent=data.voices?.length?'Choose your voice above. Requests are billable when ElevenLabs is enabled.':data.notice||'No voices available';}catch(e){result.textContent=e.message;}});
  const mode=$('pref-mascotMode');if(mode){mode.value=pref('mascotMode');mode.onchange=()=>{setPref('mascotMode',mode.value);if(mode.value==='none')silenceXRVoice();};}
  const hold=$('pref-frameHoldSeconds');if(hold){hold.value=String(pref('frameHoldSeconds'));hold.onchange=()=>setPref('frameHoldSeconds',Number(hold.value));}
+ // XR GPU rendering is distinct from billable 3D model-generation quality.
+ const graphics=window.FreeLabXRGraphics;
+ const graphicsControls={preset:$('xrGraphicsPreset'),scale:$('xrGraphicsScale'),antialias:$('xrGraphicsAA'),foveation:$('xrGraphicsFoveation')};
+ function graphicsStatus(message){const status=$('xrGraphicsStatus');if(status)status.textContent=message;}
+ function paintGraphics(message){const q=graphics.read();for(const [key,control] of Object.entries(graphicsControls)){
+  if(control)control.value=String(q[key]);}
+  graphicsStatus(message||'Saved on this device. Render scale '+q.scale.toFixed(1)+'× · antialiasing '+(q.antialias?'on':'off')+' · foveation '+q.foveation+'. Re-enter XR to apply resolution and antialiasing.');
+ }
+ graphicsControls.preset.onchange=()=>{const q=graphics.save({preset:graphicsControls.preset.value});paintGraphics('Saved '+q.preset+' preset. Re-enter XR to apply resolution and antialiasing.');};
+ for(const key of ['scale','antialias','foveation'])graphicsControls[key].onchange=()=>{
+  const raw=graphicsControls[key].value;const q=graphics.save({[key]:key==='scale'?Number(raw):key==='antialias'?raw==='true':raw});
+  if(key==='foveation')window.FreeLabXR?.applyGraphicsFoveation?.(q.foveation);
+  paintGraphics('Custom settings saved. '+(key==='foveation'?'Foveation applied live when supported; other changes need XR re-entry.':'Re-enter XR to apply resolution or antialiasing.'));
+ };
+ $('xrGraphicsReset').onclick=()=>{graphics.save({preset:'balanced'});window.FreeLabXR?.applyGraphicsFoveation?.('auto');paintGraphics('Balanced preset saved. Re-enter XR to apply.');};
+ $('xrGraphicsInspect').onclick=()=>{
+  const info=window.FreeLabXR?.getGraphicsDiagnostics?.();if(!info?.active)return graphicsStatus('XR not active. Start an immersive session to inspect the actual framebuffer and antialiasing.');
+  graphicsStatus('Active XR framebuffer: '+info.framebufferWidth+' × '+info.framebufferHeight+' px · AA '+(info.antialias?'on':'off')+' · foveation '+info.foveation+' · requested scale '+info.appliedScale+'×'+(info.fallback?' (fallback after allocation failure)':'')+'. Browser/device may cap requested resolution.');
+ };
+ paintGraphics();
+
  $('cameraButton').onclick=()=>{window.FreeLabSound?.play('capture');openCamera();};$('cameraDiagnostic').onclick=()=>{window.FreeLabSound?.play('ready');$('xrReadiness').classList.remove('hidden');xrDiagnostics()};$('refreshXRReadiness').onclick=xrDiagnostics;$('closeXRReadiness').onclick=()=>$('xrReadiness').classList.add('hidden');$('addNameButton').onclick=()=>{window.FreeLabSound?.play('bloom');$('cameraPanel').classList.remove('hidden');$('manualLabel').focus();};$('closeCamera').onclick=closeCamera;$('takeSnapshot').onclick=()=>{try{snapshot();notify('Snapshot ready')}catch(e){notify(e.message)}};
  $('fileInput').onchange=async e=>{window.FreeLabSound?.play('bloom');const file=e.target.files?.[0];if(!file)return;try{if(file.size>12*1024*1024)throw Error('Please choose an image under 12 MB');const bmp=await createImageBitmap(file);const canvas=$('snapshotCanvas');const scale=Math.min(1,960/Math.max(bmp.width,bmp.height));canvas.width=Math.round(scale*bmp.width);canvas.height=Math.round(scale*bmp.height);canvas.getContext('2d').drawImage(bmp,0,0,canvas.width,canvas.height);bmp.close();const preview=new Image();preview.src=canvas.toDataURL('image/jpeg',0.65);await preview.decode();$('cameraPanel').classList.remove('hidden');compress(preview);state.snapshotOrigin='upload';window.dispatchEvent(new CustomEvent('freelab-photo-ready'));notify('Image ready — recognize or save manually');}catch(e){notify(e.message)}e.target.value='';};
  $('recognize').onclick=()=>submitCapture(true);$('saveManual').onclick=()=>{if(state.snapshot)submitCapture(false);else saveNameOnly().catch(e=>notify(e.message))};
@@ -594,7 +645,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.50');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.51');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{

@@ -1,17 +1,30 @@
 {
-  "version": "0.10.50",
-  "title": "FREELAB v0.10.50 — premium spatial glass entrance",
+  "version": "0.10.51",
+  "title": "FREELAB v0.10.51 — XR graphics quality controls",
   "datetime": "2026-11-16",
   "changes": [
-    "Replace opaque, muddy entrance cards with transparent spatial surfaces, luminous thick white rounded borders and one vivid mint-cyan accent, keeping passthrough visible.",
-    "Create polished editorial typography layers with generous space, full-size titles, raised text parallax and responsive proximity, pointer hover and controller focus.",
-    "Add a quiet illustrated belongings motif and organic brain-line illustration within the entrance cards, without unrelated floating geometry or game primitives.",
-    "Keep both entrance panels gently yaw-following the headset with inertia and a dead zone, at close usable XR reach; retain angled panels and exact rotated hit testing for hands and controller rays.",
-    "Reuse the existing warm WebAudio entrance and selection jingles and restrained controller haptics; honor reduced-motion preferences.",
-    "Keep XR-first navigation, My Stuff collection tools and all existing Agency game logic, private user data and Nginx-safe watcher deployment unchanged.",
-    "Regression-test angled panel ray and finger hits, versioned assets, entrance interaction wiring and unchanged immersive navigation."
+    "Add headset-local graphics settings with Performance, Balanced, High, Ultra, Extreme and Custom presets (0.8× to 2.0× framebuffer scale).",
+    "Expose XR layer antialiasing and fixed foveation (browser default, off, low, medium, high); support adjustment inside the immersive CONFIG panel.",
+    "Apply saved resolution and antialiasing when entering XR; apply foveation live if the headset supports it, with clear re-entry messaging for the other controls.",
+    "Fallback safely to lower-resolution XR layers if a high-end allocation fails, recording the actual framebuffer dimensions and applied antialiasing for diagnostics.",
+    "Keep the existing two-card immersive XR entrance, My Stuff, Agency, privacy, backend and isolated Nginx deployment behavior unchanged.",
+    "Validate stored choices against an allowlist, and regression-test settings wiring and high-resolution layer creation without paid model calls."
   ],
   "history": [
+    {
+      "version": "0.10.50",
+      "title": "FREELAB v0.10.50 — premium spatial glass entrance",
+      "datetime": "2026-11-16",
+      "changes": [
+        "Replace opaque, muddy entrance cards with transparent spatial surfaces, luminous thick white rounded borders and one vivid mint-cyan accent, keeping passthrough visible.",
+        "Create polished editorial typography layers with generous space, full-size titles, raised text parallax and responsive proximity, pointer hover and controller focus.",
+        "Add a quiet illustrated belongings motif and organic brain-line illustration within the entrance cards, without unrelated floating geometry or game primitives.",
+        "Keep both entrance panels gently yaw-following the headset with inertia and a dead zone, at close usable XR reach; retain angled panels and exact rotated hit testing for hands and controller rays.",
+        "Reuse the existing warm WebAudio entrance and selection jingles and restrained controller haptics; honor reduced-motion preferences.",
+        "Keep XR-first navigation, My Stuff collection tools and all existing Agency game logic, private user data and Nginx-safe watcher deployment unchanged.",
+        "Regression-test angled panel ray and finger hits, versioned assets, entrance interaction wiring and unchanged immersive navigation."
+      ]
+    },
     {
       "version": "0.10.49",
       "title": "FREELAB v0.10.49 — clean XR entrance cards",

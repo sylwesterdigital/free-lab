@@ -38,11 +38,11 @@ class XRMenuTests(unittest.TestCase):
         self.assertIn('function pollGestures(',XR)
         self.assertIn('mascotMode()',XR)
         self.assertIn('id="pref-mascotMode"',HTML)
-        self.assertIn('gestures.js?v=0.10.50',HTML)
+        self.assertIn('gestures.js?v=0.10.51',HTML)
     def test_watchers_are_colored_and_silent(self):
         if not WATCH:
             # Ubuntu ships application files, not the macOS release watcher.
-            self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.50')
+            self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.51')
             return
         self.assertIn("VERSION='0.9.2'",WATCH)
         self.assertIn("'PASS':'\\033[1;32m'",WATCH)
@@ -69,7 +69,7 @@ const left={wrist:[-.10,0,0],'index-finger-tip':[0,.12,0],'thumb-tip':[0,.06,0]}
 const right={wrist:[.10,0,0],'index-finger-tip':[.025,.12,0],'thumb-tip':[.025,.06,0]};
 assert(g.heart(left,right),'Expected two-hand heart');
 const win={};const code=fs.readFileSync('./frontend/assets/xr.js','utf8').replace(
- 'window.FreeLabXR={start,isRunning:()=>!!session};',
+ 'window.FreeLabXR={start,isRunning:()=>!!session,getGraphicsDiagnostics:xrGraphicsDiagnostics,applyGraphicsFoveation:xrApplyFoveation};',
  'window.FreeLabXR={start,isRunning:()=>!!session,hit:buttonFromHit};');
 vm.runInNewContext(code,{window:win,performance:{now:()=>0},console});
 const hit=win.FreeLabXR.hit,card={kind:'source',canvasHeight:420};

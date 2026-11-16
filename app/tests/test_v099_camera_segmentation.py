@@ -51,7 +51,7 @@ class CameraAndSegmentation099(unittest.TestCase):
  def test_upward_forward_and_camera_facing_geometry(self):
   script=r'''const vm=require('vm'),fs=require('fs');
 const src=fs.readFileSync('frontend/assets/xr.js','utf8').replace(
-  'window.FreeLabXR={start,isRunning:()=>!!session};',
+  'window.FreeLabXR={start,isRunning:()=>!!session,getGraphicsDiagnostics:xrGraphicsDiagnostics,applyGraphicsFoveation:xrApplyFoveation};',
   `window.FreeLabXR={ringPosition,facingQuat,faceCloudCards,setScene:(m,c)=>{root=m;rootYaw=0;cards=c;},getCards:()=>cards};`);
 const w={FreeLab:{notify:()=>{},pref:()=>false}};
 vm.runInNewContext(src,{window:w,performance:{now:()=>1000},Math,console,WeakMap,Map});
@@ -69,7 +69,7 @@ console.log('Upper fan and upright camera-facing geometry passed');'''
   r=subprocess.run(['node','-e',script],cwd=ROOT,text=True,capture_output=True,timeout=15)
   self.assertEqual(r.returncode,0,r.stderr or r.stdout)
  def test_release_manifest_marker(self):
-  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.50')
+  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.51')
   self.assertIn('function extractionAvailable()',XR)
 
 if __name__=='__main__':unittest.main()

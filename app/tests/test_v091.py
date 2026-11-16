@@ -14,7 +14,7 @@ class QuestInteractionRegression(unittest.TestCase):
         script=r'''
 const fs=require('fs'),vm=require('vm');
 const src=fs.readFileSync('./frontend/assets/xr.js','utf8').replace(
- 'window.FreeLabXR={start,isRunning:()=>!!session};',
+ 'window.FreeLabXR={start,isRunning:()=>!!session,getGraphicsDiagnostics:xrGraphicsDiagnostics,applyGraphicsFoveation:xrApplyFoveation};',
  `window.FreeLabXR={start,isRunning:()=>!!session,
   hit:buttonFromHit,hitTest,drag:advanceGrab,release:grabEnd,gesture:checkStableGesture,
   setHeld:(h)=>{held=h;},getHeld:()=>held,setRoot:(m)=>{root=m;},

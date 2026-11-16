@@ -1,14 +1,14 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.50">
+<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.51">
 <title>FREELAB — Cognitive Agency · My Stuff &amp; Agency</title>
 <meta name="description" content="FREELAB Cognitive Agency — privately organise your world and explore gentle spatial games with hands, controllers or desktop.">
-<link rel="stylesheet" href="/assets/style.css?v=0.10.50">
+<link rel="stylesheet" href="/assets/style.css?v=0.10.51">
 </head><body>
 <div id="app" class="app-shell">
 <header class="header" aria-label="Site navigation">
-  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.50</span></a>
+  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.51</span></a>
   <nav class="header-right" aria-label="Workspace">
     <span class="live-pill"><span class="server-dot" id="connectionDot"></span><span id="healthStatus">Connecting</span></span>
     <button id="roomButton" class="nav-pill" type="button">Rooms</button>
@@ -127,7 +127,27 @@
       <label for="profile3DQuality">Asset type<select id="profile3DQuality"><option value="xr">XR-ready · low-poly (P2 · 12k triangles)</option><option value="balanced">Balanced · textured (P2 · 30k triangles)</option><option value="studio">High-detail original (H3.1 · 120k triangles)</option></select></label>
       <label for="profile3DTexture">Original texture quality<select id="profile3DTexture"><option value="standard">Standard · efficient</option><option value="detailed">Detailed · higher fidelity</option><option value="extreme">Extreme · 8K (higher Tripo cost)</option></select></label>
       <label for="profile3DXRTexture">Quest preview texture cap<select id="profile3DXRTexture"><option value="512">512 px · lightest</option><option value="1024">1024 px · recommended</option><option value="2048">2048 px · high memory use</option></select></label>
-      <p id="profile3DQualityStatus" class="small-muted" role="status">New generations use these settings; originals are preserved.</p></section><div class="experience-preferences"><p class="eyebrow">XR / PERSONALIZATION</p>
+      <p id="profile3DQualityStatus" class="small-muted" role="status">New generations use these settings; originals are preserved.</p></section>
+    <section class="xr-graphics-settings" aria-labelledby="xrGraphicsHeading">
+      <div class="xr-graphics-heading"><div><p class="eyebrow">WEBXR / DISPLAY</p><h3 id="xrGraphicsHeading">Graphics quality</h3></div><span class="xr-graphics-chip">DEVICE LOCAL</span></div>
+      <p>Experiment with higher-end Quest and WebXR headsets. Changes to resolution and antialiasing take effect on the next XR entry. High settings increase GPU load.</p>
+      <div class="xr-graphics-grid">
+        <label for="xrGraphicsPreset">Quality preset<select id="xrGraphicsPreset">
+          <option value="performance">Performance · 0.8×</option>
+          <option value="balanced">Balanced · 1.0×</option>
+          <option value="quality">High · 1.2×</option>
+          <option value="ultra">Ultra · 1.5×</option>
+          <option value="extreme">Extreme · 2.0× (experimental)</option>
+          <option value="custom">Custom</option>
+        </select></label>
+        <label for="xrGraphicsScale">Framebuffer scale<select id="xrGraphicsScale"><option value="0.8">0.8× · 64% pixels</option><option value="1">1.0× · recommended</option><option value="1.2">1.2× · 144% pixels</option><option value="1.5">1.5× · 225% pixels</option><option value="2">2.0× · 400% pixels</option></select></label>
+        <label for="xrGraphicsAA">XR antialiasing<select id="xrGraphicsAA"><option value="true">On · smoother edges</option><option value="false">Off · faster</option></select></label>
+        <label for="xrGraphicsFoveation">Fixed foveation<select id="xrGraphicsFoveation"><option value="auto">Browser default</option><option value="off">Off · sharp edges</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High · faster</option></select></label>
+      </div>
+      <div class="xr-graphics-actions"><button type="button" class="secondary-btn" id="xrGraphicsReset">Reset to balanced</button><button type="button" class="secondary-btn" id="xrGraphicsInspect">Show active XR values</button></div>
+      <p id="xrGraphicsStatus" role="status" aria-live="polite">Settings are stored only in this browser.</p>
+    </section>
+<div class="experience-preferences"><p class="eyebrow">XR / PERSONALIZATION</p>
      <label for="pref-mascotMode">MASCOT IN XR<select id="pref-mascotMode"><option value="3d">3D character</option><option value="2d">2D character</option><option value="none">Off</option></select></label>
      <label for="pref-frameHoldSeconds">FRAME DETACH TIMER<select id="pref-frameHoldSeconds"><option value="1.5">1.5 seconds</option><option value="3" selected>3 seconds</option><option value="5">5 seconds</option></select></label>
      <p class="small-muted">X opens experimental modes in XR. Left joystick selects; left trigger confirms.</p>
@@ -173,22 +193,22 @@
 <div id="modelStage" class="model-stage hidden" role="dialog" aria-label="Interactive 3D model viewer" aria-modal="true"><header><div><span class="eyebrow">FREELAB / MODEL VIEWER</span><h2 id="modelStageTitle">3D model</h2></div><div class="model-stage-tools"><button id="modelStageAxis" class="secondary-btn" type="button" title="Change model viewing orientation">Upright · Auto</button><a id="modelStageDownload" class="secondary-btn hidden" download>Download GLB</a><button id="modelStageClose" type="button" aria-label="Close 3D model viewer">×</button></div></header><div id="modelStageViewport" class="model-stage-viewport"><img id="modelStagePoster" class="hidden" alt="3D model thumbnail preview"><canvas id="modelStageCanvas" aria-label="Interactive 3D model. Drag to rotate, scroll to zoom."></canvas></div><p id="modelStageStatus" role="status">Preparing 3D scene…</p><p class="model-stage-hint">Drag to rotate · scroll or pinch to zoom · model loads privately</p></div>
 <div id="toast" class="toast hidden" role="status"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.module.js"}}</script>
-<script type="module" src="/assets/model-stage.mjs?v=0.10.50"></script>
-<script src="/assets/sound.js?v=0.10.50" defer></script>
-<script src="/assets/gestures.js?v=0.10.50" defer></script>
-<script src="/assets/strand-geometry.js?v=0.10.50" defer></script>
-<script src="/assets/string-lab.js?v=0.10.50" defer></script>
-<script src="/assets/finger-lab.js?v=0.10.50" defer></script>
-<script src="/assets/frame-lab.js?v=0.10.50" defer></script>
-<script src="/assets/frame-photo.js?v=0.10.50" defer></script>
-<script src="/assets/lab-selector.js?v=0.10.50" defer></script>
-<script src="/assets/frame-games.js?v=0.10.50" defer></script>
-<script src="/assets/shape-sort.js?v=0.10.50" defer></script>
-<script src="/assets/rooms.js?v=0.10.50" defer></script>
-<script src="/assets/cloud-tree.js?v=0.10.50" defer></script>
-<script src="/assets/xr-ui.js?v=0.10.50" defer></script>
-<script src="/assets/dialog.js?v=0.10.50" defer></script>
-<script src="/assets/app.js?v=0.10.50" defer></script><script src="/assets/xr.js?v=0.10.50" defer></script>
-<script src="/assets/capture-studio.js?v=0.10.50" defer></script>
-<script src="/assets/scene.mjs?v=0.10.50" type="module"></script>
+<script type="module" src="/assets/model-stage.mjs?v=0.10.51"></script>
+<script src="/assets/sound.js?v=0.10.51" defer></script>
+<script src="/assets/gestures.js?v=0.10.51" defer></script>
+<script src="/assets/strand-geometry.js?v=0.10.51" defer></script>
+<script src="/assets/string-lab.js?v=0.10.51" defer></script>
+<script src="/assets/finger-lab.js?v=0.10.51" defer></script>
+<script src="/assets/frame-lab.js?v=0.10.51" defer></script>
+<script src="/assets/frame-photo.js?v=0.10.51" defer></script>
+<script src="/assets/lab-selector.js?v=0.10.51" defer></script>
+<script src="/assets/frame-games.js?v=0.10.51" defer></script>
+<script src="/assets/shape-sort.js?v=0.10.51" defer></script>
+<script src="/assets/rooms.js?v=0.10.51" defer></script>
+<script src="/assets/cloud-tree.js?v=0.10.51" defer></script>
+<script src="/assets/xr-ui.js?v=0.10.51" defer></script>
+<script src="/assets/dialog.js?v=0.10.51" defer></script>
+<script src="/assets/app.js?v=0.10.51" defer></script><script src="/assets/xr.js?v=0.10.51" defer></script>
+<script src="/assets/capture-studio.js?v=0.10.51" defer></script>
+<script src="/assets/scene.mjs?v=0.10.51" type="module"></script>
 </body></html>

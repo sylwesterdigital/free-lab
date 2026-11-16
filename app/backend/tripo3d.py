@@ -43,7 +43,7 @@ def request_api(method,path,key,payload=None,raw=None,content_type='application/
     if data is not None and len(data)>2_500_000:raise ValueError('Tripo request exceeds safe size limit')
     req=urllib.request.Request(BASE+path,data=data,method=method,headers={
         'Authorization':'Bearer '+key,'Accept':'application/json',
-        'Content-Type':content_type,'User-Agent':'FREELAB-Tripo/0.10.50'})
+        'Content-Type':content_type,'User-Agent':'FREELAB-Tripo/0.10.51'})
     try:
         with urllib.request.build_opener(NoRedirect).open(req,timeout=35) as res:
             raw_response=res.read(MAX_RESPONSE+1)
