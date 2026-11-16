@@ -1,4 +1,4 @@
-"""Regression guards for v0.10.55. No network, headset, camera, or paid API calls."""
+"""Regression guards for v0.10.56. No network, headset, camera, or paid API calls."""
 import json
 import re
 import unittest
@@ -87,13 +87,13 @@ class QuestCompact118(unittest.TestCase):
 
  def test_release_versions(self):
   for name in ('version.json','frontend/version.json','changelog.json','frontend/changelog.json'):
-   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.55')
-  self.assertIn('room-viewer.mjs?v=0.10.55',ROOMS)
-  self.assertIn('xr.js?v=0.10.55',HTML)
+   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.56')
+  self.assertIn('room-viewer.mjs?v=0.10.56',ROOMS)
+  self.assertIn('xr.js?v=0.10.56',HTML)
 
 if __name__=='__main__': unittest.main()
 
-"""v0.10.55 Agency XR regression checks: independent labs, text aspect, focus and reachable play."""
+"""v0.10.56 Agency XR regression checks: independent labs, text aspect, focus and reachable play."""
 import unittest
 from pathlib import Path
 XR=(Path(__file__).resolve().parents[1]/'frontend/assets/xr.js').read_text()
@@ -110,7 +110,7 @@ class AgencySpatial55(unittest.TestCase):
         self.assertIn("if(activeLabMode()!=='sort'||!shapeTargets.length)return;",XR)
         self.assertNotIn("agencyLaunchMode=id.split(':')[1];beginAgencyTransition('stuff'",XR)
     def test_large_icon_only_navigation_and_proportional_type(self):
-        self.assertIn('iconOnly ? 1.72 : .52',XR)
+        self.assertIn('iconOnly ? 1.72 : pill',XR)
         self.assertIn('ratio:w/h',XR)
         self.assertIn('const pxW=1440,pxH=Math.round(pxW*h/Math.max(w,.01))',XR)
         self.assertIn('if(iconOnly){const factor=',XR)
@@ -121,12 +121,21 @@ class AgencySpatial55(unittest.TestCase):
     def test_games_direct_and_reachable_with_single_agency_return(self):
         self.assertIn("if(id.startsWith('agency-game:')){agencyGame=id.split(':')[1];agencyMode='free';agencyLevel=0;agencyStartGame()", XR)
         self.assertIn("agencyNavCard('agency-return','AGENCY'",XR)
-        self.assertIn("agencyNavCard('agency-drag','MOVE'",XR)
+        self.assertIn("agencyUiCard('agency-drag','MOVE'",XR)
         self.assertIn("agencyNode('agency-answer:'+value",XR)
         self.assertIn("agencyUiCard('answer-text:'+value",XR)
         self.assertIn('agencyHandSeed',XR)
         self.assertIn('agencyThrow',XR)
         self.assertNotIn("agencyNavCard('agency-mystuff'",XR)
+    def test_transition_safety_and_table_memory(self):
+        for token in ('function agencyCanInteract(', 'agencyInputUntil', 'agencyTouchWait',
+                      'agencyPendingRoundAt=performance.now()+920',
+                      'agencySavedTable={pos:', 'agencyLock(1050',
+                      "agencyUiCard('agency-drag','MOVE'", "icon:'grab-hand'",
+                      'agencyExitConfirmUntil','agencyProfileCard()','agencyPaintTransition(vp,t)'):
+            self.assertIn(token,XR)
+        self.assertIn("agencyNavCard('agency-mode-next'",XR)
+        self.assertIn("agencyNavCard('agency-return','AGENCY'",XR)
     def test_audio_feedback(self):
         for key in ('agency-correct','agency-wrong'):
             self.assertIn(key,SOUND)

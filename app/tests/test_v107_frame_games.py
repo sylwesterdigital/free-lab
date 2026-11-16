@@ -54,12 +54,34 @@ s.update(inp(true,false,0));s.update(inp(false,false,1));let u=s.update(inp(fals
 u=s.update(inp(false,true,0));if(u.mode!=='sort'||u.open)throw Error('trigger selection');
 s.update(inp(false,false,0));s.update(inp(true,false,0));s.update(inp(false,false,1));u=s.update(inp(false,true,0));if(u.mode!=='chain')throw Error('second selection');''')
 
+    def test_coloured_throw_targets_and_tetris_cancellation(self):
+        self.run_node(r'''const fs=require('fs'),vm=require('vm'),w={};
+vm.runInNewContext(fs.readFileSync('frontend/assets/frame-games.js','utf8'),{window:w});
+const E=w.FreeLabFrameGames.Engine;
+const rect=(id,x,y,z)=>({id,width:.3,height:.3,corners:[[x-.15,y+.15,z],[x+.15,y+.15,z],[x+.15,y-.15,z],[x-.15,y-.15,z]]});
+const g=new E();g.setMode('throw');const f=rect(1,0,1,0);g.onFrame(f,'throw',0);
+if(!f.color||!w.FreeLabFrameGames.PALETTE.includes(f.color))throw Error('new frame missing palette');
+g.setTargets([{center:[0,1,-.7],color:f.color,half:[.25,.3,.12]},
+              {center:[.5,1,-.7],color:'#FF8FB8'}]);
+const frames=[f];if(!g.launch(frames,f.id,[0,0,-2],0))throw Error('launch failed');
+let matched=false;for(let t=0;t<1200;t+=16){const st=g.update(frames,t,{floorY:-2});if(st.events.some(e=>e.event==='throw-score')){matched=true;break;}}
+if(!matched||g.score!==1||g.targets.length||frames.length)throw Error('throw score did not clear round');
+const wrong=new E();wrong.setMode('throw');const wf=rect(3,0,1,0);wrong.onFrame(wf,'throw',0);
+wrong.setTargets([{id:0,center:[0,1,-.50],color:'#FFFFFF',half:[.25,.30,.15]}]);
+const ws=[wf];wrong.launch(ws,wf.id,[0,0,-1],0);let misses=0;
+for(let t=0;t<850;t+=16){misses+=wrong.update(ws,t,{floorY:-2}).events.filter(e=>e.event==='throw-miss').length;}
+if(misses!==1||wrong.score!==0)throw Error('wrong target repeated its feedback');
+const c=new E();c.setMode('cubes');const a=rect(11,0,.15,0),b=rect(12,0,.8,0);
+a.color=b.color='#5BFFE0';c.onFrame(a,'cubes',0);c.onFrame(b,'cubes',0);
+let popped=false;for(let t=0;t<4000;t+=12){const st=c.update([],t,{floorY:0});if(st.events.some(e=>e.event==='cube-clear')){popped=true;break;}}
+if(!popped||c.boxes.length)throw Error('equal colours did not disappear');
+''')
     def test_production_wiring(self):
         for token in ('window.FreeLabFrameGames.Engine()', 'frameGames?.onFrame(placed,mode,t)',
                       'frameGames?.linkOnOverlap(frameLab.frames,df.id)', 'frameGames?.launch(frameLab.frames,frameTouch.id',
                       'pollFrameGames(t,pose)', 'drawFrameCubes(vp)', 'gl.drawArrays(gl.TRIANGLES,0,36)'):
             self.assertIn(token,XR)
-        self.assertIn('frame-games.js?v=0.10.55',PAGE)
+        self.assertIn('frame-games.js?v=0.10.56',PAGE)
         self.assertNotIn('cdn', (ROOT/'frontend/assets/frame-games.js').read_text())
 
 if __name__=='__main__':unittest.main()

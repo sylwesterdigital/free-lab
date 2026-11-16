@@ -11,6 +11,14 @@ const mid=(a,b)=>mul(add(a,b),.5),clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const finite=p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite);
 const center=f=>mul(f.corners.reduce((a,p)=>add(a,p),[0,0,0]),.25);
 const copied=c=>c.map(p=>p.slice());
+const PALETTE=['#5BFFE0','#B99AFF','#FF8FB8','#80C5FF','#FFD58F','#9CED7F'];
+function colorFor(n){return PALETTE[((n%PALETTE.length)+PALETTE.length)%PALETTE.length];}
+function targetFrameHit(corners,target){if(!target||!target.center)return false;
+ const x=target.center[0],y=target.center[1],z=target.center[2],half=target.half||[.22,.23,.14];
+ // A hit anywhere in the opening counts, not only on a thin wire edge.
+ const c=center({corners});return Math.abs(c[0]-x)<half[0]+.10&&Math.abs(c[1]-y)<half[1]+.10&&Math.abs(c[2]-z)<half[2]+.16;
+}
+
 function segmentContact(a,b,c,d){
  // Shortest distance between 3D line segments, robust for near-parallel edges.
  const u=sub(b,a),v=sub(d,c),w=sub(a,c),A=dot(u,u),B=dot(u,v),C=dot(v,v),D=dot(u,w),E=dot(v,w);
@@ -61,7 +69,7 @@ function boxFromFrame(f,floorY=0){
  const d=clamp(Math.min(w,h)*.85,.10,.65); // a shallow cuboid by default
  const c=center(f),bottom=c[1]-h*.5;
  return {id:f.id,center:[...c],velocity:[0,0,0],half:[w/2,h/2,d/2],rotation:[0,0,0],angVel:[0,0,0],mass:Math.max(.2,w*h*d*22),
-  floorY,createdAt:f.createdAt||0,settled:false};
+  floorY,createdAt:f.createdAt||0,settled:false,color:f.color||colorFor(f.id||0)};
 }
 function resolvePair(a,b){ // limited axis-aligned broadphase for this small lab
  const dx=b.center[0]-a.center[0],dy=b.center[1]-a.center[1],dz=b.center[2]-a.center[2];
@@ -81,12 +89,15 @@ function resolvePair(a,b){ // limited axis-aligned broadphase for this small lab
 }
 class Engine{
  constructor(){this.clear();}
- clear(){this.boxes=[];this.links=[];this.throws=[];this.mode='off';this.lastTime=null;this.floorY=0;this.events=[];}
- setMode(m){this.mode=m;this.lastTime=null;}
+ clear(){this.boxes=[];this.links=[];this.throws=[];this.mode='off';this.lastTime=null;this.floorY=0;this.events=[];this.targets=[];this.score=0;this.colorIndex=0;this.targetSeed=0;}
+ setMode(m){if(m!==this.mode){this.boxes=[];this.links=[];this.throws=[];this.targets=[];this.score=0;this.colorIndex=0;}this.mode=m;this.lastTime=null;}
+ setTargets(targets){this.targets=Array.isArray(targets)?targets.slice(0,6).map(t=>({...t,center:t.center.slice(),half:(t.half||[.22,.22,.14]).slice()})):[];}
+ nextColor(){return colorFor(this.colorIndex++);}
+
  setFloor(y){if(Number.isFinite(y))this.floorY=y;}
  onFrame(frame,mode=this.mode,time=0){
   if(!frame||!Array.isArray(frame.corners)||frame.corners.length!==4)return null;
-  frame.gameMode=mode;
+  frame.gameMode=mode;frame.color=frame.color||this.nextColor();
   if(mode==='cubes'){
    // Spawn at drawn position and let it fall. The original wire frame is consumed.
    if(this.boxes.length>=22)this.boxes.shift();const box=boxFromFrame(frame,this.floorY);this.boxes.push(box);
@@ -113,7 +124,7 @@ class Engine{
   const f=frames.find(q=>q.id===id&&q.gameMode==='throw');if(!f)return null;
   const speed=len(velocity);if(!Number.isFinite(speed)||speed<.28)return null;
   const v=mul(velocity,clamp(speed,.45,4.5)/(speed||1));
-  this.throws.push({id,velocity:v,start:time,until:time+1600,alpha:1});
+  this.throws.push({id,velocity:v,start:time,until:time+1800,alpha:1,colour:f.color,scored:false,missedTargets:[]});
   return {event:'throw',id,speed:len(v)};
  }
  update(frames,time,opts={}){
@@ -145,19 +156,40 @@ class Engine{
    }
   }
   for(const fly of this.throws){const f=frames.find(q=>q.id===fly.id);if(!f)continue;
-   const u=clamp((time-fly.start)/1600,0,1);
+   const u=clamp((time-fly.start)/1800,0,1);
    const before=copied(f.corners),shift=mul(fly.velocity,dt);f.corners=f.corners.map(p=>add(p,shift));
    if(!fly.hitMascot&&finite(opts.mascot)&&sweptFrameSphereHit(before,f.corners,opts.mascot,opts.mascotRadius||.14)){
     fly.hitMascot=true;events.push({event:'mascot-hit',id:fly.id,position:opts.mascot.slice()});
    }
+   for(const target of this.targets){
+    if(fly.scored||fly.missedTargets.includes(target.id)||!targetFrameHit(f.corners,target))continue;
+    fly.scored=true;
+    if(target.color===f.color){this.score++;events.push({event:'throw-score',id:fly.id,score:this.score,target:target.center.slice(),color:f.color});
+     this.targets=[];this.throws=this.throws.filter(v=>v!==fly);const ix=frames.indexOf(f);if(ix>=0)frames.splice(ix,1);}
+    else{fly.missedTargets.push(target.id);events.push({event:'throw-miss',id:fly.id,target:target.center.slice()});}
+    break;
+   }
    fly.alpha=clamp((1-u)/.35,0,1);
    if(time>=fly.until){const index=frames.indexOf(f);if(index>=0)frames.splice(index,1);events.push({event:'vanish',id:fly.id});}
   }
-  this.throws=this.throws.filter(f=>f.until>time);
+  // Equal-colour blocks cancel only after a drop onto the top of a settled block.
+  for(let i=this.boxes.length-1;i>=0;i--){const a=this.boxes[i];
+   for(let j=i-1;j>=0;j--){const b=this.boxes[j];
+    if(a.color!==b.color)continue;
+    const dx=Math.abs(a.center[0]-b.center[0]),dz=Math.abs(a.center[2]-b.center[2]);
+    const dy=Math.abs(a.center[1]-b.center[1]),stackHeight=a.half[1]+b.half[1];
+    if(dx>a.half[0]+b.half[0]-.025||dz>a.half[2]+b.half[2]-.025||Math.abs(dy-stackHeight)>.09)continue;
+    // Reject sideways contacts: the upper block must fall toward a lower one.
+    if(Math.max(a.velocity[1],b.velocity[1])>.25)continue;
+    const at=mid(a.center,b.center);this.boxes.splice(i,1);this.boxes.splice(j,1);
+    events.push({event:'cube-clear',color:a.color,position:at});break;
+   }
+  }
+  this.throws=this.throws.filter(f=>f.until>time&&!f.scored);
   this.links=this.links.filter(l=>frames.some(f=>f.id===l.parentId)&&frames.some(f=>f.id===l.childId));
   return {events,boxes:this.boxes,links:this.links,throws:this.throws};
  }
- resetGames(){this.boxes=[];this.links=[];this.throws=[];this.lastTime=null;}
+ resetGames(){this.boxes=[];this.links=[];this.throws=[];this.targets=[];this.lastTime=null;this.score=0;this.colorIndex=0;}
 }
-window.FreeLabFrameGames={Engine,segmentContact,nearestEdge,boxFromFrame,resolvePair,rotateVector,frameSphereHit,sweptFrameSphereHit};
+window.FreeLabFrameGames={Engine,PALETTE,colorFor,targetFrameHit,segmentContact,nearestEdge,boxFromFrame,resolvePair,rotateVector,frameSphereHit,sweptFrameSphereHit};
 })();
