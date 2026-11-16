@@ -1,16 +1,29 @@
 {
-  "version": "0.10.48",
-  "title": "FREELAB v0.10.48 — immersive XR entrance and spatial Agency",
+  "version": "0.10.49",
+  "title": "FREELAB v0.10.49 — clean XR entrance cards",
   "datetime": "2026-11-16",
   "changes": [
-    "Enter XR directly from the browser and choose MY STUFF or AGENCY only inside the immersive WebXR scene; preserve My Stuff camera, collections, capture and models.",
-    "Replace Agency 2D rectangles with native perspective-lit 3D portal sculptures, animated shapes, neon open-top sorting bins, tactile number choices and a spatial L/R hand target.",
-    "Restore the in-headset Home route from both My Stuff toolbar and Agency, with hand-pinch, direct fingertip touch, and controller ray/trigger selection.",
-    "Keep Free Play, 120-second Timed, daily deterministic challenges, four difficulty levels and browser-local private progress, with gentle response feedback and no medical claims.",
-    "Remove the browser My Stuff/Agency gate and standalone 2D Agency UI; browser remains the XR launch and collection administration surface.",
-    "Preserve active shared Nginx configuration on updates, with a compatibility preflight and no shared-service reload; keep watcher v0.9.2 and all existing service/data boundaries."
+    "Replace the entrance sculpture clusters, arches, trays and floor rings with exactly two large upright rectangular panels inside the immersive WebXR session, matching the supplied two-card reference.",
+    "Render MY STUFF and AGENCY titles and their short descriptions directly on high-contrast dark panels with quiet teal/violet neon edges; remove detached labels and decorative shapes from the entrance.",
+    "Place both panels at a more comfortable headset viewing distance; preserve passthrough outside the panels and retain XR-first navigation with no browser choice.",
+    "Make the full visible rectangle the controller-ray, pinch and fingertip hit target; prevent selection when pointing or touching outside a card.",
+    "Keep the existing My Stuff collection, spatial capture, reconstruction, Agency activities, user data, backend and isolated shared-Nginx deployment safeguards unchanged.",
+    "Add regression coverage for the two-panel entrance and real hit-testing of both rectangles without any live headset or paid provider request."
   ],
   "history": [
+    {
+      "version": "0.10.48",
+      "title": "FREELAB v0.10.48 — immersive XR entrance and spatial Agency",
+      "datetime": "2026-11-16",
+      "changes": [
+        "Enter XR directly from the browser and choose MY STUFF or AGENCY only inside the immersive WebXR scene; preserve My Stuff camera, collections, capture and models.",
+        "Replace Agency 2D rectangles with native perspective-lit 3D portal sculptures, animated shapes, neon open-top sorting bins, tactile number choices and a spatial L/R hand target.",
+        "Restore the in-headset Home route from both My Stuff toolbar and Agency, with hand-pinch, direct fingertip touch, and controller ray/trigger selection.",
+        "Keep Free Play, 120-second Timed, daily deterministic challenges, four difficulty levels and browser-local private progress, with gentle response feedback and no medical claims.",
+        "Remove the browser My Stuff/Agency gate and standalone 2D Agency UI; browser remains the XR launch and collection administration surface.",
+        "Preserve active shared Nginx configuration on updates, with a compatibility preflight and no shared-service reload; keep watcher v0.9.2 and all existing service/data boundaries."
+      ]
+    },
     {
       "version": "0.10.47",
       "title": "FREELAB v0.10.47 — macOS room thumbnail validation compatibility",

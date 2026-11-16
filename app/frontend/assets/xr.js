@@ -1520,7 +1520,7 @@ function placeRoomVisitors(pose){const m=pose.transform.matrix,eye=[m[12],m[13],
 // WebXR session. Labels are small, transparent world-space type; the choices,
 // exercises and receiving bins are real perspective-lit 3D geometry.
 // No camera uploads, medical inference, external assets or new network calls.
-let xrExperience='entrance',agencyCards=[],agencyNodes=[],agencyRoot=null,agencyGeometryCache=new Map(),agencyScreen='lobby',agencyGame='shapes',agencyMode='free',agencyLevel=0,agencySession=null,agencyGrab=null,agencyChosen=null,agencyTouched=new WeakMap(),agencyRefreshSecond=-1,agencyDistance=.91;
+let xrExperience='entrance',agencyCards=[],agencyNodes=[],agencyRoot=null,agencyGeometryCache=new Map(),agencyScreen='lobby',agencyGame='shapes',agencyMode='free',agencyLevel=0,agencySession=null,agencyGrab=null,agencyChosen=null,agencyTouched=new WeakMap(),agencyRefreshSecond=-1,agencyDistance=1.38;
 const AGENCY_PALETTE={cyan:[.24,.94,.84,1],violet:[.65,.50,.99,1],pink:[1,.43,.66,1],gold:[1,.77,.38,1],blue:[.42,.73,1,1]};
 function agencyClearCards(){if(gl)for(const card of agencyCards)if(card.front)gl.deleteTexture(card.front);agencyCards=[];agencyNodes=[];}
 function agencyPanel(id,title,subtitle,x,y,w=.43,h=.18,accent='#8cefea',large=false,z=.13){
@@ -1533,6 +1533,41 @@ function agencyPanel(id,title,subtitle,x,y,w=.43,h=.18,accent='#8cefea',large=fa
  return {id,kind:'agency',pos:[x,y,z],q:[0,0,0,1],scale:1,size:[w,h],front:tex,back:tex,resources:[tex],visible:true};
 }
 function agencyAdd(id,label,sub,x,y,w,h,color,large=false,z=.13){agencyCards.push(agencyPanel(id,label,sub,x,y,w,h,color,large,z));}
+// XR entrance contract: exactly two large upright rectangular surfaces.
+// Every label is painted ON its panel, not beneath decorative 3D objects.
+// The panel itself is the hand/controller hit target (not a hidden sphere).
+function agencyEntrancePanel(id,title,description,x,accent){
+ const w=1024,h=1120,[cv,ctx]=canvas2d(w,h),r=54;
+ const path=()=>{ctx.beginPath();ctx.moveTo(r,8);ctx.lineTo(w-r,8);ctx.quadraticCurveTo(w-8,8,w-8,r);
+  ctx.lineTo(w-8,h-r);ctx.quadraticCurveTo(w-8,h-8,w-r,h-8);ctx.lineTo(r,h-8);
+  ctx.quadraticCurveTo(8,h-8,8,h-r);ctx.lineTo(8,r);ctx.quadraticCurveTo(8,8,r,8);ctx.closePath();};
+ // Deep ink, muted translucent gradient, soft edge. Passthrough remains visible around panels.
+ ctx.save();path();ctx.clip();
+ const fill=ctx.createLinearGradient(0,0,w,h);fill.addColorStop(0,'rgba(17,28,42,.97)');
+ fill.addColorStop(.65,'rgba(12,19,35,.95)');fill.addColorStop(1,'rgba(26,25,48,.96)');
+ ctx.fillStyle=fill;ctx.fillRect(0,0,w,h);
+ const light=ctx.createLinearGradient(0,0,w,0);light.addColorStop(0,'rgba(255,255,255,.06)');
+ light.addColorStop(.5,'rgba(255,255,255,.01)');light.addColorStop(1,'rgba(255,255,255,.03)');
+ ctx.fillStyle=light;ctx.fillRect(0,0,w,h);
+ // No objects, arrows, icons or ornament inside the cards.
+ ctx.textAlign='center';ctx.textBaseline='middle';
+ ctx.shadowColor=accent;ctx.shadowBlur=22;ctx.font='750 114px system-ui,-apple-system,sans-serif';
+ ctx.fillStyle='#f7fcff';ctx.fillText(title,w/2,477,885);ctx.shadowBlur=0;
+ ctx.fillStyle='#d4dee9';ctx.font='500 43px system-ui,-apple-system,sans-serif';
+ ctx.fillText(description,w/2,604,890);
+ ctx.fillStyle=accent;ctx.fillRect(w/2-65,690,130,5);
+ ctx.fillStyle='#9faec2';ctx.font='540 31px system-ui,-apple-system,sans-serif';
+ ctx.fillText('PINCH OR SELECT',w/2,960);
+ ctx.restore();
+ ctx.save();ctx.shadowColor=accent;ctx.shadowBlur=19;path();ctx.strokeStyle=accent;ctx.lineWidth=11;ctx.stroke();ctx.restore();
+ // An inset stroke preserves a crisp silhouette under Quest's foveated rendering.
+ ctx.save();ctx.beginPath();ctx.roundRect?.(26,26,w-52,h-52,38);
+ if(typeof ctx.roundRect==='function'){ctx.strokeStyle='rgba(255,255,255,.14)';ctx.lineWidth=2;ctx.stroke();}
+ ctx.restore();
+ const tex=texture(cv),pos=[x,0,.02],size=[.71,.78];
+ agencyCards.push({id,kind:'agency',pos,q:[0,0,0,1],scale:1,size,front:tex,back:tex,resources:[tex],visible:true});
+ agencyNode(id,...pos,'panel','cyan',0,{size,passive:false});
+}
 function agencyNode(id,x,y,z,type='sphere',color='cyan',radius=.18,extra={}){
  const n={id,pos:[x,y,z],home:[x,y,z],type,color,radius,...extra};agencyNodes.push(n);return n;
 }
@@ -1543,12 +1578,11 @@ function agencyButton(id,label,sub,x,y,z,type='sphere',color='cyan',radius=.17,{
 function agencyBuild(){if(!gl||!agencyRoot||!['entrance','agency'].includes(xrExperience))return;agencyClearCards();
  const E=window.FreeLabAgency;if(!E)return;
  if(xrExperience==='entrance'){
-  agencyAdd('entrance-title','FREELAB','COGNITIVE AGENCY  ·  YOUR SPACE',0,.59,1.15,.24,'#b4b8ff',true,-.10);
-  agencyButton('xr-mystuff','MY STUFF','Organise your world',-.47,.04,-.08,'stack','cyan',.25,{width:.58,labelY:-.35});
-  agencyButton('xr-agency','AGENCY','Play, practise, reset',.47,.04,-.08,'garden','violet',.25,{width:.58,labelY:-.35});
-  agencyAdd('entrance-footer','PINCH OR POINT TO ENTER','Comfortable seated play  ·  No pressure',0,-.69,.96,.17,'#8eece8',false,.02);
-  agencyButton('agency-recenter','RE-CENTER','',-.29,-.79,.06,'sphere','blue',.085,{width:.23,labelY:-.11});
-  agencyButton('xr-exit','EXIT XR','',.29,-.79,.06,'sphere','pink',.085,{width:.23,labelY:-.11});
+  // The user's original mockup: TWO clean rectangles, with large titles.
+  // The browser only enters WebXR. My Stuff / Agency are chosen here in space.
+  agencyEntrancePanel('xr-mystuff','MY STUFF','Organise your world',-.405,'#58e2d3');
+  agencyEntrancePanel('xr-agency','AGENCY','Play, practise, explore',.405,'#b29aff');
+  agencyAdd('entrance-title','FREELAB','YOUR SPACE  ·  YOUR PACE',0,.515,.95,.18,'#b4b8ff',true,.035);
  }else if(agencyScreen==='lobby'){
   agencyAdd('agency-head','COGNITIVE AGENCY','Choose an activity  ·  Your pace',0,.65,1.18,.23,'#c4b0ff',true,-.22);
   agencyButton('agency-game:shapes','SHAPE GARDEN','Pick and place',-.48,.05,-.09,'triangle','cyan',.205,{width:.48,labelY:-.27});
@@ -1623,9 +1657,27 @@ function agencyNavigate(id,src=null){if(!id||!['agency','entrance'].includes(xrE
 }
 function agencySubmit(value,hand){if(!agencySession)return;const result=agencySession.answer(value,hand);if(result.accepted){cue(result.correct?'bloom':'paper');agencyGrab=null;agencyChosen=null;setStatus(result.feedback,2400);if(result.finished)agencyScreen='summary';agencyBuild();}}
 function agencyWorldPoint(p){return point(agencyRoot,p);}
-function agencyNodeDistance(r,n){if(!r||n.passive)return null;const c=agencyWorldPoint(n.pos),oc=vsub(r.o,c),b=oc.reduce((s,v,i)=>s+v*r.d[i],0),d=b*b-(oc.reduce((s,v)=>s+v*v,0)-n.radius*n.radius);if(d<0)return null;const t=-b-Math.sqrt(d);return t>.035&&t<4?t:null;}
+function agencyNodeDistance(r,n){
+ if(!r||n.passive)return null;
+ if(n.type==='panel'){
+  const inv=inverse(agencyRoot);if(!inv)return null;
+  const o=point(inv,r.o),d=point(inv,r.d,0);if(Math.abs(d[2])<1e-6)return null;
+  const t=(n.pos[2]-o[2])/d[2];if(t<=.035||t>=4)return null;
+  const x=o[0]+t*d[0]-n.pos[0],y=o[1]+t*d[1]-n.pos[1];
+  return Math.abs(x)<=n.size[0]*.5&&Math.abs(y)<=n.size[1]*.5?t:null;
+ }
+ const c=agencyWorldPoint(n.pos),oc=vsub(r.o,c),b=oc.reduce((s,v,i)=>s+v*r.d[i],0),d=b*b-(oc.reduce((s,v)=>s+v*v,0)-n.radius*n.radius);if(d<0)return null;const t=-b-Math.sqrt(d);return t>.035&&t<4?t:null;
+}
 function agencyPick(r){return agencyNodes.map(node=>({node,dist:agencyNodeDistance(r,node)})).filter(hit=>hit.dist!==null).sort((a,b)=>a.dist-b.dist)[0]||null;}
-function agencyContact(p){if(!p)return null;return agencyNodes.find(node=>!node.passive&&length(vsub(p,agencyWorldPoint(node.pos)))<=node.radius*1.10)||null;}
+function agencyContact(p){if(!p)return null;
+ const inv=inverse(agencyRoot),local=inv?point(inv,p):null;
+ return agencyNodes.find(node=>{
+  if(node.passive)return false;
+  if(node.type==='panel')return local&&Math.abs(local[0]-node.pos[0])<=node.size[0]*.5&&
+   Math.abs(local[1]-node.pos[1])<=node.size[1]*.5&&Math.abs(local[2]-node.pos[2])<.075;
+  return length(vsub(p,agencyWorldPoint(node.pos)))<=node.radius*1.10;
+ })||null;
+}
 function agencyTip(frame,src){
  if(src.hand&&frame.getJointPose){const joint=src.hand.get('index-finger-tip');const p=joint&&frame.getJointPose(joint,refSpace)?.transform?.position;if(p)return [p.x,p.y,p.z];}
  return posePosition(frame,src);
@@ -1710,6 +1762,7 @@ function agencySculpture(vp,node,t){
  const [x,y,z]=node.pos,still=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
  const animated=still||node.id==='agency-shape'||node.type==='handtarget'?0:Math.sin(t*.00075+x*4)*.014;
  const p=[x,y+animated,z],c=node.color;
+ if(node.type==='panel')return;
  if(node.type==='bin'){
   // Open-topped 3D container: thick walls, a recessed dark interior, glowing trim.
   agencySolid(vp,[x,y-.05,z],'cube','blue',[.38,.075,.32],0,.46);
@@ -1743,18 +1796,12 @@ function agencySculpture(vp,node,t){
  if(!node.draggable&&node.type!=='handtarget')agencyRing(vp,[x,y,z],node.radius*1.25,c,t*.00015,.22);
 }
 function agencyWorld(vp,t){
- // Spatial ground plane, arc portals, orbiting firefly points: calm and still enough for seated use.
- const theme=xrExperience==='entrance'?'violet':'cyan',baseY=-.93;
+ // Entrance is intentionally quiet. No flying primitives, circles, arches,
+ // floor rings, trays or pedestal geometry around the two rectangular choices.
+ if(xrExperience==='entrance')return;
+ const baseY=-.93;
  agencyRing(vp,[0,baseY,-.15],.91,'violet',0,1.40);agencyRing(vp,[0,baseY+.05,-.12],.66,'cyan',0,1.40);
  for(let i=0;i<18;i++){const a=i*TAU/18,p=agencyWorldPoint([Math.cos(a)*.93,baseY+.1+Math.sin(i*2.3)*.07,Math.sin(a)*.31-.12]);line(vp,[p],[.45,.9,1,.55],true,3);}
- if(xrExperience==='entrance'){
-  for(const x of [-.47,.47]){
-   // The portals have true depth and upright arches, not a pair of browser cards.
-   for(let i=0;i<24;i++){const a=Math.PI*i/24,b=Math.PI*(i+1)/24;
-    line(vp,[[x+Math.cos(a)*.31,.16+Math.sin(a)*.49,-.23],[x+Math.cos(b)*.31,.16+Math.sin(b)*.49,-.23]].map(agencyWorldPoint),x<0?[.39,1,.9,.63]:[.72,.54,1,.70]);}
-   agencySolid(vp,[x,-.29,-.15],'cube',x<0?'cyan':'violet',[.56,.09,.32],0,.72);
-  }
- }
  for(const node of agencyNodes)agencySculpture(vp,node,t);
 }
 function renderAgencyView(t,frame,pose){

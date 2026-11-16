@@ -59,7 +59,7 @@ s.update(inp(false,false,0));s.update(inp(true,false,0));s.update(inp(false,fals
                       'frameGames?.linkOnOverlap(frameLab.frames,df.id)', 'frameGames?.launch(frameLab.frames,frameTouch.id',
                       'pollFrameGames(t,pose)', 'drawFrameCubes(vp)', 'gl.drawArrays(gl.TRIANGLES,0,36)'):
             self.assertIn(token,XR)
-        self.assertIn('frame-games.js?v=0.10.48',PAGE)
+        self.assertIn('frame-games.js?v=0.10.49',PAGE)
         self.assertNotIn('cdn', (ROOT/'frontend/assets/frame-games.js').read_text())
 
 if __name__=='__main__':unittest.main()
@@ -130,3 +130,47 @@ if(!storage.v.includes('"completed":true'))throw Error('Progress not stored');
                         "node.type==='handtarget'", "agencyGame==='shapes'", "agencyGame==='math'"):
             self.assertIn(snippet,xr)
         self.assertIn("xrExperience!=='stuff'",xr)
+
+    def test_xr_entrance_is_exactly_two_labelled_rectangles(self):
+        xr=(ROOT/'frontend/assets/xr.js').read_text()
+        entrance=xr.split("if(xrExperience==='entrance'){",1)[1].split("}else if(agencyScreen==='lobby')",1)[0]
+        self.assertEqual(entrance.count('agencyEntrancePanel('),2)
+        self.assertIn("agencyEntrancePanel('xr-mystuff','MY STUFF'",entrance)
+        self.assertIn("agencyEntrancePanel('xr-agency','AGENCY'",entrance)
+        self.assertNotIn('agencyButton(',entrance)
+        self.assertNotIn('agencySolid(',entrance)
+        self.assertIn("if(xrExperience==='entrance')return;",xr)
+        self.assertIn("agencyNode(id,...pos,'panel'",xr)
+        self.assertIn('const t=(n.pos[2]-o[2])/d[2]',xr)
+        self.assertIn("if(node.type==='panel')return;",xr)
+    def test_xr_rectangular_panel_controller_and_fingertip_hit_regions(self):
+        # Execute the actual production ray/card and fingertip contact functions
+        # with a static reference frame, no XR session, server or provider calls.
+        self.run_node(r'''const fs=require('fs'),vm=require('vm');
+const src=fs.readFileSync('frontend/assets/xr.js','utf8');
+const extract=name=>{const start=src.indexOf('function '+name+'(');if(start<0)throw Error('missing '+name);
+ const brace=src.indexOf('{',start);let depth=0;for(let i=brace;i<src.length;i++){
+  if(src[i]==='{')depth++;if(src[i]==='}'&&!--depth)return src.slice(start,i+1);
+ }throw Error('unclosed '+name);};
+const prefix=`const agencyRoot=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);
+const agencyNodes=[{id:'xr-mystuff',type:'panel',pos:[-.405,0,.02],size:[.71,.78]},
+{id:'xr-agency',type:'panel',pos:[.405,0,.02],size:[.71,.78]}];
+const point=(m,p,w=1)=>[m[0]*p[0]+m[4]*p[1]+m[8]*p[2]+m[12]*w,
+ m[1]*p[0]+m[5]*p[1]+m[9]*p[2]+m[13]*w,m[2]*p[0]+m[6]*p[1]+m[10]*p[2]+m[14]*w];
+const inverse=m=>m,vsub=(a,b)=>a.map((n,i)=>n-b[i]),length=a=>Math.hypot(...a);
+`;
+const test=`const left=agencyNodes[0],right=agencyNodes[1];
+const ray=(x,y,z=1)=>({o:[x,y,z],d:[0,0,-1]});
+if(Math.abs(agencyNodeDistance(ray(-.405,0),left)-.98)>1e-5)throw Error('left ray misses');
+if(agencyNodeDistance(ray(.405,0),left)!==null)throw Error('left ray overlaps right card');
+if(Math.abs(agencyNodeDistance(ray(.405,0),right)-.98)>1e-5)throw Error('right ray misses');
+if(agencyNodeDistance(ray(1.5,0),right)!==null)throw Error('ray outside card hits');
+if(agencyNodeDistance(ray(-.405,.7),left)!==null)throw Error('ray above card hits');
+if(agencyContact([-.405,0,.05])?.id!=='xr-mystuff')throw Error('left finger contact misses');
+if(agencyContact([.405,0,.05])?.id!=='xr-agency')throw Error('right finger contact misses');
+if(agencyContact([.405,.7,.05])!==null)throw Error('finger outside card hits');
+if(agencyContact([.405,0,.3])!==null)throw Error('finger too far from surface hits');
+`;
+vm.runInNewContext(prefix+extract('agencyWorldPoint')+extract('agencyNodeDistance')+
+ extract('agencyContact')+test,{});
+''')

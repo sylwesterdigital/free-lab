@@ -330,7 +330,7 @@ No server routes, database migrations, Nginx configuration or watcher version
 are changed in this release. Backup and deploy with the normal watcher.
 
 
-## Cognitive Agency immersive XR entrance — v0.10.48
+## Cognitive Agency immersive XR entrance — v0.10.49
 
 The browser is the **launch surface only**. After sign-in, select **Enter XR**.
 The WebXR session begins at a neon-lit 3D entrance with two sculpted choices:
@@ -358,3 +358,10 @@ vhost lacks its required asset routing; it still restarts the dedicated
 free-lab systemd unit. Local automation can verify syntax and
 game logic, but cannot validate true Quest hand-tracking, optics, or the live
 Ubuntu server. Perform headset QA before treating the release as production-ready.
+
+
+## v0.10.49 — headset entrance correction
+
+Enter XR before choosing a destination. The entrance now contains **two large upright rectangular panels only**: **MY STUFF** and **AGENCY**, with their labels integrated into the panel surfaces. No flying shapes, arches, trays or pedestal objects are used in this entrance. Hand-pinch, fingertip touch and controller trigger select the complete panel.
+
+This change deliberately does not redesign Agency activities or My Stuff. The existing release watcher and shared-server installation safeguards remain unchanged. A local watcher `--dry-run` validates structure and tests; final visual fit, tracking and legibility require testing in the Quest Browser.
