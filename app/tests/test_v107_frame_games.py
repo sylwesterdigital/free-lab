@@ -59,7 +59,7 @@ s.update(inp(false,false,0));s.update(inp(true,false,0));s.update(inp(false,fals
                       'frameGames?.linkOnOverlap(frameLab.frames,df.id)', 'frameGames?.launch(frameLab.frames,frameTouch.id',
                       'pollFrameGames(t,pose)', 'drawFrameCubes(vp)', 'gl.drawArrays(gl.TRIANGLES,0,36)'):
             self.assertIn(token,XR)
-        self.assertIn('frame-games.js?v=0.10.53',PAGE)
+        self.assertIn('frame-games.js?v=0.10.54',PAGE)
         self.assertNotIn('cdn', (ROOT/'frontend/assets/frame-games.js').read_text())
 
 if __name__=='__main__':unittest.main()
@@ -107,7 +107,8 @@ if(!storage.v.includes('"completed":true'))throw Error('Progress not stored');
         self.assertIn("xrExperience='entrance'",xr)
         self.assertIn("'xr-mystuff'",xr)
         self.assertIn("'xr-agency'",xr)
-        self.assertIn("case 'home':agencyEnter('entrance')",xr)
+        self.assertIn("case 'home':if(agencyLabMode)",xr)
+        self.assertIn("agencyEnter('entrance');return;case 'labstuff':",xr)
         self.assertNotIn('start({experience:',source)
         self.assertIn('freelab-agency-v1-',source)
         self.assertNotIn('fetch(',source[source.index('/* Cognitive Agency'):])
