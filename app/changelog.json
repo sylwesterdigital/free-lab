@@ -1,14 +1,14 @@
 {
-  "version": "0.10.51",
-  "title": "FREELAB v0.10.51 — XR graphics quality controls",
+  "version": "0.10.52",
+  "title": "FREELAB v0.10.52 — XR navigation and experimental lab integration",
   "datetime": "2026-11-16",
   "changes": [
-    "Add headset-local graphics settings with Performance, Balanced, High, Ultra, Extreme and Custom presets (0.8× to 2.0× framebuffer scale).",
-    "Expose XR layer antialiasing and fixed foveation (browser default, off, low, medium, high); support adjustment inside the immersive CONFIG panel.",
-    "Apply saved resolution and antialiasing when entering XR; apply foveation live if the headset supports it, with clear re-entry messaging for the other controls.",
-    "Fallback safely to lower-resolution XR layers if a high-end allocation fails, recording the actual framebuffer dimensions and applied antialiasing for diagnostics.",
-    "Keep the existing two-card immersive XR entrance, My Stuff, Agency, privacy, backend and isolated Nginx deployment behavior unchanged.",
-    "Validate stored choices against an allowlist, and regression-test settings wiring and high-resolution layer creation without paid model calls."
+    "Remove redundant FREELAB heading above the XR entrance cards.",
+    "Preserve text aspect ratios within XR activity cards.",
+    "Keep the selected destination title visible briefly when entering My Stuff or Agency.",
+    "Display the configured mascot at the XR entrance and within Agency.",
+    "Present Cognitive Games and Experimental Labs as sections within Agency.",
+    "Open legacy Experimental Labs from Agency while preserving existing My Stuff features."
   ],
   "history": [
     {

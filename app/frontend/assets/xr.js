@@ -1542,17 +1542,21 @@ function placeRoomVisitors(pose){const m=pose.transform.matrix,eye=[m[12],m[13],
 // WebXR session. Labels are small, transparent world-space type; the choices,
 // exercises and receiving bins are real perspective-lit 3D geometry.
 // No camera uploads, medical inference, external assets or new network calls.
-let xrExperience='entrance',agencyCards=[],agencyNodes=[],agencyRoot=null,agencyGeometryCache=new Map(),agencyScreen='lobby',agencyGame='shapes',agencyMode='free',agencyLevel=0,agencySession=null,agencyGrab=null,agencyChosen=null,agencyTouched=new WeakMap(),agencyRefreshSecond=-1,agencyDistance=1.38;
+let xrExperience='entrance',agencyCards=[],agencyNodes=[],agencyRoot=null,agencyGeometryCache=new Map(),agencyScreen='lobby',agencyGame='shapes',agencyMode='free',agencyLevel=0,agencySession=null,agencyGrab=null,agencyChosen=null,agencyTouched=new WeakMap(),agencyRefreshSecond=-1,agencyDistance=1.38,agencyTransition=null,agencyCatalog='games',agencyLaunchMode=null;
 // The entrance is a spatial composition: two glass-outline panels, NOT dark blocks.
 let entranceFollow=null,entranceHover=null,entranceLastHover=0;const ENTRANCE_DEPTH=.99;
 const AGENCY_PALETTE={cyan:[.24,.94,.84,1],violet:[.65,.50,.99,1],pink:[1,.43,.66,1],gold:[1,.77,.38,1],blue:[.42,.73,1,1]};
 function agencyClearCards(){if(gl){const used=new Set();for(const card of agencyCards)for(const t of card.resources||[card.front])if(t&&!used.has(t)){used.add(t);gl.deleteTexture(t);}}agencyCards=[];agencyNodes=[];entranceHover=null;}
 function agencyPanel(id,title,subtitle,x,y,w=.43,h=.18,accent='#8cefea',large=false,z=.13){
- const [cv,ctx]=canvas2d(768,260);ctx.clearRect(0,0,768,260);
- ctx.shadowColor=accent;ctx.shadowBlur=large?27:17;ctx.textAlign='center';
- ctx.font=`750 ${large?78:title.length>17?43:61}px system-ui,sans-serif`;ctx.fillStyle='#f6ffff';
- ctx.fillText(String(title).slice(0,42),384,large?123:114,712);ctx.shadowBlur=0;
- if(subtitle){ctx.font='450 29px system-ui,sans-serif';ctx.fillStyle='#b5cad3';ctx.fillText(String(subtitle).slice(0,55),384,large?190:178,742);}
+ const pxW=1200,pxH=Math.max(340,Math.round(pxW*(h/Math.max(w,.01))));
+ const [cv,ctx]=canvas2d(pxW,pxH);ctx.clearRect(0,0,pxW,pxH);
+ ctx.shadowColor=accent;ctx.shadowBlur=large?28:18;ctx.textAlign='center';ctx.textBaseline='middle';
+ const titleSize=large?Math.min(118,pxH*.34):Math.min(title.length>19?66:82,pxH*.27);
+ ctx.font=`750 ${Math.round(titleSize)}px system-ui,sans-serif`;ctx.fillStyle='#f6ffff';
+ ctx.fillText(String(title).slice(0,42),pxW/2,large?pxH*.42:pxH*.43,pxW*.86);ctx.shadowBlur=0;
+ if(subtitle){ctx.font=`450 ${Math.round(Math.min(36,pxH*.12))}px system-ui,sans-serif`;ctx.fillStyle='#b5cad3';ctx.fillText(String(subtitle).slice(0,78),pxW/2,large?pxH*.70:pxH*.70,pxW*.9);}
+ const lineW=Math.min(180,pxW*.15),lineH=Math.max(8,Math.round(pxH*.018));
+ ctx.fillStyle='rgba(91,255,224,.95)';entrancePath(ctx,(pxW-lineW)/2,pxH*.82,lineW,lineH,Math.min(lineH/2,6));ctx.fill();
  const tex=texture(cv);
  return {id,kind:'agency',pos:[x,y,z],q:[0,0,0,1],scale:1,size:[w,h],front:tex,back:tex,resources:[tex],visible:true};
 }
@@ -1664,23 +1668,55 @@ function agencyButton(id,label,sub,x,y,z,type='sphere',color='cyan',radius=.17,{
  agencyNode(id,x,y,z,type,color,radius,extra);
  agencyAdd('label:'+id,label,sub,x,y+labelY,width,.14,color==='violet'?'#c4b0ff':color==='pink'?'#ff99bd':'#7ef4df',false,z+.07);
 }
+function agencyMenuCard(id,label,sub,x,y,w=.78,h=.20,color='#8ef4e4',z=.04,angle=0){
+ const card=agencyPanel(id,label,sub,x,y,w,h,color,false,z);card.q=quatY(angle);card.basePos=[x,y,z];card.menu=true;
+ agencyCards.push(card);agencyNode(id,x,y,z,'panel','cyan',0,{size:[w,h],angle,card,passive:false});
+ return card;
+}
+function agencyExperimentalOptions(){return [
+ ['frames','SPATIAL FRAMES','Join, stretch and place'],
+ ['sort','SHAPE SORT','Draw and match forms'],
+ ['chain','CHAIN LAB','Link frames together'],
+ ['cubes','CUBE LAB','Fall, stack and build'],
+ ['throw','THROW LAB','Grab and release'],
+ ['five','FIVE NOTE','Five-finger chords'],
+ ['thumbs','THUMB STRING','Stretch and snap'],
+];}
+function beginAgencyTransition(destination,label,sub='',launchMode=null){
+ if(latestPose)agencyRoot=viewerAnchor(latestPose,-.06,agencyDistance);
+ agencyTransition={destination,label,sub,launchMode,startedAt:performance.now()};
+ xrExperience='agency';agencyScreen='transition';agencyBuild();
+}
 function agencyBuild(){if(!gl||!agencyRoot||!['entrance','agency'].includes(xrExperience))return;agencyClearCards();
  const E=window.FreeLabAgency;if(!E)return;
  if(xrExperience==='entrance'){
-  // The user's original mockup: TWO clean rectangles, with large titles.
-  // The browser only enters WebXR. My Stuff / Agency are chosen here in space.
   agencyEntrancePanel('xr-mystuff','MY STUFF','Capture. Keep. Rediscover.',-.246,'#5BFFE0');
   agencyEntrancePanel('xr-agency','AGENCY','Play. Focus. Feel good.',.246,'#5BFFE0');
-  agencyAdd('entrance-title','FREELAB','YOUR SPACE  ·  YOUR PACE',0,.385,.74,.12,'#faffff',false,.005);
+ }else if(agencyScreen==='transition'&&agencyTransition){
+  agencyAdd('agency-head',agencyTransition.label,agencyTransition.sub||'Opening…',0,.18,1.06,.28,'#faffff',true,-.06);
  }else if(agencyScreen==='lobby'){
-  agencyAdd('agency-head','COGNITIVE AGENCY','Choose an activity  ·  Your pace',0,.65,1.18,.23,'#c4b0ff',true,-.22);
-  agencyButton('agency-game:shapes','SHAPE GARDEN','Pick and place',-.48,.05,-.09,'triangle','cyan',.205,{width:.48,labelY:-.27});
-  agencyButton('agency-game:math','NUMBER FLOW','Choose an answer',0,.05,-.09,'numbers','violet',.205,{width:.48,labelY:-.27});
-  agencyButton('agency-game:hands','HAND HARMONY','L  /  R touch',.48,.05,-.09,'hands','pink',.205,{width:.48,labelY:-.27});
-  agencyButton('agency-home','HOME','',-.39,-.60,.06,'cube','blue',.12,{width:.28,labelY:-.14});
-  agencyButton('agency-mystuff','MY STUFF','',0,-.60,.06,'stack','cyan',.12,{width:.30,labelY:-.14});
-  agencyButton('agency-exit','EXIT XR','',.39,-.60,.06,'sphere','pink',.12,{width:.28,labelY:-.14});
-  agencyButton('agency-recenter','RE-CENTER','',0,-.85,.06,'sphere','blue',.085,{width:.24,labelY:-.11});
+  agencyAdd('agency-head','AGENCY','Play. Focus. Feel good.',0,.67,1.08,.23,'#c4b0ff',true,-.18);
+  agencyMenuCard('agency-catalog:games','COGNITIVE GAMES','Number, shape and hand activities',0,.14,.86,.22,'#8ef4e4',.04,0);
+  agencyMenuCard('agency-catalog:experimental','EXPERIMENTAL LABS','Spatial frames, chains, cubes and more',0,-.16,.86,.22,'#c4b0ff',.04,0);
+  agencyButton('agency-home','HOME','',-.39,-.62,.06,'cube','blue',.12,{width:.28,labelY:-.14});
+  agencyButton('agency-mystuff','MY STUFF','',0,-.62,.06,'stack','cyan',.12,{width:.30,labelY:-.14});
+  agencyButton('agency-exit','EXIT XR','',.39,-.62,.06,'sphere','pink',.12,{width:.28,labelY:-.14});
+  agencyButton('agency-recenter','RE-CENTER','',0,-.86,.06,'sphere','blue',.085,{width:.24,labelY:-.11});
+ }else if(agencyScreen==='catalog'){
+  if(agencyCatalog==='experimental'){
+   agencyAdd('agency-head','EXPERIMENTAL LABS','Launched from Agency · runs in your world space',0,.69,1.14,.21,'#c4b0ff',true,-.22);
+   const entries=agencyExperimentalOptions();
+   entries.forEach(([mode,title,sub],i)=>{const row=Math.floor(i/2),col=i%2? .33:-.33;agencyMenuCard('agency-exp:'+mode,title,sub,col,.30-row*.26,.56,.17,i%2?'#c4b0ff':'#8ef4e4',.04,0);});
+   agencyButton('agency-sections','SECTIONS','',-.25,-.76,.08,'cube','blue',.10,{width:.28,labelY:-.13});
+   agencyButton('agency-mystuff','MY STUFF','',.25,-.76,.08,'stack','cyan',.10,{width:.30,labelY:-.13});
+  }else{
+   agencyAdd('agency-head','COGNITIVE GAMES','Choose one activity',0,.69,1.12,.21,'#c4b0ff',true,-.22);
+   agencyMenuCard('agency-game:shapes','SHAPE GARDEN','Pick and place',0,.26,.82,.19,'#8ef4e4',.04,0);
+   agencyMenuCard('agency-game:math','NUMBER FLOW','Choose an answer',0,0,.82,.19,'#c4b0ff',.04,0);
+   agencyMenuCard('agency-game:hands','HAND HARMONY','Left / right touch',0,-.26,.82,.19,'#ff99bd',.04,0);
+   agencyButton('agency-sections','SECTIONS','',-.25,-.76,.08,'cube','blue',.10,{width:.28,labelY:-.13});
+   agencyButton('agency-mystuff','MY STUFF','',.25,-.76,.08,'stack','cyan',.10,{width:.30,labelY:-.13});
+  }
  }else if(agencyScreen==='setup'){
   agencyAdd('agency-head',E.GAMES[agencyGame].name.toUpperCase(),'Choose your mode and difficulty',0,.67,1.12,.23,'#b4b8ff',true,-.14);
   [['free','FREE PLAY'],['timed','2 MINUTES'],['daily','DAILY']].forEach(([mode,title],i)=>agencyButton('agency-mode:'+mode,title,mode===agencyMode?'SELECTED':'',(-1+i)*.47,.23,-.06,'sphere',mode===agencyMode?'cyan':'violet',.15,{width:.4,labelY:-.19}));
@@ -1718,16 +1754,25 @@ function agencyBuild(){if(!gl||!agencyRoot||!['entrance','agency'].includes(xrEx
 }
 function agencyEnter(destination){
  if(agencySession&&!agencySession.completed)agencySession.finish();agencySession=null;agencyGrab=null;agencyChosen=null;agencyRefreshSecond=-1;
- xrExperience=destination;agencyScreen='lobby';agencyClearCards();if(destination==='entrance'&&latestPose)entranceReset(latestPose);if(destination==='stuff'){refreshToolbar();setStatus('MY STUFF · Your spatial collection',5000);if(uiSettings.voice!==false&&window.FreeLab?.pref?.('spoken')){mascotSay('Welcome to FreeLab!',3600);window.FreeLab?.speakUpdate?.('Welcome to FreeLab! Your room is ready to explore.');}}else{agencyBuild();}
+ xrExperience=destination;agencyScreen='lobby';agencyClearCards();agencyTransition=null;if(destination==='entrance'&&latestPose)entranceReset(latestPose);if(destination==='stuff'){
+  refreshToolbar();
+  const mode=agencyLaunchMode;agencyLaunchMode=null;
+  if(mode)experimentalMode(mode);else experimentalMode('off');
+  setStatus(mode?('AGENCY LAB · '+mode.toUpperCase().replace('THUMBS','THUMB STRING').replace('FIVE','FIVE NOTE')):'MY STUFF · Your spatial collection',5000);
+  if(uiSettings.voice!==false&&window.FreeLab?.pref?.('spoken')){mascotSay('Welcome to FreeLab!',3600);window.FreeLab?.speakUpdate?.('Welcome to FreeLab! Your room is ready to explore.');}
+ }else{agencyBuild();}
 }
 function agencyNavigate(id,src=null){if(!id||!['agency','entrance'].includes(xrExperience))return;
- if(id==='xr-mystuff'||id==='agency-mystuff'){agencyEnter('stuff');return;}
- if(id==='xr-agency'){xrExperience='agency';agencyScreen='lobby';if(latestPose)agencyRoot=viewerAnchor(latestPose,-.06,agencyDistance);agencyBuild();return;}
+ if(id==='xr-mystuff'||id==='agency-mystuff'){agencyLaunchMode=null;beginAgencyTransition('stuff','MY STUFF','Capture. Keep. Rediscover.');return;}
+ if(id==='xr-agency'){beginAgencyTransition('agency','AGENCY','Play. Focus. Feel good.');return;}
  if(id==='agency-recenter'&&latestPose){agencyRoot=viewerAnchor(latestPose,-.06,agencyDistance);agencyBuild();return;}
  if(id==='agency-home'){agencyEnter('entrance');return;}
+ if(id==='agency-sections'){agencyScreen='lobby';agencyBuild();return;}
  if(id==='xr-exit'||id==='agency-exit'){session?.end();return;}
  if(xrExperience==='entrance')return;
- if(id==='agency-back'){if(agencySession&&!agencySession.completed)agencySession.finish();agencySession=null;agencyGrab=null;agencyChosen=null;agencyScreen='lobby';agencyBuild();return;}
+ if(id==='agency-back'){if(agencySession&&!agencySession.completed)agencySession.finish();agencySession=null;agencyGrab=null;agencyChosen=null;agencyScreen='catalog';agencyBuild();return;}
+ if(id.startsWith('agency-catalog:')){agencyCatalog=id.split(':')[1];agencyScreen='catalog';agencyBuild();return;}
+ if(id.startsWith('agency-exp:')){agencyLaunchMode=id.split(':')[1];beginAgencyTransition('stuff','EXPERIMENTAL LABS','Opening '+String(id.split(':')[1]).toUpperCase());return;}
  if(id.startsWith('agency-game:')){agencyGame=id.split(':')[1];agencyMode='free';agencyLevel=0;agencyScreen='setup';agencyBuild();return;}
  if(id.startsWith('agency-mode:')){agencyMode=id.split(':')[1];agencyBuild();return;}
  if(id.startsWith('agency-level:')){agencyLevel=Number(id.split(':')[1]);agencyBuild();return;}
@@ -1958,7 +2003,15 @@ function entranceUpdate(frame,pose,t){
 }
 function renderAgencyView(t,frame,pose){
  if(xrExperience==='entrance')entranceUpdate(frame,pose,t);
+ if(agencyTransition&&t-agencyTransition.startedAt>720){
+  const done=agencyTransition;agencyTransition=null;
+  if(done.launchMode)agencyLaunchMode=done.launchMode;
+  if(done.destination==='stuff')agencyEnter('stuff');
+  else{xrExperience='agency';agencyScreen='lobby';if(latestPose)agencyRoot=viewerAnchor(latestPose,-.06,agencyDistance);agencyBuild();}
+  session.requestAnimationFrame(updateView);return;
+ }
  agencyTouchPoll(frame,t);for(const src of session.inputSources)pinchPoll(frame,src);
+ updateMascot(frame,t);tickMascotSpeech(t);
  if(xrExperience==='agency'&&agencySession&&agencyScreen==='play'){
   if(agencySession.tick()){agencyScreen='summary';agencyBuild();}
   else if(agencySession.mode==='timed'){const remaining=agencySession.remaining();if(remaining!==agencyRefreshSecond&&!agencyGrab){agencyRefreshSecond=remaining;agencyBuild();}}
@@ -1966,6 +2019,7 @@ function renderAgencyView(t,frame,pose){
  gl.bindFramebuffer(gl.FRAMEBUFFER,session.renderState.baseLayer.framebuffer);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
  for(const view of pose.views){const v=session.renderState.baseLayer.getViewport(view);gl.viewport(v.x,v.y,v.width,v.height);const vp=matmul(view.projectionMatrix,view.transform.inverse.matrix);
   agencyWorld(vp,t);for(const card of agencyCards)drawCard(card,vp);drawHands(frame,vp);
+  if(mascotPointer?.visible){if(mascotMode()==='2d')drawCard(mascotPointer,vp);else drawMascot3D(vp,t);}if(mascotSpeech)drawCard(mascotSpeech,vp);
   for(const src of session.inputSources){const r=ray(frame,src);if(!r)continue;const hit=agencyPick(r);line(vp,[r.o,vadd(r.o,vmul(r.d,hit?.dist||.9))],src.hand?[.54,1,.83,.65]:[.63,.76,1,.73]);}
  }
  session.requestAnimationFrame(updateView);

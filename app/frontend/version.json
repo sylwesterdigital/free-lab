@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.51",
-  "description": "Configurable WebXR render quality, antialiasing and foveation with device-safe fallback"
+  "version": "0.10.52",
+  "description": "XR entrance and Agency flow refined: uncompressed typography, mascot visible from the start, section transition hold, and Agency-led labs"
 }
