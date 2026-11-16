@@ -59,7 +59,7 @@ s.update(inp(false,false,0));s.update(inp(true,false,0));s.update(inp(false,fals
                       'frameGames?.linkOnOverlap(frameLab.frames,df.id)', 'frameGames?.launch(frameLab.frames,frameTouch.id',
                       'pollFrameGames(t,pose)', 'drawFrameCubes(vp)', 'gl.drawArrays(gl.TRIANGLES,0,36)'):
             self.assertIn(token,XR)
-        self.assertIn('frame-games.js?v=0.10.49',PAGE)
+        self.assertIn('frame-games.js?v=0.10.50',PAGE)
         self.assertNotIn('cdn', (ROOT/'frontend/assets/frame-games.js').read_text())
 
 if __name__=='__main__':unittest.main()
@@ -140,9 +140,52 @@ if(!storage.v.includes('"completed":true'))throw Error('Progress not stored');
         self.assertNotIn('agencyButton(',entrance)
         self.assertNotIn('agencySolid(',entrance)
         self.assertIn("if(xrExperience==='entrance')return;",xr)
-        self.assertIn("agencyNode(id,...pos,'panel'",xr)
-        self.assertIn('const t=(n.pos[2]-o[2])/d[2]',xr)
+        self.assertIn("agencyNode(id,...body.pos,'panel'",xr)
+        self.assertIn("const t=((n.angle?0:n.pos[2])-o[2])/d[2]",xr)
         self.assertIn("if(node.type==='panel')return;",xr)
+    def test_premium_entrance_has_transparency_inertia_and_proximity(self):
+        xr=(ROOT/'frontend/assets/xr.js').read_text()
+        self.assertIn('function entranceTexture(kind,hot=false)',xr)
+        self.assertIn('function entranceTitleTexture(title,description)',xr)
+        self.assertIn('function entranceArt(ctx,kind,hot)',xr)
+        self.assertIn('function entranceUpdate(frame,pose,t)',xr)
+        self.assertIn("if(xrExperience==='entrance')entranceUpdate(frame,pose,t)",xr)
+        self.assertIn('const ENTRANCE_DEPTH=.99',xr)
+        self.assertIn('card.entranceAttention=previous+(target-previous)*a',xr)
+        self.assertIn('card.pos[2]=card.basePos[2]+v*',xr)
+        self.assertIn('const targetYaw=Math.abs(delta)>.14',xr)
+        self.assertIn('window.FreeLabSound?.hover?.()',xr)
+        self.assertIn("cue('enter',src)",xr)
+        self.assertIn("agencyNode(id,...body.pos,'panel'",xr)
+        self.assertNotIn('rgba(17,28,42,.97)',xr)
+        self.assertNotIn('rgba(12,19,35,.95)',xr)
+        self.assertIn("ctx.clearRect(0,0,1200,1380)",xr)
+        self.assertIn('prefers-reduced-motion: reduce',xr)
+
+    def test_angling_of_entrance_panels_keeps_rays_and_touch_precise(self):
+        # Execute the production geometric functions against rotated XR panels.
+        self.run_node(r'''const fs=require('fs'),vm=require('vm');const src=fs.readFileSync('frontend/assets/xr.js','utf8');
+const extract=name=>{const start=src.indexOf('function '+name+'(');if(start<0)throw Error('missing '+name);
+ const brace=src.indexOf('{',start);let depth=0;for(let i=brace;i<src.length;i++){
+ if(src[i]==='{')depth++;if(src[i]==='}'&&!--depth)return src.slice(start,i+1);
+ }throw Error('unclosed '+name);};
+const prefix=`const agencyRoot=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);
+const agencyNodes=[{id:'xr-mystuff',type:'panel',pos:[-.246,0,.024],size:[.438,.555],angle:.095,card:{scale:1.025}},
+{id:'xr-agency',type:'panel',pos:[.246,0,.024],size:[.438,.555],angle:-.095,card:{scale:1.025}}];
+const vsub=(a,b)=>a.map((n,i)=>n-b[i]),length=a=>Math.hypot(...a);`;
+const js=prefix+['matmul','translate','rotateY','point','inverse','agencyWorldPoint','agencyNodeDistance','agencyContact'].map(extract).join('\n')+`
+const vunit=a=>a.map(x=>x/Math.hypot(...a));
+for(const n of agencyNodes){
+ const center=point(matmul(translate(...n.pos),rotateY(n.angle)),[0,0,0]);
+ const origin=[0,0,1],direction=vunit(vsub(center,origin)),hit=agencyNodeDistance({o:origin,d:direction},n);
+ if(!(hit>.1&&hit<2))throw Error('ray missed angled panel '+n.id);
+ const fingertip=point(matmul(translate(...n.pos),rotateY(n.angle)),[0,0,.025]);
+ if(agencyContact(fingertip)?.id!==n.id)throw Error('fingertip missed angled panel '+n.id);
+}
+if(agencyNodeDistance({o:[1.25,0,1],d:[0,0,-1]},agencyNodes[1])!==null)throw Error('outside ray selected angled panel');
+if(agencyContact([0,.5,.02])!==null)throw Error('outside fingertip selected angled panel');`;
+vm.runInNewContext(js,{});''')
+
     def test_xr_rectangular_panel_controller_and_fingertip_hit_regions(self):
         # Execute the actual production ray/card and fingertip contact functions
         # with a static reference frame, no XR session, server or provider calls.

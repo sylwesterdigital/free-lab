@@ -1034,7 +1034,7 @@ function syncTrackedUI(pose,t){
  lastFrame=t;
 }
 function cardModel(c){
- if(c.kind==='agency'&&agencyRoot)return matmul(agencyRoot,matmul(translate(...c.pos),scale(c.size[0]*c.scale,c.size[1]*c.scale,1)));
+ if(c.kind==='agency'&&agencyRoot)return matmul(agencyRoot,matmul(translate(...c.pos),matmul(quatMatrix(c.q||[0,0,0,1]),scale(c.size[0]*c.scale,c.size[1]*c.scale,1))));
  // 3D job chips are in world space and re-anchor to a source card each XR frame.
  if(c.kind==='3djob')return matmul(translate(...c.pos),matmul(quatMatrix(c.q),scale(c.size[0]*(c.animScale??1),c.size[1]*(c.animScale??1),1)));
  if(c.kind==='contextbar'&&c.parentCard){const parent=c.parentCard,sc=parent.scale*(parent.animScale===undefined?1:parent.animScale);
@@ -1127,7 +1127,7 @@ function sparkles(vp,t){const cool=[],warm=[],trailBright=[],trailDim=[];particl
  if(trailBright.length)line(vp,trailBright,[.79,.99,.91,.65],true,4);
  if(trailDim.length)line(vp,trailDim,[.63,.86,1,.18],true,2);
 }
-function place(pose){root=viewerAnchor(pose,-.04,1.45);rootYaw=yawFromMatrix(pose.transform.matrix);agencyRoot=viewerAnchor(pose,-.06,agencyDistance);poseReady=true;
+function place(pose){root=viewerAnchor(pose,-.04,1.45);rootYaw=yawFromMatrix(pose.transform.matrix);agencyRoot=viewerAnchor(pose,-.075,xrExperience==='entrance'?ENTRANCE_DEPTH:agencyDistance);entranceFollow=null;poseReady=true;
  if(!toolbar){menuYaw=cameraYaw(pose);const h=pose.transform.matrix,world=point(h,[0,0,0]),off=point(rotateY(cameraYaw(pose)),followOffset,0);toolbar={id:'toolbar',kind:'toolbar',size:[.67,.135],pos:vadd(world,off),q:quatY(cameraYaw(pose)),scale:1,visible:true,front:toolbarTexture('main'),back:null,resources:[]};toolbar.back=toolbar.front;toolbar.resources=[toolbar.front];}
  if(!captureEye){eyeResource=eyeTexture();captureEye={id:'captureeye',kind:'captureeye',size:[.099,.099],pos:point(poseForwardAnchor(pose,1.02,-.49),[0,0,0]),q:quatY(cameraYaw(pose)),scale:1,visible:true,front:eyeResource.tex,back:eyeResource.tex,resources:[eyeResource.tex]};paintEye(performance.now());}
  if(!voiceButton)voiceButton=makeRoundel('voice-roundel','voiceroundel',.089);
@@ -1521,8 +1521,10 @@ function placeRoomVisitors(pose){const m=pose.transform.matrix,eye=[m[12],m[13],
 // exercises and receiving bins are real perspective-lit 3D geometry.
 // No camera uploads, medical inference, external assets or new network calls.
 let xrExperience='entrance',agencyCards=[],agencyNodes=[],agencyRoot=null,agencyGeometryCache=new Map(),agencyScreen='lobby',agencyGame='shapes',agencyMode='free',agencyLevel=0,agencySession=null,agencyGrab=null,agencyChosen=null,agencyTouched=new WeakMap(),agencyRefreshSecond=-1,agencyDistance=1.38;
+// The entrance is a spatial composition: two glass-outline panels, NOT dark blocks.
+let entranceFollow=null,entranceHover=null,entranceLastHover=0;const ENTRANCE_DEPTH=.99;
 const AGENCY_PALETTE={cyan:[.24,.94,.84,1],violet:[.65,.50,.99,1],pink:[1,.43,.66,1],gold:[1,.77,.38,1],blue:[.42,.73,1,1]};
-function agencyClearCards(){if(gl)for(const card of agencyCards)if(card.front)gl.deleteTexture(card.front);agencyCards=[];agencyNodes=[];}
+function agencyClearCards(){if(gl){const used=new Set();for(const card of agencyCards)for(const t of card.resources||[card.front])if(t&&!used.has(t)){used.add(t);gl.deleteTexture(t);}}agencyCards=[];agencyNodes=[];entranceHover=null;}
 function agencyPanel(id,title,subtitle,x,y,w=.43,h=.18,accent='#8cefea',large=false,z=.13){
  const [cv,ctx]=canvas2d(768,260);ctx.clearRect(0,0,768,260);
  ctx.shadowColor=accent;ctx.shadowBlur=large?27:17;ctx.textAlign='center';
@@ -1536,37 +1538,102 @@ function agencyAdd(id,label,sub,x,y,w,h,color,large=false,z=.13){agencyCards.pus
 // XR entrance contract: exactly two large upright rectangular surfaces.
 // Every label is painted ON its panel, not beneath decorative 3D objects.
 // The panel itself is the hand/controller hit target (not a hidden sphere).
+// Art-directed entrance textures. Every surface pixel starts transparent: the
+// room remains visible through the softly luminous rim and subtle glass wash.
+function entrancePath(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
+function entranceArt(ctx,kind,hot){
+ ctx.save();ctx.translate(600,486);ctx.lineCap='round';ctx.lineJoin='round';
+ const aura=ctx.createRadialGradient(0,0,22,0,0,336);
+ aura.addColorStop(0,hot?'rgba(77,255,224,.21)':'rgba(77,255,224,.13)');aura.addColorStop(.5,'rgba(77,255,224,.042)');aura.addColorStop(1,'rgba(77,255,224,0)');
+ ctx.fillStyle=aura;ctx.fillRect(-345,-340,690,680);
+ if(kind==='stuff'){
+  // An illustrated grouping of familiar belongings, not random XR primitives:
+  // a cloth-bound book, a ceramic mug and headphones, with dimensional highlights.
+  ctx.save();ctx.translate(-125,5);ctx.rotate(-.115);
+  ctx.shadowColor='rgba(0,0,0,.25)';ctx.shadowBlur=16;ctx.shadowOffsetY=12;
+  entrancePath(ctx,-74,-152,174,264,19);const book=ctx.createLinearGradient(-74,-120,110,110);
+  book.addColorStop(0,'rgba(246,255,254,.85)');book.addColorStop(.55,'rgba(147,244,226,.56)');book.addColorStop(1,'rgba(238,255,250,.80)');ctx.fillStyle=book;ctx.fill();ctx.shadowBlur=0;
+  ctx.strokeStyle='rgba(248,255,253,.93)';ctx.lineWidth=7;ctx.stroke();
+  ctx.strokeStyle='rgba(15,104,98,.43)';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-38,-148);ctx.lineTo(-38,106);ctx.stroke();
+  ctx.strokeStyle='rgba(19,115,103,.64)';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-10,-94);ctx.lineTo(59,-94);ctx.moveTo(-10,-69);ctx.lineTo(36,-69);ctx.stroke();ctx.restore();
+  ctx.save();ctx.translate(120,54);ctx.shadowColor='rgba(15,63,61,.35)';ctx.shadowBlur=22;
+  entrancePath(ctx,-100,-105,178,182,37);const cup=ctx.createLinearGradient(-100,0,84,0);cup.addColorStop(0,'rgba(198,245,235,.9)');cup.addColorStop(.45,'rgba(255,255,255,.96)');cup.addColorStop(1,'rgba(137,218,211,.75)');ctx.fillStyle=cup;ctx.fill();ctx.shadowBlur=0;
+  ctx.strokeStyle='rgba(255,255,255,.93)';ctx.lineWidth=9;ctx.stroke();
+  ctx.beginPath();ctx.ellipse(-10,-105,88,22,0,0,Math.PI*2);ctx.fillStyle='rgba(241,255,250,.95)';ctx.fill();
+  ctx.beginPath();ctx.ellipse(-10,-107,66,13,0,0,Math.PI*2);ctx.fillStyle='rgba(60,125,114,.38)';ctx.fill();
+  ctx.beginPath();ctx.ellipse(93,-15,50,66,0,-Math.PI/2,Math.PI/2);ctx.lineWidth=21;ctx.strokeStyle='rgba(211,255,249,.95)';ctx.stroke();ctx.restore();
+  ctx.save();ctx.translate(5,-105);ctx.rotate(.2);ctx.strokeStyle='rgba(255,255,255,.86)';ctx.shadowColor='rgba(57,255,220,.5)';ctx.shadowBlur=16;ctx.lineWidth=17;
+  ctx.beginPath();ctx.arc(0,0,175,Math.PI*1.14,Math.PI*1.87);ctx.stroke();
+  ctx.fillStyle='rgba(239,255,254,.92)';entrancePath(ctx,-178,30,42,92,18);ctx.fill();entrancePath(ctx,136,30,42,92,18);ctx.fill();ctx.restore();
+ }else{
+  // Fine-line bilateral brain illustration, softly lit, with controlled organic curves.
+  const cyan=ctx.createLinearGradient(-230,-180,240,200);cyan.addColorStop(0,'rgba(255,255,255,.97)');cyan.addColorStop(.65,'rgba(115,255,230,.98)');cyan.addColorStop(1,'rgba(255,255,255,.9)');
+  ctx.strokeStyle=cyan;ctx.lineWidth=13;ctx.shadowColor='rgba(64,252,213,.54)';ctx.shadowBlur=29;
+  ctx.beginPath();ctx.moveTo(0,-177);ctx.bezierCurveTo(-82,-247,-193,-188,-208,-117);ctx.bezierCurveTo(-300,-96,-266,17,-235,43);ctx.bezierCurveTo(-268,129,-172,196,-102,175);ctx.bezierCurveTo(-54,237,13,199,0,147);
+  ctx.bezierCurveTo(45,209,109,220,143,178);ctx.bezierCurveTo(222,197,271,112,236,48);ctx.bezierCurveTo(283,-27,250,-106,198,-111);ctx.bezierCurveTo(188,-198,77,-242,0,-177);ctx.stroke();ctx.shadowBlur=0;
+  ctx.lineWidth=7;ctx.strokeStyle='rgba(231,255,253,.80)';
+  const paths=[
+   [[-166,-130],[-87,-138],[-135,-42],[-53,-57]],
+   [[-222,-35],[-112,-48],[-191,46],[-84,57]],
+   [[-206,98],[-125,60],[-147,148],[-71,118]],
+   [[-89,-180],[-25,-117],[-104,-93],[-24,-18]],
+   [[-70,63],[-18,35],[-70,151],[-12,138]],
+   [[166,-130],[86,-138],[135,-42],[53,-57]],
+   [[222,-35],[112,-48],[191,46],[84,57]],
+   [[206,98],[125,60],[147,148],[71,118]],
+   [[89,-180],[25,-117],[104,-93],[24,-18]],
+   [[70,63],[18,35],[70,151],[12,138]],
+  ];
+  for(const v of paths){ctx.beginPath();ctx.moveTo(...v[0]);ctx.bezierCurveTo(...v[1],...v[2],...v[3]);ctx.stroke();}
+  ctx.strokeStyle='rgba(90,248,222,.78)';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(0,-177);ctx.bezierCurveTo(-18,-93,13,-44,0,0);ctx.bezierCurveTo(-17,64,12,108,0,147);ctx.stroke();
+  for(const [x,y] of [[-207,-111],[-162,145],[186,-141],[227,52]]){ctx.beginPath();ctx.arc(x,y,8,0,TAU);ctx.fillStyle='#bffff4';ctx.fill();}
+ }
+ ctx.restore();
+}
+function entranceTexture(kind,hot=false){
+ const [cv,ctx]=canvas2d(1200,1380);ctx.clearRect(0,0,1200,1380);
+ const accent='#5BFFE0',pad=28,width=1144,height=1324,r=113;
+ ctx.save();entrancePath(ctx,pad,pad,width,height,r);ctx.clip();
+ const wash=ctx.createRadialGradient(hot?680:600,460,18,600,650,815);
+ wash.addColorStop(0,hot?'rgba(213,255,249,.15)':'rgba(239,255,254,.078)');
+ wash.addColorStop(.53,'rgba(255,255,255,.034)');wash.addColorStop(1,'rgba(255,255,255,.012)');
+ ctx.fillStyle=wash;ctx.fillRect(0,0,1200,1380);
+ const upper=ctx.createLinearGradient(0,0,1200,1380);upper.addColorStop(0,'rgba(255,255,255,.075)');upper.addColorStop(.44,'rgba(255,255,255,0)');upper.addColorStop(1,hot?'rgba(77,255,221,.065)':'rgba(77,255,221,.018)');
+ ctx.fillStyle=upper;ctx.fillRect(0,0,1200,1380);ctx.restore();
+ ctx.save();ctx.shadowColor=hot?'rgba(66,255,218,.96)':'rgba(252,255,255,.63)';ctx.shadowBlur=hot?48:30;
+ entrancePath(ctx,pad,pad,width,height,r);ctx.strokeStyle=hot?'rgba(255,255,255,.99)':'rgba(248,255,255,.96)';ctx.lineWidth=16;ctx.stroke();ctx.restore();
+ ctx.save();entrancePath(ctx,52,52,1096,1276,93);ctx.strokeStyle=hot?'rgba(91,255,224,.53)':'rgba(255,255,255,.22)';ctx.lineWidth=3;ctx.stroke();ctx.restore();
+ // Top left hierarchy; cyan is the sole color accent across both experiences.
+ ctx.fillStyle='rgba(250,255,255,.94)';ctx.textAlign='left';ctx.textBaseline='middle';
+ ctx.font='650 36px system-ui,-apple-system,sans-serif';ctx.fillText(kind==='stuff'?'01   /   YOUR WORLD':'02   /   YOUR MIND',116,150);
+ ctx.fillStyle=accent;ctx.beginPath();ctx.arc(1068,150,11,0,TAU);ctx.fill();
+ entranceArt(ctx,kind,hot);
+ // Lower CTA is an outlined pill: no filled rectangle underneath the title.
+ ctx.save();ctx.shadowColor=hot?'rgba(78,255,226,.6)':'rgba(255,255,255,.27)';ctx.shadowBlur=hot?25:11;
+ entrancePath(ctx,125,1127,950,127,63);ctx.strokeStyle=hot?'rgba(117,255,233,1)':'rgba(255,255,255,.86)';ctx.lineWidth=6;ctx.stroke();ctx.restore();
+ ctx.fillStyle='#ffffff';ctx.font='630 41px system-ui,-apple-system,sans-serif';ctx.textAlign='center';ctx.fillText('OPEN EXPERIENCE',550,1194);
+ ctx.strokeStyle=accent;ctx.lineWidth=6;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(959,1194);ctx.lineTo(1004,1194);ctx.moveTo(987,1178);ctx.lineTo(1004,1194);ctx.lineTo(987,1210);ctx.stroke();
+ return texture(cv);
+}
+function entranceTitleTexture(title,description){const [cv,ctx]=canvas2d(1200,400);ctx.clearRect(0,0,1200,400);
+ ctx.textAlign='center';ctx.textBaseline='middle';ctx.shadowColor='rgba(4,43,45,.66)';ctx.shadowBlur=18;
+ ctx.fillStyle='#ffffff';ctx.font=`780 ${title==='MY STUFF'?154:173}px system-ui,-apple-system,sans-serif`;
+ ctx.fillText(title,600,145);ctx.shadowBlur=9;
+ ctx.fillStyle='rgba(249,255,254,.98)';ctx.font='510 52px system-ui,-apple-system,sans-serif';ctx.fillText(description,600,274);
+ ctx.shadowBlur=0;ctx.fillStyle='#5BFFE0';entrancePath(ctx,543,345,114,9,5);ctx.fill();return texture(cv);
+}
+// One selectable, rounded card + one non-interactive raised typography layer.
+// This preserves precise hit regions and gives type independent parallax on hover.
 function agencyEntrancePanel(id,title,description,x,accent){
- const w=1024,h=1120,[cv,ctx]=canvas2d(w,h),r=54;
- const path=()=>{ctx.beginPath();ctx.moveTo(r,8);ctx.lineTo(w-r,8);ctx.quadraticCurveTo(w-8,8,w-8,r);
-  ctx.lineTo(w-8,h-r);ctx.quadraticCurveTo(w-8,h-8,w-r,h-8);ctx.lineTo(r,h-8);
-  ctx.quadraticCurveTo(8,h-8,8,h-r);ctx.lineTo(8,r);ctx.quadraticCurveTo(8,8,r,8);ctx.closePath();};
- // Deep ink, muted translucent gradient, soft edge. Passthrough remains visible around panels.
- ctx.save();path();ctx.clip();
- const fill=ctx.createLinearGradient(0,0,w,h);fill.addColorStop(0,'rgba(17,28,42,.97)');
- fill.addColorStop(.65,'rgba(12,19,35,.95)');fill.addColorStop(1,'rgba(26,25,48,.96)');
- ctx.fillStyle=fill;ctx.fillRect(0,0,w,h);
- const light=ctx.createLinearGradient(0,0,w,0);light.addColorStop(0,'rgba(255,255,255,.06)');
- light.addColorStop(.5,'rgba(255,255,255,.01)');light.addColorStop(1,'rgba(255,255,255,.03)');
- ctx.fillStyle=light;ctx.fillRect(0,0,w,h);
- // No objects, arrows, icons or ornament inside the cards.
- ctx.textAlign='center';ctx.textBaseline='middle';
- ctx.shadowColor=accent;ctx.shadowBlur=22;ctx.font='750 114px system-ui,-apple-system,sans-serif';
- ctx.fillStyle='#f7fcff';ctx.fillText(title,w/2,477,885);ctx.shadowBlur=0;
- ctx.fillStyle='#d4dee9';ctx.font='500 43px system-ui,-apple-system,sans-serif';
- ctx.fillText(description,w/2,604,890);
- ctx.fillStyle=accent;ctx.fillRect(w/2-65,690,130,5);
- ctx.fillStyle='#9faec2';ctx.font='540 31px system-ui,-apple-system,sans-serif';
- ctx.fillText('PINCH OR SELECT',w/2,960);
- ctx.restore();
- ctx.save();ctx.shadowColor=accent;ctx.shadowBlur=19;path();ctx.strokeStyle=accent;ctx.lineWidth=11;ctx.stroke();ctx.restore();
- // An inset stroke preserves a crisp silhouette under Quest's foveated rendering.
- ctx.save();ctx.beginPath();ctx.roundRect?.(26,26,w-52,h-52,38);
- if(typeof ctx.roundRect==='function'){ctx.strokeStyle='rgba(255,255,255,.14)';ctx.lineWidth=2;ctx.stroke();}
- ctx.restore();
- const tex=texture(cv),pos=[x,0,.02],size=[.71,.78];
- agencyCards.push({id,kind:'agency',pos,q:[0,0,0,1],scale:1,size,front:tex,back:tex,resources:[tex],visible:true});
- agencyNode(id,...pos,'panel','cyan',0,{size,passive:false});
+ const isStuff=id==='xr-mystuff',kind=isStuff?'stuff':'agency';
+ const size=[.438,.555],z=.024,angle=x<0?.095:-.095,q=quatY(angle);
+ const normal=entranceTexture(kind),focused=entranceTexture(kind,true);
+ const body={id,kind:'agency',entranceBody:true,pos:[x,0,z],basePos:[x,0,z],q,scale:1,size,front:normal,back:normal,normal,focused,resources:[normal,focused],visible:true};
+ agencyCards.push(body);
+ const tex=entranceTitleTexture(title,description);
+ const titleCard={id:'entrance-type:'+id,kind:'agency',entranceTypeFor:id,pos:[x,-.085,z+.026],basePos:[x,-.085,z+.026],q,scale:1,size:[.425,.148],front:tex,back:tex,resources:[tex],visible:true};
+ agencyCards.push(titleCard);
+ agencyNode(id,...body.pos,'panel','cyan',0,{size,angle,card:body,passive:false});
 }
 function agencyNode(id,x,y,z,type='sphere',color='cyan',radius=.18,extra={}){
  const n={id,pos:[x,y,z],home:[x,y,z],type,color,radius,...extra};agencyNodes.push(n);return n;
@@ -1580,9 +1647,9 @@ function agencyBuild(){if(!gl||!agencyRoot||!['entrance','agency'].includes(xrEx
  if(xrExperience==='entrance'){
   // The user's original mockup: TWO clean rectangles, with large titles.
   // The browser only enters WebXR. My Stuff / Agency are chosen here in space.
-  agencyEntrancePanel('xr-mystuff','MY STUFF','Organise your world',-.405,'#58e2d3');
-  agencyEntrancePanel('xr-agency','AGENCY','Play, practise, explore',.405,'#b29aff');
-  agencyAdd('entrance-title','FREELAB','YOUR SPACE  ·  YOUR PACE',0,.515,.95,.18,'#b4b8ff',true,.035);
+  agencyEntrancePanel('xr-mystuff','MY STUFF','Capture. Keep. Rediscover.',-.246,'#5BFFE0');
+  agencyEntrancePanel('xr-agency','AGENCY','Play. Focus. Feel good.',.246,'#5BFFE0');
+  agencyAdd('entrance-title','FREELAB','YOUR SPACE  ·  YOUR PACE',0,.385,.74,.12,'#faffff',false,.005);
  }else if(agencyScreen==='lobby'){
   agencyAdd('agency-head','COGNITIVE AGENCY','Choose an activity  ·  Your pace',0,.65,1.18,.23,'#c4b0ff',true,-.22);
   agencyButton('agency-game:shapes','SHAPE GARDEN','Pick and place',-.48,.05,-.09,'triangle','cyan',.205,{width:.48,labelY:-.27});
@@ -1629,11 +1696,11 @@ function agencyBuild(){if(!gl||!agencyRoot||!['entrance','agency'].includes(xrEx
 }
 function agencyEnter(destination){
  if(agencySession&&!agencySession.completed)agencySession.finish();agencySession=null;agencyGrab=null;agencyChosen=null;agencyRefreshSecond=-1;
- xrExperience=destination;agencyScreen='lobby';agencyClearCards();if(destination==='stuff'){refreshToolbar();setStatus('MY STUFF · Your spatial collection',5000);if(uiSettings.voice!==false&&window.FreeLab?.pref?.('spoken')){mascotSay('Welcome to FreeLab!',3600);window.FreeLab?.speakUpdate?.('Welcome to FreeLab! Your room is ready to explore.');}}else{agencyBuild();}
+ xrExperience=destination;agencyScreen='lobby';agencyClearCards();if(destination==='entrance'&&latestPose)entranceReset(latestPose);if(destination==='stuff'){refreshToolbar();setStatus('MY STUFF · Your spatial collection',5000);if(uiSettings.voice!==false&&window.FreeLab?.pref?.('spoken')){mascotSay('Welcome to FreeLab!',3600);window.FreeLab?.speakUpdate?.('Welcome to FreeLab! Your room is ready to explore.');}}else{agencyBuild();}
 }
 function agencyNavigate(id,src=null){if(!id||!['agency','entrance'].includes(xrExperience))return;
  if(id==='xr-mystuff'||id==='agency-mystuff'){agencyEnter('stuff');return;}
- if(id==='xr-agency'){xrExperience='agency';agencyScreen='lobby';agencyBuild();return;}
+ if(id==='xr-agency'){xrExperience='agency';agencyScreen='lobby';if(latestPose)agencyRoot=viewerAnchor(latestPose,-.06,agencyDistance);agencyBuild();return;}
  if(id==='agency-recenter'&&latestPose){agencyRoot=viewerAnchor(latestPose,-.06,agencyDistance);agencyBuild();return;}
  if(id==='agency-home'){agencyEnter('entrance');return;}
  if(id==='xr-exit'||id==='agency-exit'){session?.end();return;}
@@ -1661,10 +1728,12 @@ function agencyNodeDistance(r,n){
  if(!r||n.passive)return null;
  if(n.type==='panel'){
   const inv=inverse(agencyRoot);if(!inv)return null;
-  const o=point(inv,r.o),d=point(inv,r.d,0);if(Math.abs(d[2])<1e-6)return null;
-  const t=(n.pos[2]-o[2])/d[2];if(t<=.035||t>=4)return null;
-  const x=o[0]+t*d[0]-n.pos[0],y=o[1]+t*d[1]-n.pos[1];
-  return Math.abs(x)<=n.size[0]*.5&&Math.abs(y)<=n.size[1]*.5?t:null;
+  let o=point(inv,r.o),d=point(inv,r.d,0);if(n.angle){const local=inverse(matmul(translate(...n.pos),rotateY(n.angle)));if(!local)return null;o=point(local,o);d=point(local,d,0);}
+  if(Math.abs(d[2])<1e-6)return null;
+  const t=((n.angle?0:n.pos[2])-o[2])/d[2];if(t<=.035||t>=4)return null;
+  const x=o[0]+t*d[0]-(n.angle?0:n.pos[0]),y=o[1]+t*d[1]-(n.angle?0:n.pos[1]);
+  const sc=n.card?.scale||1;
+  return Math.abs(x)<=n.size[0]*sc*.5&&Math.abs(y)<=n.size[1]*sc*.5?t:null;
  }
  const c=agencyWorldPoint(n.pos),oc=vsub(r.o,c),b=oc.reduce((s,v,i)=>s+v*r.d[i],0),d=b*b-(oc.reduce((s,v)=>s+v*v,0)-n.radius*n.radius);if(d<0)return null;const t=-b-Math.sqrt(d);return t>.035&&t<4?t:null;
 }
@@ -1673,8 +1742,13 @@ function agencyContact(p){if(!p)return null;
  const inv=inverse(agencyRoot),local=inv?point(inv,p):null;
  return agencyNodes.find(node=>{
   if(node.passive)return false;
-  if(node.type==='panel')return local&&Math.abs(local[0]-node.pos[0])<=node.size[0]*.5&&
-   Math.abs(local[1]-node.pos[1])<=node.size[1]*.5&&Math.abs(local[2]-node.pos[2])<.075;
+  if(node.type==='panel'){
+   if(!local)return false;
+   const unrotated=node.angle?inverse(matmul(translate(...node.pos),rotateY(node.angle))):null;
+   const v=unrotated?point(unrotated,local):[local[0]-node.pos[0],local[1]-node.pos[1],local[2]-node.pos[2]];
+   const sc=node.card?.scale||1;
+   return Math.abs(v[0])<=node.size[0]*sc*.5&&Math.abs(v[1])<=node.size[1]*sc*.5&&Math.abs(v[2])<.08;
+  }
   return length(vsub(p,agencyWorldPoint(node.pos)))<=node.radius*1.10;
  })||null;
 }
@@ -1693,7 +1767,7 @@ function agencyPointerStart(frame,src,manual=false){
   agencyGrab={src,node,offset:vsub(center,hand)};cue('grab',src);return;
  }
  if(node.id.startsWith('agency-bin:'))return; // Shape requires an actual pick-up and drop.
- agencyNavigate(node.id,src);cue('pin',src);
+ if(xrExperience==='entrance'){window.FreeLabSound?.unlock?.();cue('enter',src);}else cue('pin',src);agencyNavigate(node.id,src);
 }
 function agencyPointerEnd(frame,src){if(!agencyGrab||agencyGrab.src!==src)return;
  const grabbed=agencyGrab,position=agencyTip(frame,src);agencyGrab=null;
@@ -1714,7 +1788,7 @@ function agencyTouchPoll(frame,t){if(!['agency','entrance'].includes(xrExperienc
    if(agencyGrab?.src!==src||length(vsub(agencyWorldPoint(agencyGrab.node.pos),agencyWorldPoint(contact.pos)))>.43)continue;
    agencyTouched.set(src,t);agencySubmit(contact.id.slice('agency-bin:'.length));continue;
   }
-  agencyTouched.set(src,t);agencyNavigate(contact.id,src);cue('pin',src);
+  agencyTouched.set(src,t);if(xrExperience==='entrance'){window.FreeLabSound?.unlock?.();cue('enter',src);}else cue('pin',src);agencyNavigate(contact.id,src);
  }
 }
 // Geometry is built once and re-used across both eyes. This is genuine shaded
@@ -1804,7 +1878,64 @@ function agencyWorld(vp,t){
  for(let i=0;i<18;i++){const a=i*TAU/18,p=agencyWorldPoint([Math.cos(a)*.93,baseY+.1+Math.sin(i*2.3)*.07,Math.sin(a)*.31-.12]);line(vp,[p],[.45,.9,1,.55],true,3);}
  for(const node of agencyNodes)agencySculpture(vp,node,t);
 }
+// Soft head-follow with hysteresis and physical inertia. It is never a
+// camera-locked HUD: small movements are ignored and both position and yaw lag.
+function entranceReset(pose){
+ const m=viewerAnchor(pose,-.075,ENTRANCE_DEPTH);
+ entranceFollow={pos:[m[12],m[13],m[14]],yaw:cameraYaw(pose),last:0};
+ agencyRoot=matmul(translate(...entranceFollow.pos),rotateY(entranceFollow.yaw));
+ entranceHover=null;
+}
+function entranceUpdate(frame,pose,t){
+ if(!entranceFollow)entranceReset(pose);
+ const e=entranceFollow,dt=clamp((t-(e.last||t))/1000,.001,.055);e.last=t;
+ const head=pose.transform.matrix,eye=[head[12],head[13],head[14]],yaw=cameraYaw(pose);
+ const delta=Math.atan2(Math.sin(yaw-e.yaw),Math.cos(yaw-e.yaw));
+ const targetYaw=Math.abs(delta)>.14?yaw-Math.sign(delta)*.075:e.yaw;
+ e.yaw=smoothYaw(e.yaw,targetYaw,1-Math.exp(-dt*3.1));
+ // Reposition smoothly when the user turns or walks; retain a small dead zone.
+ const wanted=vadd(eye,point(rotateY(e.yaw),[0,-.075,-ENTRANCE_DEPTH],0));
+ const gap=length(vsub(wanted,e.pos));
+ if(gap>.075){const target=vadd(wanted,vmul(norm(vsub(e.pos,wanted)),.035));e.pos=blend(e.pos,target,1-Math.exp(-dt*3.7));}
+ agencyRoot=matmul(translate(...e.pos),rotateY(e.yaw));
+ const panelNodes=agencyNodes.filter(n=>n.type==='panel'&&n.card?.entranceBody);
+ const presence=new Map(panelNodes.map(n=>[n.id,0]));let primary=null,best=0,source=null;
+ const invRoot=inverse(agencyRoot);
+ for(const src of session.inputSources){
+  const rayHit=agencyPick(ray(frame,src));
+  if(rayHit?.node?.type==='panel'&&presence.has(rayHit.node.id)){
+   const id=rayHit.node.id;presence.set(id,Math.max(presence.get(id),.58));
+   if(best<.58){best=.58;primary=id;source=src;}
+  }
+  const tip=agencyTip(frame,src);if(!tip||!invRoot)continue;
+  const p=point(invRoot,tip);
+  for(const n of panelNodes){
+   const v=n.angle?point(inverse(matmul(translate(...n.pos),rotateY(n.angle))),p):vsub(p,n.pos);
+   const dx=Math.max(0,Math.abs(v[0])-n.size[0]*.55),dy=Math.max(0,Math.abs(v[1])-n.size[1]*.55);
+   const near=clamp((.48-Math.abs(v[2]))/.40,0,1)*clamp(1-Math.hypot(dx,dy)/.18,0,1);
+   presence.set(n.id,Math.max(presence.get(n.id),near));
+   if(near>best){best=near;primary=n.id;source=src;}
+  }
+ }
+ // Only announce hover changes (not every headset frame).
+ if(best>.30&&primary!==entranceHover&&t-entranceLastHover>320){entranceHover=primary;entranceLastHover=t;window.FreeLabSound?.hover?.();if(source)haptic(source,.12,22);}
+ else if(best<.18)entranceHover=null;
+ const reduced=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+ for(const card of agencyCards){
+  const id=card.entranceTypeFor||card.entranceBody&&card.id;if(!id)continue;
+  const raw=presence.get(id)||0,target=reduced?Math.min(.18,raw):raw;
+  const previous=card.entranceAttention||0;
+  const a=1-Math.exp(-dt*(target>previous?9:5));
+  card.entranceAttention=previous+(target-previous)*a;
+  const v=card.entranceAttention;
+  card.scale=1+v*(card.entranceBody?.038:.078);
+  card.pos[2]=card.basePos[2]+v*(card.entranceBody?.005:.038);
+  if(card.entranceTypeFor)card.pos[1]=card.basePos[1]+v*.010;
+  if(card.entranceBody){const tex=v>.35?card.focused:card.normal;if(card.front!==tex)card.front=card.back=tex;}
+ }
+}
 function renderAgencyView(t,frame,pose){
+ if(xrExperience==='entrance')entranceUpdate(frame,pose,t);
  agencyTouchPoll(frame,t);for(const src of session.inputSources)pinchPoll(frame,src);
  if(xrExperience==='agency'&&agencySession&&agencyScreen==='play'){
   if(agencySession.tick()){agencyScreen='summary';agencyBuild();}
@@ -2885,7 +3016,7 @@ async function action(id){const t=performance.now();if(t-lastAction<200)return;l
  case 'follow':return toggleFollow();case 'gallery':galleryPage=0;return openGallery(0);
  case 'exit':held=null;return darkroom?closeDarkroom():session?.end();}}
 
-async function start(options={}){if(session)return;xrExperience='entrance';agencyScreen='lobby';agencySession=null;agencyChosen=null;agencyGrab=null;agencyRefreshSecond=-1;agencyRoot=null;uiSettings=window.FreeLabXRUI?.read?.()||uiSettings;if(!navigator.xr)throw Error('WebXR is not available. Use Enter 3D for the browser viewer.');
+async function start(options={}){if(session)return;xrExperience='entrance';agencyScreen='lobby';agencySession=null;agencyChosen=null;agencyGrab=null;agencyRefreshSecond=-1;agencyRoot=null;entranceFollow=null;uiSettings=window.FreeLabXRUI?.read?.()||uiSettings;if(!navigator.xr)throw Error('WebXR is not available. Use Enter 3D for the browser viewer.');
  // Request the immersive session synchronously from the user's click; do not await GPU setup first.
  session=await navigator.xr.requestSession('immersive-ar',{requiredFeatures:options.requireDepth?['local','depth-sensing']:['local'],optionalFeatures:['local-floor','hand-tracking'],...(options.requireDepth?{depthSensing:{usagePreference:['cpu-optimized','gpu-optimized'],dataFormatPreference:['luminance-alpha','float32']}}:{})});
  try{setup();stringLab=new window.FreeLabStringLab.Experiment();stringLabState=null;rightStickDown=false;fingerLab=new window.FreeLabFingerLab.Experiment();fingerLabState=null;leftStickDown=false;frameLab=new window.FreeLabFrameLab.Experiment();frameLabState=null;frameGames=new window.FreeLabFrameGames.Engine();triangleLab=new window.FreeLabShapeSort.TriangleDraw();labSelector=new window.FreeLabLabSelector.Selector();labMenu=null;labMenuIndex=-1;await gl.makeXRCompatible();xrDomOverlay=false;session.updateRenderState({baseLayer:new XRWebGLLayer(session,gl,{alpha:true,antialias:false,depth:true,stencil:false,framebufferScaleFactor:.8})});xr3D('XR_SESSION_RENDER_STATE',{depthRequested:Boolean(options.requireDepth),framebufferWidth:session.renderState.baseLayer?.framebufferWidth,framebufferHeight:session.renderState.baseLayer?.framebufferHeight,framebufferStatus:gl.checkFramebufferStatus(gl.FRAMEBUFFER),gpu:xrGLErrors()});
@@ -2894,10 +3025,10 @@ async function start(options={}){if(session)return;xrExperience='entrance';agenc
  session.addEventListener('selectend',e=>{lastNative.set(e.inputSource,performance.now());if(xrExperience!=='stuff'){agencyPointerEnd(e.frame,e.inputSource);return;}if(e.inputSource.handedness==='left'&&labSelector?.open)return;grabEnd(e.inputSource,e.frame);});
  session.addEventListener('squeezestart',e=>{lastNative.set(e.inputSource,performance.now());if(xrExperience!=='stuff'){agencyPointerStart(e.frame,e.inputSource);return;}if(e.inputSource.handedness==='left'&&labSelector?.open)return;grabStart(e.frame,e.inputSource);});
  session.addEventListener('squeezeend',e=>{lastNative.set(e.inputSource,performance.now());if(xrExperience!=='stuff'){agencyPointerEnd(e.frame,e.inputSource);return;}if(e.inputSource.handedness==='left'&&labSelector?.open)return;grabEnd(e.inputSource,e.frame);});
- session.addEventListener('end',()=>{agencySession?.finish();agencySession=null;agencyClearCards();for(const g of agencyGeometryCache.values())gl?.deleteBuffer(g.buffer);agencyGeometryCache.clear();agencyRoot=null;agencyGrab=null;xrExperience='entrance';window.FreeLabRooms?.end?.();for(const v of visitorBadges)if(v.front&&gl)gl.deleteTexture(v.front);visitorBadges=[];visitorPollAt=0;if(labMenu?.front)gl.deleteTexture(labMenu.front);labMenu=null;labMenuIndex=-1;labSelector?.reset();labSelector=null;for(const photo of framePhotos){if(photo.texture&&gl)gl.deleteTexture(photo.texture);if(photo.buffer&&gl)gl.deleteBuffer(photo.buffer);}framePhotos=[];framePhotoBusy=false;frameLab?.clear();frameLab=null;triangleLab=null;shapeTargets=[];frameGames?.clear();frameGames=null;mascotHitUntil=0;if(mascotImpactSprite){gl.deleteTexture(mascotImpactSprite);mascotImpactSprite=null;}if(frameGameCubeBuffer){gl.deleteBuffer(frameGameCubeBuffer);frameGameCubeBuffer=null;}frameTouch=null;frameErase=null;frameLabState=null;window.FreeLabSound?.fingersStopAll?.();fingerLab?.setEnabled(false);fingerLab=null;fingerLabState=null;leftStickDown=false;window.FreeLabSound?.stringStop?.();stringLab?.setEnabled(false);stringLab=null;stringLabState=null;rightStickDown=false;cue('release');session=null;poseReady=false;held=null;clearCards();if(darkroom?.ownedTexture&&darkroom.front)gl.deleteTexture(darkroom.front);if(darkFloor?.front)gl.deleteTexture(darkFloor.front);if(darkClose?.front)gl.deleteTexture(darkClose.front);for(const b of [darkPrevious,darkNext])if(b?.front)gl.deleteTexture(b.front);darkPrevious=null;darkNext=null;darkroom=null;darkBackdrop=null;darkClose=null;darkFloor=null;descriptionQuestionMode=false;if(voiceBadge?.front)gl.deleteTexture(voiceBadge.front);voiceBadge=null;dismissVoice();gestureDebounce.clear();gestureSpeechTimes.clear();lastGestureAnnouncement=-100000;if(mascotSpeech?.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(cameraHint?.front)gl.deleteTexture(cameraHint.front);cameraHint=null;cameraHintState='';if(captureEye?.front)gl.deleteTexture(captureEye.front);if(voiceButton?.front)gl.deleteTexture(voiceButton.front);if(extractButton?.front)gl.deleteTexture(extractButton.front);voiceButton=null;extractButton=null;extractVisualActive=null;inferenceCard=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;document.getElementById('xrPromptEditor')?.classList.add('hidden');document.getElementById('xrPromptEditor')?.classList.remove('xr-native-open');if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;modelDiagnosticLines=[];modelDiagnosticJob=null;modelDiagnosticViewedAt=0;if(configPanel?.front)gl.deleteTexture(configPanel.front);configPanel=null;configShowing=false;if(descriptionPanel?.front)gl.deleteTexture(descriptionPanel.front);descriptionPanel=null;for(const m of meshPreviews)releaseMeshPreview(m);meshPreviews=[];voiceRecord?.cancel?.();voiceRecord=null;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
+ session.addEventListener('end',()=>{agencySession?.finish();agencySession=null;agencyClearCards();for(const g of agencyGeometryCache.values())gl?.deleteBuffer(g.buffer);agencyGeometryCache.clear();agencyRoot=null;entranceFollow=null;entranceHover=null;agencyGrab=null;xrExperience='entrance';window.FreeLabRooms?.end?.();for(const v of visitorBadges)if(v.front&&gl)gl.deleteTexture(v.front);visitorBadges=[];visitorPollAt=0;if(labMenu?.front)gl.deleteTexture(labMenu.front);labMenu=null;labMenuIndex=-1;labSelector?.reset();labSelector=null;for(const photo of framePhotos){if(photo.texture&&gl)gl.deleteTexture(photo.texture);if(photo.buffer&&gl)gl.deleteBuffer(photo.buffer);}framePhotos=[];framePhotoBusy=false;frameLab?.clear();frameLab=null;triangleLab=null;shapeTargets=[];frameGames?.clear();frameGames=null;mascotHitUntil=0;if(mascotImpactSprite){gl.deleteTexture(mascotImpactSprite);mascotImpactSprite=null;}if(frameGameCubeBuffer){gl.deleteBuffer(frameGameCubeBuffer);frameGameCubeBuffer=null;}frameTouch=null;frameErase=null;frameLabState=null;window.FreeLabSound?.fingersStopAll?.();fingerLab?.setEnabled(false);fingerLab=null;fingerLabState=null;leftStickDown=false;window.FreeLabSound?.stringStop?.();stringLab?.setEnabled(false);stringLab=null;stringLabState=null;rightStickDown=false;cue('release');session=null;poseReady=false;held=null;clearCards();if(darkroom?.ownedTexture&&darkroom.front)gl.deleteTexture(darkroom.front);if(darkFloor?.front)gl.deleteTexture(darkFloor.front);if(darkClose?.front)gl.deleteTexture(darkClose.front);for(const b of [darkPrevious,darkNext])if(b?.front)gl.deleteTexture(b.front);darkPrevious=null;darkNext=null;darkroom=null;darkBackdrop=null;darkClose=null;darkFloor=null;descriptionQuestionMode=false;if(voiceBadge?.front)gl.deleteTexture(voiceBadge.front);voiceBadge=null;dismissVoice();gestureDebounce.clear();gestureSpeechTimes.clear();lastGestureAnnouncement=-100000;if(mascotSpeech?.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(cameraHint?.front)gl.deleteTexture(cameraHint.front);cameraHint=null;cameraHintState='';if(captureEye?.front)gl.deleteTexture(captureEye.front);if(voiceButton?.front)gl.deleteTexture(voiceButton.front);if(extractButton?.front)gl.deleteTexture(extractButton.front);voiceButton=null;extractButton=null;extractVisualActive=null;inferenceCard=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;document.getElementById('xrPromptEditor')?.classList.add('hidden');document.getElementById('xrPromptEditor')?.classList.remove('xr-native-open');if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;modelDiagnosticLines=[];modelDiagnosticJob=null;modelDiagnosticViewedAt=0;if(configPanel?.front)gl.deleteTexture(configPanel.front);configPanel=null;configShowing=false;if(descriptionPanel?.front)gl.deleteTexture(descriptionPanel.front);descriptionPanel=null;for(const m of meshPreviews)releaseMeshPreview(m);meshPreviews=[];voiceRecord?.cancel?.();voiceRecord=null;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
  // Render the immersive entrance immediately. Storage/model metadata loads must
  // never hold the first headset frame hostage to slow network responses.
- setStatus('XR ENTRANCE · Choose MY STUFF or AGENCY in your headset',6700);
+ setStatus('XR ENTRANCE · Choose MY STUFF or AGENCY in your headset',6700);window.FreeLabSound?.unlock?.();cue('arrival');
  session.requestAnimationFrame(updateView);
  const activeSession=session;
  void (async()=>{

@@ -365,3 +365,20 @@ Ubuntu server. Perform headset QA before treating the release as production-read
 Enter XR before choosing a destination. The entrance now contains **two large upright rectangular panels only**: **MY STUFF** and **AGENCY**, with their labels integrated into the panel surfaces. No flying shapes, arches, trays or pedestal objects are used in this entrance. Hand-pinch, fingertip touch and controller trigger select the complete panel.
 
 This change deliberately does not redesign Agency activities or My Stuff. The existing release watcher and shared-server installation safeguards remain unchanged. A local watcher `--dry-run` validates structure and tests; final visual fit, tracking and legibility require testing in the Quest Browser.
+
+
+## v0.10.50 — premium XR entrance
+
+Browser → Enter XR → **MY STUFF** / **AGENCY** inside the headset. The entrance has
+exactly two selectable large transparent curved-row panels with broad white rounded
+strokes, a unified bright mint-cyan accent, material-style drawings of belongings /
+brain, no dark panels, no flying abstract objects, and spacious raised typography.
+The placement begins 0.99 m from the current HMD with slightly inward-turned cards,
+then follows yaw and body motion with soft inertia and a dead zone. Rays, hand-pinch
+and direct fingertip contact share one geometry-correct hit region, including the
+card angles and gentle hover scaling. The white title layers rise independently
+on proximity; hover chimes and selection jingles use the bundled WebAudio system.
+
+No database, backend, nginx or watcher changes. The downloadable ZIP is suitable
+for the normal *local* watcher validation, but final headset visual/performance
+acceptance remains required.

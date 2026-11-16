@@ -1,16 +1,30 @@
 {
-  "version": "0.10.49",
-  "title": "FREELAB v0.10.49 — clean XR entrance cards",
+  "version": "0.10.50",
+  "title": "FREELAB v0.10.50 — premium spatial glass entrance",
   "datetime": "2026-11-16",
   "changes": [
-    "Replace the entrance sculpture clusters, arches, trays and floor rings with exactly two large upright rectangular panels inside the immersive WebXR session, matching the supplied two-card reference.",
-    "Render MY STUFF and AGENCY titles and their short descriptions directly on high-contrast dark panels with quiet teal/violet neon edges; remove detached labels and decorative shapes from the entrance.",
-    "Place both panels at a more comfortable headset viewing distance; preserve passthrough outside the panels and retain XR-first navigation with no browser choice.",
-    "Make the full visible rectangle the controller-ray, pinch and fingertip hit target; prevent selection when pointing or touching outside a card.",
-    "Keep the existing My Stuff collection, spatial capture, reconstruction, Agency activities, user data, backend and isolated shared-Nginx deployment safeguards unchanged.",
-    "Add regression coverage for the two-panel entrance and real hit-testing of both rectangles without any live headset or paid provider request."
+    "Replace opaque, muddy entrance cards with transparent spatial surfaces, luminous thick white rounded borders and one vivid mint-cyan accent, keeping passthrough visible.",
+    "Create polished editorial typography layers with generous space, full-size titles, raised text parallax and responsive proximity, pointer hover and controller focus.",
+    "Add a quiet illustrated belongings motif and organic brain-line illustration within the entrance cards, without unrelated floating geometry or game primitives.",
+    "Keep both entrance panels gently yaw-following the headset with inertia and a dead zone, at close usable XR reach; retain angled panels and exact rotated hit testing for hands and controller rays.",
+    "Reuse the existing warm WebAudio entrance and selection jingles and restrained controller haptics; honor reduced-motion preferences.",
+    "Keep XR-first navigation, My Stuff collection tools and all existing Agency game logic, private user data and Nginx-safe watcher deployment unchanged.",
+    "Regression-test angled panel ray and finger hits, versioned assets, entrance interaction wiring and unchanged immersive navigation."
   ],
   "history": [
+    {
+      "version": "0.10.49",
+      "title": "FREELAB v0.10.49 — clean XR entrance cards",
+      "datetime": "2026-11-16",
+      "changes": [
+        "Replace the entrance sculpture clusters, arches, trays and floor rings with exactly two large upright rectangular panels inside the immersive WebXR session, matching the supplied two-card reference.",
+        "Render MY STUFF and AGENCY titles and their short descriptions directly on high-contrast dark panels with quiet teal/violet neon edges; remove detached labels and decorative shapes from the entrance.",
+        "Place both panels at a more comfortable headset viewing distance; preserve passthrough outside the panels and retain XR-first navigation with no browser choice.",
+        "Make the full visible rectangle the controller-ray, pinch and fingertip hit target; prevent selection when pointing or touching outside a card.",
+        "Keep the existing My Stuff collection, spatial capture, reconstruction, Agency activities, user data, backend and isolated shared-Nginx deployment safeguards unchanged.",
+        "Add regression coverage for the two-panel entrance and real hit-testing of both rectangles without any live headset or paid provider request."
+      ]
+    },
     {
       "version": "0.10.48",
       "title": "FREELAB v0.10.48 — immersive XR entrance and spatial Agency",
