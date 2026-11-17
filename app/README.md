@@ -1,14 +1,13 @@
-# FREELAB v0.10.67 — XR library, cinema and preview control
+# FREELAB v0.10.68 — Avatar reliability and admin diagnostics
 
-Adds Quest landing mascot parity, semantic names for repeated image edits, responsive collection name/date filters, and a private descriptive Agency activity dashboard. Place `FREE_LAB_RELEASE_v0.10.67.zip` in `updates/` as a complete release. HLS videos remain in the independently managed `videos/` directory.
+This complete release makes avatar preview actions conditional on an actual saved avatar, replaces misleading indefinite thumbnail rendering with bounded status and retry feedback, and adds **Settings → Logs** for administrators. Blender thumbnails remain private and asynchronous. The app event log is stored under the persistent `FREE_LAB_DATA_DIR` (`runtime-events.jsonl`); service journal access depends on system permissions. No private GLB, API key or request body is recorded in app events. Upload `FREE_LAB_RELEASE_v0.10.68.zip` to `updates/`.
 
-## Progress data and scientific interpretation
+## v0.10.68 — Thumbnail states and admin runtime logs
 
-Agency play events are stored in `agency_sessions`, isolated by `owner_id`, and purged when an account is deleted. A session starts when a game or hands-on lab begins. The client submits current totals during play, on answers, and on exit. Partial sessions remain available if connectivity ends. Time is monotonic elapsed milliseconds minus in-app HOW TO PLAY time; idle periods may be included. Correct answers and errors come from the existing Agency scoring engine; Throw Lab points are separate. Other experimental labs log time/session counts but do not claim artificial scores. Every record contains activity, mode, level, UTC start time, elapsed duration, correct, errors, points and completion state.
-
-`GET /api/agency/dashboard?days=7|30|90|365|all` returns per-user totals, daily counts and individual activities. `GET /api/agency/export.csv?days=...` downloads a private CSV with one row per session suitable for exploratory analysis. The dashboard provides descriptive trends only: the game tasks are not validated psychometric instruments; the app cannot infer intelligence, attention deficits, cognitive change, or clinical outcomes from these counts. Dates in the exported dataset are UTC. Scores are client-reported and are not cheating-resistant; experimenters should validate instrumentation, exposure, task difficulty, test-retest reliability and consent before formal research. Data recording begins with this release; earlier unrecorded sessions do not appear in the server history. No analytics information is transferred to a third-party model; Meta interpretation requires a separate, explicit consent and privacy/data-minimization design.
-
-Collection filters use saved object labels (not additional AI inference), count available matches and offer date inputs that open the platform calendar. XR offers a compact progress board in Agency and source-library filter cards accessible through the magnifying-glass toolbar button. Consecutive image edits use `Edited (N) original name`, with the edit count based on the saved parent chain; stored historic labels are presented without repeated `Edited` strings.
+- Preview 3D and Remove are disabled when no saved avatar is present.
+- Blender queue status reports elapsed time, failures and a Retry thumbnail option; model preview remains available if rendering fails.
+- Admins can open the read-only Logs tab in Desktop settings: App runtime events, recent API requests, and the `free-lab.service` journal when the service user can read it.
+- Log access is admin-only and bounded; credentials are scrubbed from journal excerpts.
 
 ## v0.10.62 — XR video performance and cleanup
 

@@ -1,14 +1,14 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.67">
+<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.68">
 <title>FREELAB — Cognitive Agency · My Stuff &amp; Agency</title>
 <meta name="description" content="FREELAB Cognitive Agency — privately organise your world and explore gentle spatial games with hands, controllers or desktop.">
-<link rel="stylesheet" href="/assets/style.css?v=0.10.67">
+<link rel="stylesheet" href="/assets/style.css?v=0.10.68">
 </head><body>
 <div id="app" class="app-shell">
 <header class="header" aria-label="Site navigation">
-  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.67</span></a>
+  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.68</span></a>
   <nav class="header-right" aria-label="Workspace">
     <span class="live-pill"><span class="server-dot" id="connectionDot"></span><span id="healthStatus">Connecting</span></span>
     <button id="roomButton" class="nav-pill" type="button">Rooms</button>
@@ -155,6 +155,7 @@
    <button type="button" class="profile-tab" role="tab" aria-controls="profileExperience" data-profile-tab="experience" aria-selected="true">Experience</button>
    <button type="button" class="profile-tab admin-tab hidden" role="tab" aria-controls="profileAPIs" data-profile-tab="apis" aria-selected="false">APIs</button>
    <button type="button" class="profile-tab admin-tab hidden" role="tab" aria-controls="profileUsers" data-profile-tab="users" aria-selected="false">Users</button>
+   <button type="button" class="profile-tab admin-tab hidden" role="tab" aria-controls="profileLogs" data-profile-tab="logs" aria-selected="false">Logs</button>
   </div>
   <div class="profile-scroll" id="profileScroll">
    <section id="profileExperience" role="tabpanel" data-profile-view="experience">
@@ -176,9 +177,10 @@
           </label>
           <input type="file" id="profile3DAvatarInput" accept=".glb,model/gltf-binary" aria-label="Upload 3D avatar GLB" class="visually-hidden">
           <div class="avatar3d-copy"><p>Tap the avatar circle to upload a GLB. Up to 4 MB for XR, or 16 MB with optional Blender optimization.</p>
-            <div class="avatar3d-actions"><button type="button" id="profile3DAvatarPreview">Preview 3D</button><button type="button" id="profile3DAvatarOptimize" class="hidden">Optimize for XR</button><button type="button" id="profile3DAvatarRemove">Remove</button></div></div>
+            <div class="avatar3d-actions"><button type="button" id="profile3DAvatarPreview" disabled title="Upload a 3D avatar to enable preview">Preview 3D</button><button type="button" id="profile3DAvatarOptimize" class="hidden">Optimize for XR</button><button type="button" id="profile3DAvatarRemove" disabled title="No saved 3D avatar">Remove</button></div></div>
         </div>
         <p id="profile3DAvatarStatus" role="status" aria-live="polite">No 3D avatar selected.</p>
+        <button type="button" id="profile3DAvatarRetry" class="secondary-btn hidden">Retry thumbnail</button>
       </section>
     </div>
     <section class="model-provider-settings"><strong>3D GENERATION PROVIDER</strong><p>Choose which configured service creates 3D models in Quest XR, desktop and mobile. Test connections separately from paid generation.</p><label for="profile3DProvider">Provider<select id="profile3DProvider"><option value="auto">Auto (configured service)</option><option value="aholo">AHOLO Lux3D</option><option value="meshy">Meshy 3D</option><option value="tripo">Tripo 3D (v3)</option></select></label><p id="profile3DProviderStatus" role="status">Provider choice applies across devices.</p>
@@ -226,7 +228,18 @@
      <div id="providerList" class="api-provider-list" aria-label="Configured model APIs"></div>
      <p id="apiListStatus" class="profile-inline-status" role="status" aria-live="polite"></p>
     </section>
-    <section data-profile-view="users" id="profileUsers" role="tabpanel" class="hidden">
+    <section data-profile-view="logs" id="profileLogs" role="tabpanel" class="hidden">
+     <div class="profile-section-heading"><h3>Server diagnostics</h3><p>Administrator-only operational logs. The runtime stream records Blender thumbnail failures, avatar uploads and backend events without private images, prompts or API credentials. Service journal access may require operating-system permissions.</p></div>
+     <div class="admin-runtime-controls">
+       <label for="adminLogSource">Log stream<select id="adminLogSource"><option value="events">App runtime events</option><option value="requests">Recent API requests</option><option value="journal">free-lab service journal</option></select></label>
+       <label for="adminLogLimit">Lines<select id="adminLogLimit"><option value="50">50</option><option value="100" selected>100</option><option value="200">200</option></select></label>
+       <button type="button" class="secondary-btn" id="adminLogRefresh">Refresh logs</button>
+       <button type="button" class="secondary-btn" id="adminLogCopy">Copy visible logs</button>
+     </div>
+     <p id="adminLogNotice" class="small-muted" role="status">Select Refresh logs to read server events.</p>
+     <pre id="adminLogOutput" class="admin-runtime-output" aria-live="polite">No logs loaded.</pre>
+   </section>
+   <section data-profile-view="users" id="profileUsers" role="tabpanel" class="hidden">
      <div class="profile-section-heading"><h3>Users</h3><p>Create accounts separately from API connections.</p></div>
      <form id="createProfile" class="profile-user-form">
       <label>Username<input id="newUsername" placeholder="Username" required minlength="3" maxlength="32" autocomplete="off"></label>
@@ -251,22 +264,22 @@
 <div id="modelStage" class="model-stage hidden" role="dialog" aria-label="Interactive 3D model viewer" aria-modal="true"><header><div><span class="eyebrow">FREELAB / MODEL VIEWER</span><h2 id="modelStageTitle">3D model</h2></div><div class="model-stage-tools"><button id="modelStageAxis" class="secondary-btn" type="button" title="Change model viewing orientation">Upright · Auto</button><a id="modelStageDownload" class="secondary-btn hidden" download>Download GLB</a><button id="modelStageClose" type="button" aria-label="Close 3D model viewer">×</button></div></header><div id="modelStageViewport" class="model-stage-viewport"><img id="modelStagePoster" class="hidden" alt="3D model thumbnail preview"><canvas id="modelStageCanvas" aria-label="Interactive 3D model. Drag to rotate, scroll to zoom."></canvas></div><p id="modelStageStatus" role="status">Preparing 3D scene…</p><p class="model-stage-hint">Drag to rotate · scroll or pinch to zoom · model loads privately</p></div>
 <div id="toast" class="toast hidden" role="status"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.module.js"}}</script>
-<script type="module" src="/assets/model-stage.mjs?v=0.10.67"></script>
-<script src="/assets/sound.js?v=0.10.67" defer></script>
-<script src="/assets/gestures.js?v=0.10.67" defer></script>
-<script src="/assets/strand-geometry.js?v=0.10.67" defer></script>
-<script src="/assets/string-lab.js?v=0.10.67" defer></script>
-<script src="/assets/finger-lab.js?v=0.10.67" defer></script>
-<script src="/assets/frame-lab.js?v=0.10.67" defer></script>
-<script src="/assets/frame-photo.js?v=0.10.67" defer></script>
-<script src="/assets/frame-games.js?v=0.10.67" defer></script>
-<script src="/assets/agency-video.js?v=0.10.67" defer></script>
-<script src="/assets/shape-sort.js?v=0.10.67" defer></script>
-<script src="/assets/rooms.js?v=0.10.67" defer></script>
-<script src="/assets/cloud-tree.js?v=0.10.67" defer></script>
-<script src="/assets/xr-ui.js?v=0.10.67" defer></script>
-<script src="/assets/dialog.js?v=0.10.67" defer></script>
-<script src="/assets/app.js?v=0.10.67" defer></script><script src="/assets/xr.js?v=0.10.67" defer></script>
-<script src="/assets/capture-studio.js?v=0.10.67" defer></script>
-<script src="/assets/scene.mjs?v=0.10.67" type="module"></script>
+<script type="module" src="/assets/model-stage.mjs?v=0.10.68"></script>
+<script src="/assets/sound.js?v=0.10.68" defer></script>
+<script src="/assets/gestures.js?v=0.10.68" defer></script>
+<script src="/assets/strand-geometry.js?v=0.10.68" defer></script>
+<script src="/assets/string-lab.js?v=0.10.68" defer></script>
+<script src="/assets/finger-lab.js?v=0.10.68" defer></script>
+<script src="/assets/frame-lab.js?v=0.10.68" defer></script>
+<script src="/assets/frame-photo.js?v=0.10.68" defer></script>
+<script src="/assets/frame-games.js?v=0.10.68" defer></script>
+<script src="/assets/agency-video.js?v=0.10.68" defer></script>
+<script src="/assets/shape-sort.js?v=0.10.68" defer></script>
+<script src="/assets/rooms.js?v=0.10.68" defer></script>
+<script src="/assets/cloud-tree.js?v=0.10.68" defer></script>
+<script src="/assets/xr-ui.js?v=0.10.68" defer></script>
+<script src="/assets/dialog.js?v=0.10.68" defer></script>
+<script src="/assets/app.js?v=0.10.68" defer></script><script src="/assets/xr.js?v=0.10.68" defer></script>
+<script src="/assets/capture-studio.js?v=0.10.68" defer></script>
+<script src="/assets/scene.mjs?v=0.10.68" type="module"></script>
 </body></html>

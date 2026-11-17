@@ -1,6 +1,6 @@
 """Flask API: identity-scoped private object collection with optional Meta inference."""
 from __future__ import annotations
-import base64,hashlib,hmac,io,json,math,os,re,secrets,sqlite3,threading,time,urllib.request,urllib.error,subprocess,sys,tempfile,csv
+import base64,hashlib,hmac,io,json,math,os,re,secrets,sqlite3,threading,time,urllib.request,urllib.error,subprocess,sys,tempfile,csv,shutil
 from pathlib import Path
 from datetime import datetime,timezone
 from functools import wraps
@@ -28,6 +28,25 @@ IMAGE_DIR.mkdir(parents=True,exist_ok=True)
 MODEL_DIR.mkdir(parents=True,exist_ok=True)
 AVATAR_THUMB_DIR=DATA_DIR/'avatar-thumbnails'
 AVATAR_THUMB_DIR.mkdir(parents=True,exist_ok=True)
+# Process-safe, bounded application events. These contain only operational metadata;
+# neither credentials nor user-submitted content are recorded.
+RUNTIME_EVENTS=DATA_DIR/'runtime-events.jsonl'
+
+def _admin_event(kind,message='',owner=None):
+    try:
+        item={'at':datetime.now(timezone.utc).isoformat(timespec='seconds'),
+              'event':re.sub(r'[^a-z0-9_.-]','',str(kind).lower())[:55],
+              'message':re.sub(r'[^a-zA-Z0-9 .,:;_()=-]','?',str(message))[:250]}
+        if owner is not None:item['user_id']=int(owner)
+        record=(json.dumps(item,separators=(',',':'))+'\n').encode()
+        handle=os.open(str(RUNTIME_EVENTS),os.O_WRONLY|os.O_APPEND|os.O_CREAT,0o600)
+        try:os.write(handle,record)
+        finally:os.close(handle)
+    except (OSError,TypeError,ValueError):pass
+
+def _avatar_thumbnail_marker(owner,digest,suffix):
+    return AVATAR_THUMB_DIR/f'{int(owner)}_{digest[:20]}.{suffix}'
+
 _avatar_thumb_guard=threading.Lock()
 _avatar_thumb_active=set()
 
@@ -39,15 +58,19 @@ def _avatar_thumbnail_file(owner,digest):
 
 def _avatar_thumbnail_worker(owner,digest,raw):
     import fcntl
+    active=_avatar_thumbnail_marker(owner,digest,'rendering')
+    queued=_avatar_thumbnail_marker(owner,digest,'queued')
     try:
-        # Existing Blender renderer is bounded by 120 seconds, runs with
-        # --disable-autoexec, and never reads external GLB dependencies.
+        # Wait for the one global Blender slot instead of silently abandoning
+        # thumbnail jobs when another user's render holds the lock.
         with (AVATAR_THUMB_DIR/'.render.lock').open('a+b') as lock:
-            try:fcntl.flock(lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
-            except BlockingIOError:return
+            fcntl.flock(lock.fileno(),fcntl.LOCK_EX)
             try:
                 target=_avatar_thumbnail_file(owner,digest)
                 if target.is_file():return
+                active.write_text(str(int(time.time())))
+                queued.unlink(missing_ok=True)
+                _admin_event('avatar.thumbnail.started','Blender rendering 384px thumbnail',owner)
                 png=avatar_optimizer.render_thumbnail(raw,size=384)
                 # Never commit an old render after an avatar was replaced/deleted.
                 with db.connect(DB) as con:
@@ -60,23 +83,30 @@ def _avatar_thumbnail_worker(owner,digest,raw):
                     for stale in AVATAR_THUMB_DIR.glob(f'{int(owner)}_*.png'):
                         if stale!=target:stale.unlink(missing_ok=True)
                     (AVATAR_THUMB_DIR/f'{owner}.error').unlink(missing_ok=True)
+                    _admin_event('avatar.thumbnail.ready',f'{len(png)} PNG bytes',owner)
                 finally:temporary.unlink(missing_ok=True)
             finally:fcntl.flock(lock.fileno(),fcntl.LOCK_UN)
-    except Exception:
-        # Generic error marker; no private Blender logs exposed to clients.
+    except Exception as e:
+        # Explain failures to administrators, but never expose private Blender
+        # stderr, server paths, or uploaded model content to other users.
+        _admin_event('avatar.thumbnail.failed',type(e).__name__+': '+str(e)[:150],owner)
         try:(AVATAR_THUMB_DIR/f'{owner}.error').write_text(digest)
         except OSError:pass
     finally:
+        queued.unlink(missing_ok=True)
+        active.unlink(missing_ok=True)
         with _avatar_thumb_guard:_avatar_thumb_active.discard((owner,digest))
 
 
 def _schedule_avatar_thumbnail(owner,digest,raw):
     with _avatar_thumb_guard:
-        if (owner,digest) in _avatar_thumb_active:return
-        if len(_avatar_thumb_active)>=1:return
+        if (owner,digest) in _avatar_thumb_active:return True
+        if len(_avatar_thumb_active)>=1:return False
         _avatar_thumb_active.add((owner,digest))
+    _avatar_thumbnail_marker(owner,digest,'queued').touch()
     threading.Thread(target=_avatar_thumbnail_worker,args=(owner,digest,raw),daemon=True,
                      name=f'freelab-avatar-thumb-{owner}').start()
+    return True
 
 # XR preview preparation is a bounded read-only conversion of an already completed
 # paid job. Never regenerate or submit a provider task from a preview request.
@@ -771,6 +801,7 @@ def upload_3d_avatar():
     if not valid_avatar_glb(raw):return jsonify(error='Invalid, oversized or externally linked GLB avatar'),422
     with g.con:g.con.execute('''INSERT INTO user_avatar_models(user_id,glb) VALUES(?,?) ON CONFLICT(user_id)
       DO UPDATE SET glb=excluded.glb,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')''',(g.user['id'],raw))
+    _admin_event('avatar.upload',f'{len(raw)} GLB bytes',g.user['id'])
     return jsonify(ok=True,bytes=len(raw),limit=MAX_AVATAR_GLB)
 
 @app.post('/api/me/avatar-3d/optimize')
@@ -796,14 +827,20 @@ def avatar_optimization_status(job_id):
     if not job:abort(404)
     return jsonify(**job)
 
+@app.get('/api/me/avatar-3d/status')
+@require_user
+def own_avatar_status():
+    """Fast metadata check: never download a multi-megabyte GLB to inspect state."""
+    row=g.con.execute('SELECT glb,updated_at FROM user_avatar_models WHERE user_id=?',(g.user['id'],)).fetchone()
+    response=jsonify(present=bool(row),bytes=len(row['glb']) if row else 0,
+                     updated_at=row['updated_at'] if row else None)
+    response.headers['Cache-Control']='private, no-store'
+    return response
+
 @app.get('/api/me/avatar-3d/thumbnail')
 @require_user
 def own_avatar_thumbnail():
-    """Only the signed-in owner may request the cached Blender render.
-
-    A 202 response indicates async rendering; JS polls without blocking Flask.
-    No media is returned or cached for users who do not own an avatar.
-    """
+    """Private Blender thumbnail. Async state is bounded and visible to the UI."""
     row=g.con.execute('SELECT glb FROM user_avatar_models WHERE user_id=?',(g.user['id'],)).fetchone()
     if not row:return jsonify(status='missing'),404
     raw=bytes(row['glb']);digest=hashlib.sha256(raw).hexdigest()
@@ -813,15 +850,47 @@ def own_avatar_thumbnail():
         res.headers['Cache-Control']='private, no-store'
         res.headers['X-Content-Type-Options']='nosniff'
         return res
-    if not avatar_optimizer.blender_command():return jsonify(status='unavailable',error='Blender renderer is not configured'),503
+    if not avatar_optimizer.blender_command():return jsonify(status='unavailable',error='Blender renderer is not configured on this server'),503
     failed=AVATAR_THUMB_DIR/f"{g.user['id']}.error"
     if failed.is_file() and failed.read_text()==digest and time.time()-failed.stat().st_mtime<300:
-        return jsonify(status='unavailable',error='Blender thumbnail rendering failed'),503
-    _schedule_avatar_thumbnail(g.user['id'],digest,raw)
-    response=jsonify(status='rendering');response.status_code=202
+        return jsonify(status='failed',error='Blender could not render this GLB. Admin: check Runtime logs, or retry.'),503
+    rendering=_avatar_thumbnail_marker(g.user['id'],digest,'rendering')
+    queued=_avatar_thumbnail_marker(g.user['id'],digest,'queued')
+    if rendering.exists():
+        elapsed=max(0,int(time.time()-rendering.stat().st_mtime))
+        if elapsed>avatar_optimizer.MAX_THUMBNAIL_SECONDS+35:
+            _admin_event('avatar.thumbnail.timeout',f'No result after {elapsed}s',g.user['id'])
+            return jsonify(status='failed',error='Thumbnail exceeded its render deadline. Try again or inspect Runtime logs.'),503
+        status='rendering'
+    else:
+        elapsed=max(0,int(time.time()-queued.stat().st_mtime)) if queued.exists() else 0
+        if elapsed>300:
+            _admin_event('avatar.thumbnail.queue_timeout',f'No rendering slot after {elapsed}s',g.user['id'])
+            return jsonify(status='failed',error='Thumbnail worker unavailable. Retry later or inspect Runtime logs.'),503
+        status='queued'
+    started=_schedule_avatar_thumbnail(g.user['id'],digest,raw)
+    response=jsonify(status=status if started else 'queued',elapsed_seconds=elapsed,
+                     hint='Waiting for Blender' if status=='queued' else 'Blender rendering thumbnail')
+    response.status_code=202
     response.headers['Cache-Control']='private, no-store'
     response.headers['Retry-After']='3'
     return response
+
+@app.post('/api/me/avatar-3d/thumbnail/retry')
+@require_user
+def retry_own_avatar_thumbnail():
+    row=g.con.execute('SELECT glb FROM user_avatar_models WHERE user_id=?',(g.user['id'],)).fetchone()
+    if not row:return jsonify(error='No saved avatar to render'),404
+    digest=hashlib.sha256(row['glb']).hexdigest()
+    # Do not disrupt a running job. Only clear terminal-error markers.
+    active=_avatar_thumbnail_marker(g.user['id'],digest,'rendering')
+    if active.exists() and time.time()-active.stat().st_mtime<avatar_optimizer.MAX_THUMBNAIL_SECONDS+35:
+        return jsonify(error='Thumbnail still rendering'),409
+    active.unlink(missing_ok=True)
+    _avatar_thumbnail_marker(g.user['id'],digest,'queued').unlink(missing_ok=True)
+    (AVATAR_THUMB_DIR/f"{g.user['id']}.error").unlink(missing_ok=True)
+    _admin_event('avatar.thumbnail.retry','Manual thumbnail retry requested',g.user['id'])
+    return jsonify(ok=True)
 
 
 @app.get('/api/me/avatar-3d')
@@ -840,6 +909,7 @@ def remove_3d_avatar():
     for thumbnail in AVATAR_THUMB_DIR.glob(f"{g.user['id']}_*.png"):
         thumbnail.unlink(missing_ok=True)
     (AVATAR_THUMB_DIR/f"{g.user['id']}.error").unlink(missing_ok=True)
+    _admin_event('avatar.deleted','3D avatar removed',g.user['id'])
     return jsonify(ok=True)
 
 @app.get('/api/me/avatar-3d/preview')
@@ -1498,6 +1568,48 @@ def diagnostic_response(response):
 def admin_diagnostics():
     with _DIAGNOSTICS_LOCK:recent=list(_DIAGNOSTICS)[-35:]
     return jsonify(entries=recent,scope='current Python worker only',notice='No payloads, image content, credentials or prompts are collected.')
+
+def _safe_journal_text(value):
+    # The journal may contain third-party exceptions. Strip likely credentials
+    # before returning this optional diagnostic stream to the administrator.
+    value=re.sub(r'(?i)(authorization\s*[:=]\s*bearer\s+)\S+',r'\1[REDACTED]',value)
+    value=re.sub(r'(?i)((?:api[_-]?key|password|secret|token)\s*[:=]\s*)[^\s,;]+',r'\1[REDACTED]',value)
+    return value[:85000]
+
+@app.get('/api/admin/runtime-logs')
+@require_admin
+def admin_runtime_logs():
+    """Read-only, bounded, account-gated operations without arbitrary file access."""
+    source=request.args.get('source','events')
+    if source not in ('events','requests','journal'):return jsonify(error='Invalid log stream'),400
+    try:limit=min(200,max(10,int(request.args.get('limit','100'))))
+    except ValueError:return jsonify(error='Invalid limit'),400
+    if source=='events':
+        if not RUNTIME_EVENTS.is_file():return jsonify(source=source,entries=[],notice='No runtime events recorded yet')
+        with RUNTIME_EVENTS.open('rb') as file:
+            file.seek(0,2);length=file.tell();file.seek(max(0,length-150_000))
+            lines=file.read(150_000).decode('utf-8','replace').splitlines()[-limit:]
+        entries=[]
+        for line in lines:
+            try:entries.append(json.loads(line))
+            except ValueError:continue
+        return jsonify(source=source,entries=entries,notice='Persistent server-side operational events; no request bodies or credentials')
+    if source=='requests':
+        with _DIAGNOSTICS_LOCK:entries=list(_DIAGNOSTICS)[-limit:]
+        return jsonify(source=source,entries=entries,notice='Recent requests from this Gunicorn worker; no query parameters or payloads')
+    if not shutil.which('journalctl'):
+        return jsonify(source=source,entries=[],notice='journalctl not installed on the server')
+    try:
+        result=subprocess.run(['journalctl','--unit=free-lab.service','--no-pager',
+                               '--output=short-iso','--lines='+str(limit)],
+                              capture_output=True,text=True,timeout=4,check=False)
+        if result.returncode:
+            return jsonify(source=source,entries=[],notice='Service journal is not readable by the application user. '+
+                           'Use sudo journalctl -u free-lab -n 100 on the server, or view App events here.')
+        rows=_safe_journal_text(result.stdout).splitlines()[-limit:]
+        return jsonify(source=source,entries=rows,notice='Bounded service journal; administrator-only, sensitive tokens masked')
+    except (OSError,subprocess.TimeoutExpired):
+        return jsonify(source=source,entries=[],notice='Service journal unavailable. App events remain readable.')
 
 @app.get('/api/media/capabilities')
 @require_user

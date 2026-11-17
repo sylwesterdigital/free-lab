@@ -680,3 +680,12 @@
 .room-chooser-footer p{max-width:240px;margin:0}.room-chooser-footer .primary-btn{background:#bfe9ce;color:#14231b;min-width:200px;border-color:#bfe9ce}
 .room-chooser-footer .primary-btn:hover{background:#d8ffe4}
 @media(max-width:540px){.room-chooser .room-choice{grid-template-columns:1fr}.room-visibility-art{height:100px}.room-visibility-body{min-height:95px}.room-chooser-footer{flex-wrap:wrap}.room-chooser-footer .primary-btn{width:100%}}
+
+/* Admin operations and disabled avatar actions */
+#profilePanel .avatar3d-actions button:disabled{opacity:.34;cursor:not-allowed;filter:grayscale(1);background:#13211a;border-color:#506257;color:#86978d}
+#profilePanel .avatar3d-actions button:disabled:hover{background:#13211a;border-color:#506257;color:#86978d}
+#profilePanel #profile3DAvatarRetry{align-self:flex-start;min-height:33px;padding:8px 14px;font-size:12px}
+#profilePanel .admin-runtime-controls{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin:20px 0 12px}
+#profilePanel .admin-runtime-controls label{display:flex;flex-direction:column;gap:5px;min-width:130px;font-size:12px}
+#profilePanel .admin-runtime-controls select{min-height:40px;background:#20372d;border:1px solid #5a7969;color:#e6f9ec;padding:9px;border-radius:10px}
+#profilePanel .admin-runtime-output{background:#090e0c;color:#cff7d9;border:1px solid #425d50;border-radius:12px;padding:16px;min-height:160px;max-height:48vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;user-select:text}

@@ -1,15 +1,28 @@
 {
-  "version": "0.10.67",
-  "title": "FREELAB v0.10.67 — Profile avatar roundels and spatial room cards",
+  "version": "0.10.68",
+  "title": "FREELAB v0.10.68 — Avatar preview and server diagnostics",
   "datetime": "2026-11-17",
   "changes": [
-    "Arrange profile picture and 3D avatar in two responsive columns, keeping the existing upload, local preview, optimization and deletion controls.",
-    "Replace the visible avatar file picker with a tap-to-upload circular roundel and a sanitized human silhouette from the provided SVG.",
-    "Render owner-only 3D avatar preview thumbnails asynchronously with the existing bounded headless Blender renderer; cache a hash-specific PNG, and refresh on uploads and optimization.",
-    "Redesign the private/public XR room chooser as two responsive spatial cards with clear visibility, selection feedback and direct room launch.",
-    "Preserve private-by-default room choice and existing watcher compatibility without adding archive entries."
+    "Disable avatar Preview 3D and Remove actions until an avatar is saved, while retaining local preview for an unsaved large GLB.",
+    "Give Blender avatar thumbnails bounded queued/running/error states and an explicit retry action; prevent silent worker cancellation and endless spinners.",
+    "Validate decoded PNG thumbnail responses and keep the placeholder visible until the image loads successfully, instead of showing broken alt text.",
+    "Add account-scoped, lightweight avatar model status endpoint without downloading the GLB.",
+    "Provide a protected Settings → Logs tab for administrators: persistent operational events, recent API timings and service journal when readable.",
+    "Keep server log requests bounded, redact likely credentials and never expose model data or raw request payloads."
   ],
   "history": [
+    {
+      "version": "0.10.67",
+      "title": "FREELAB v0.10.67 — Profile avatar roundels and spatial room cards",
+      "datetime": "2026-11-17",
+      "changes": [
+        "Arrange profile picture and 3D avatar in two responsive columns, keeping the existing upload, local preview, optimization and deletion controls.",
+        "Replace the visible avatar file picker with a tap-to-upload circular roundel and a sanitized human silhouette from the provided SVG.",
+        "Render owner-only 3D avatar preview thumbnails asynchronously with the existing bounded headless Blender renderer; cache a hash-specific PNG, and refresh on uploads and optimization.",
+        "Redesign the private/public XR room chooser as two responsive spatial cards with clear visibility, selection feedback and direct room launch.",
+        "Preserve private-by-default room choice and existing watcher compatibility without adding archive entries."
+      ]
+    },
     {
       "version": "0.10.66",
       "title": "FREELAB v0.10.66 — XR search, world-fixed theatre and near/far previews",

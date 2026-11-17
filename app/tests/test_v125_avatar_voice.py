@@ -1,4 +1,4 @@
-"""v0.10.67 checks: private bounded avatar workflow and no-camera text generation.
+"""v0.10.68 checks: private bounded avatar workflow and no-camera text generation.
 No paid services, live headset, or server Blender required.
 """
 import base64,io,json,struct,tempfile,time,unittest
@@ -80,10 +80,10 @@ class AvatarRoundel67(unittest.TestCase):
   self.assertIn('profile3DAvatarSpinner',APP)
   self.assertIn("'/api/me/avatar-3d/thumbnail'",APP)
  def test_thumbnail_stale_avatar_not_saved_and_render_once(self):
-  import ast,hashlib,threading
+  import ast,hashlib,threading,time
   backend=ast.parse(BACK)
-  functions=[n for n in backend.body if isinstance(n,ast.FunctionDef) and n.name in ('_avatar_thumbnail_file','_avatar_thumbnail_worker')]
-  self.assertEqual(len(functions),2)
+  functions=[n for n in backend.body if isinstance(n,ast.FunctionDef) and n.name in ('_avatar_thumbnail_file','_avatar_thumbnail_marker','_avatar_thumbnail_worker')]
+  self.assertEqual(len(functions),3)
   with tempfile.TemporaryDirectory() as tmp:
    data=Path(tmp);path=data/'main.sqlite';db.init(path)
    with db.connect(path) as con:
@@ -91,7 +91,7 @@ class AvatarRoundel67(unittest.TestCase):
     raw=minimal_glb();digest=hashlib.sha256(raw).hexdigest()
     with con:con.execute('INSERT INTO user_avatar_models(user_id,glb) VALUES(?,?)',(uid,raw))
    namespace=dict(AVATAR_THUMB_DIR=data,DB=path,avatar_optimizer=avatar_optimizer,hashlib=hashlib,
-                  threading=threading,db=db,_avatar_thumb_guard=threading.Lock(),_avatar_thumb_active={(uid,digest)})
+                  threading=threading,time=time,db=db,_admin_event=lambda *a:None,_avatar_thumb_guard=threading.Lock(),_avatar_thumb_active={(uid,digest)})
    exec(compile(ast.Module(body=functions,type_ignores=[]),'<thumbnail-test>','exec'),namespace)
    with patch.object(avatar_optimizer,'render_thumbnail',return_value=b'PNG mock') as render:
     namespace['_avatar_thumbnail_worker'](uid,digest,raw)
@@ -146,3 +146,65 @@ class VoiceText125(unittest.TestCase):
   self.assertIn("w=c.kind==='gallery'?Math.min(c.size[0]*c.scale*1.03,.27):.377*factor",XR)
 
 if __name__=='__main__':unittest.main()
+
+class AvatarDiagnostics68(unittest.TestCase):
+ """Local regressions for server diagnostics and safe missing-avatar behavior."""
+ def test_preview_and_remove_disabled_until_avatar_exists(self):
+  self.assertIn('id="profile3DAvatarPreview" disabled',HTML)
+  self.assertIn('id="profile3DAvatarRemove" disabled',HTML)
+  self.assertIn('preview.disabled=!avatarSaved&&!pendingAvatarFile',APP)
+  self.assertIn('remove.disabled=!avatarSaved',APP)
+  self.assertIn("if(!pendingAvatarFile&&!avatarSaved)return;",APP)
+  self.assertIn("'/me/avatar-3d/status'",APP)
+  self.assertIn("avatarSaved=false;pendingAvatarFile=null;updateAvatarButtons()",APP)
+
+ def test_thumbnail_failures_are_bounded_and_retry_is_explicit(self):
+  self.assertIn("@app.get('/api/me/avatar-3d/status')\n@require_user",BACK)
+  self.assertIn("@app.get('/api/me/avatar-3d/thumbnail')\n@require_user",BACK)
+  self.assertIn("@app.post('/api/me/avatar-3d/thumbnail/retry')\n@require_user",BACK)
+  self.assertIn('MAX_THUMBNAIL_SECONDS+35',BACK)
+  self.assertIn("_avatar_thumbnail_marker(owner,digest,'rendering')",BACK)
+  self.assertIn('fcntl.flock(lock.fileno(),fcntl.LOCK_EX)',BACK)
+  self.assertIn("$('profile3DAvatarRetry')",APP)
+  self.assertIn("response.headers.get('content-type')",APP)
+  self.assertIn('img.onload=()=>',APP)
+  self.assertIn('img.onerror=()=>',APP)
+
+ def test_administrator_logs_are_bounded_and_read_only(self):
+  import ast,re
+  source=ast.parse(BACK)
+  route=next(n for n in source.body if isinstance(n,ast.FunctionDef) and n.name=='admin_runtime_logs')
+  decorators=[ast.unparse(d) for d in route.decorator_list]
+  self.assertIn('require_admin',decorators)
+  self.assertIn("app.get('/api/admin/runtime-logs')",decorators)
+  self.assertIn("source not in ('events','requests','journal')",BACK)
+  self.assertIn('min(200,max(10,int(',BACK)
+  self.assertIn("['journalctl','--unit=free-lab.service'",BACK)
+  self.assertIn('capture_output=True,text=True,timeout=4',BACK)
+  self.assertIn('id="profileLogs"',HTML)
+  self.assertIn('data-profile-tab="logs"',HTML)
+  self.assertIn('function loadAdminRuntimeLogs()',APP)
+  safe=next(n for n in source.body if isinstance(n,ast.FunctionDef) and n.name=='_safe_journal_text')
+  namespace={'re':re}
+  exec(compile(ast.Module(body=[safe],type_ignores=[]),'<journal-filter>','exec'),namespace)
+  filtered=namespace['_safe_journal_text']('authorization: Bearer abc123\npassword=qwerty\nAll clear')
+  self.assertNotIn('abc123',filtered)
+  self.assertNotIn('qwerty',filtered)
+  self.assertIn('All clear',filtered)
+
+ def test_server_events_do_not_log_user_content(self):
+  import ast,hashlib,os,re,datetime
+  from datetime import timezone
+  source=ast.parse(BACK)
+  helper=next(n for n in source.body if isinstance(n,ast.FunctionDef) and n.name=='_admin_event')
+  with tempfile.TemporaryDirectory() as tmp:
+   log=Path(tmp)/'events.jsonl'
+   namespace={'RUNTIME_EVENTS':log,'datetime':datetime.datetime,'timezone':timezone,
+              'os':os,'re':re,'json':json}
+   exec(compile(ast.Module(body=[helper],type_ignores=[]),'<events>','exec'),namespace)
+   namespace['_admin_event']('avatar.thumbnail.failed','Blender failed: /var/lib/freelab/private-file',7)
+   data=json.loads(log.read_text())
+   self.assertEqual(data['event'],'avatar.thumbnail.failed')
+   self.assertEqual(data['user_id'],7)
+   self.assertNotIn('/',data['message'])
+   self.assertEqual(log.stat().st_mode&0o777,0o600)

@@ -138,7 +138,7 @@ class ProductProgressGuards(unittest.TestCase):
   self.assertNotIn("g.user['username']",source.split("def agency_analyse():",1)[1].split("@app.get('/api/agency/events.csv')",1)[0])
 
 class XRLibraryAndAnalysis65(unittest.TestCase):
- """Functional contract tests for the 0.10.67 work, without XR or paid requests."""
+ """Functional contract tests for the 0.10.68 work, without XR or paid requests."""
  def test_analysis_budget_is_separate_and_operator_configurable(self):
   import ast,os
   from unittest.mock import patch

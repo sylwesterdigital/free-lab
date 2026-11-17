@@ -268,12 +268,25 @@ const PROVIDER_SAFE_TESTS=new Set(['meta','aholo','meshy','tripo','openai','gemi
 const ACTIVE_PROVIDERS=new Set(['meta','aholo','meshy','tripo','elevenlabs']);
 let providerRows=new Map();
 function profileTab(name){
- const valid=state.user?.role==='admin'?['experience','apis','users']:['experience'];
+ const valid=state.user?.role==='admin'?['experience','apis','users','logs']:['experience'];
  if(!valid.includes(name))name='experience';
  document.querySelectorAll('[data-profile-tab]').forEach(button=>{const on=button.dataset.profileTab===name;button.classList.toggle('active',on);button.setAttribute('aria-selected',String(on));});
  document.querySelectorAll('[data-profile-view]').forEach(panel=>panel.classList.toggle('hidden',panel.dataset.profileView!==name));
  $('profileScroll').scrollTop=0;
  if(name==='apis')loadProviderList().catch(error=>{$('apiListStatus').textContent=error.message;});
+ if(name==='logs')void loadAdminRuntimeLogs();
+}
+async function loadAdminRuntimeLogs(){
+ if(state.user?.role!=='admin')return;
+ const output=$('adminLogOutput'),notice=$('adminLogNotice');
+ output.textContent='Loading server events…';
+ try{
+  const source=$('adminLogSource').value,limit=$('adminLogLimit').value;
+  const data=await api('/admin/runtime-logs?source='+encodeURIComponent(source)+'&limit='+encodeURIComponent(limit));
+  const entries=data.entries||[];
+  output.textContent=entries.length?entries.map(e=>typeof e==='string'?e:JSON.stringify(e)).join('\n'):'No entries in this stream.';
+  notice.textContent=data.notice||'Server log entries loaded.';
+ }catch(error){notice.textContent='Could not load server logs: '+error.message;output.textContent='Log request failed.';}
 }
 async function refresh3DProviderUI(){
  const control=$('profile3DProvider');if(!control)return;
@@ -497,35 +510,76 @@ async function init(){
     const data=cv.toDataURL('image/jpeg',.76);await api('/me/avatar',{method:'PUT',body:JSON.stringify({image:data})});
     const portrait=$('profileAvatar');portrait.src='/api/me/avatar?v='+Date.now();notify('Profile picture saved');
    }catch(err){notify('Profile image: '+err.message);}e.target.value='';};
- let pendingAvatarFile=null,avatarPoll=null,avatarThumbnailTimer=null,avatarThumbnailUrl=null,avatarThumbnailEpoch=0;
+ let pendingAvatarFile=null,avatarPoll=null,avatarThumbnailTimer=null,avatarThumbnailUrl=null,avatarThumbnailEpoch=0,avatarSaved=false,avatarRenderPollSince=0;
  const setAvatarThumbnail=(blob=null)=>{
    const img=$('profile3DAvatarThumbnail'),placeholder=$('profile3DAvatarPlaceholder');
    if(avatarThumbnailUrl){URL.revokeObjectURL(avatarThumbnailUrl);avatarThumbnailUrl=null;}
-   if(blob){avatarThumbnailUrl=URL.createObjectURL(blob);img.src=avatarThumbnailUrl;img.classList.remove('hidden');placeholder.classList.add('hidden');}
-   else{img.removeAttribute('src');img.classList.add('hidden');placeholder.classList.remove('hidden');}
+   img.onload=null;img.onerror=null;img.removeAttribute('src');
+   img.classList.add('hidden');placeholder.classList.remove('hidden');
+   if(blob){
+     const current=URL.createObjectURL(blob);avatarThumbnailUrl=current;
+     img.onload=()=>{if(avatarThumbnailUrl!==current)return;img.classList.remove('hidden');placeholder.classList.add('hidden');};
+     img.onerror=()=>{if(avatarThumbnailUrl!==current)return;setAvatarThumbnail();
+       $('profile3DAvatarSpinner').classList.add('hidden');$('profile3DAvatarRetry').classList.remove('hidden');
+       setAvatarStatus('The thumbnail response was not a valid image. Check Admin → Logs, then retry.');};
+     img.src=current;
+   }
  };
+ function updateAvatarButtons(){
+  const preview=$('profile3DAvatarPreview'),remove=$('profile3DAvatarRemove');
+  preview.disabled=!avatarSaved&&!pendingAvatarFile;
+  remove.disabled=!avatarSaved;
+  preview.title=preview.disabled?'Upload a 3D avatar to enable preview':'Preview the uploaded 3D avatar';
+  remove.title=remove.disabled?'No saved 3D avatar':'Remove saved 3D avatar';
+ }
+ async function refresh3DAvatarState(){
+  try{
+   const result=await api('/me/avatar-3d/status');
+   if($('profilePanel').classList.contains('hidden'))return;
+   avatarSaved=Boolean(result.present);updateAvatarButtons();
+   if(!avatarSaved){setAvatarThumbnail();$('profile3DAvatarSpinner').classList.add('hidden');
+    $('profile3DAvatarRetry').classList.add('hidden');setAvatarStatus('No 3D avatar selected.');return;}
+   if(!pendingAvatarFile)setAvatarStatus('3D avatar saved · '+fmtAvatar(result.bytes)+'. Checking thumbnail…');
+   avatarRenderPollSince=Date.now();void refresh3DAvatarThumbnail();
+  }catch(error){updateAvatarButtons();setAvatarStatus('Avatar status unavailable: '+error.message);}
+ }
  async function refresh3DAvatarThumbnail(){
    clearTimeout(avatarThumbnailTimer);
-   const epoch=++avatarThumbnailEpoch;
-   const spinner=$('profile3DAvatarSpinner');
+   const epoch=++avatarThumbnailEpoch,spinner=$('profile3DAvatarSpinner'),retry=$('profile3DAvatarRetry');
+   if(!avatarSaved){spinner.classList.add('hidden');return;}
+   if(!avatarRenderPollSince)avatarRenderPollSince=Date.now();
    try{
      const response=await fetch('/api/me/avatar-3d/thumbnail',{credentials:'same-origin',cache:'no-store'});
      if(epoch!==avatarThumbnailEpoch)return;
-     if(response.ok){const blob=await response.blob();if(epoch!==avatarThumbnailEpoch)return;
-       setAvatarThumbnail(blob);spinner.classList.add('hidden');return;}
-     if(response.status===404){setAvatarThumbnail();spinner.classList.add('hidden');return;}
-     if(response.status===202){spinner.classList.remove('hidden');
+     if(response.ok){if(!response.headers.get('content-type')?.toLowerCase().startsWith('image/png'))throw Error('Expected a PNG thumbnail, received '+(response.headers.get('content-type')||'unknown content type'));
+       const blob=await response.blob();if(epoch!==avatarThumbnailEpoch)return;
+       if(blob.size<100)throw Error('Thumbnail image is unexpectedly empty');
+       setAvatarThumbnail(blob);spinner.classList.add('hidden');retry.classList.add('hidden');
+       setAvatarStatus('3D avatar saved · Blender thumbnail ready.');avatarRenderPollSince=0;return;}
+     if(response.status===404){avatarSaved=false;updateAvatarButtons();setAvatarThumbnail();spinner.classList.add('hidden');
+       retry.classList.add('hidden');setAvatarStatus('No 3D avatar selected.');return;}
+     if(response.status===202){
+       const result=await response.json();if(epoch!==avatarThumbnailEpoch)return;
+       const elapsed=Math.round((Date.now()-avatarRenderPollSince)/1000);
+       spinner.classList.remove('hidden');retry.classList.add('hidden');
+       setAvatarStatus((result.status==='queued'?'Thumbnail queued':'Blender rendering thumbnail')+
+         ' · '+elapsed+'s elapsed. Avatar is saved and Preview 3D is available.');
+       if(elapsed>290){spinner.classList.add('hidden');retry.classList.remove('hidden');
+         setAvatarStatus('Thumbnail did not complete within 290 seconds. Check Admin → Logs or retry.');return;}
        avatarThumbnailTimer=setTimeout(()=>{if(!$('profilePanel').classList.contains('hidden'))void refresh3DAvatarThumbnail();},3000);
        return;}
-     spinner.classList.add('hidden');
-     if(response.status===503){const result=await response.json();setAvatarStatus('3D avatar saved; '+(result.error||'thumbnail unavailable')+'. Preview 3D remains available.');}
-   }catch(_error){spinner.classList.add('hidden');}
+     spinner.classList.add('hidden');retry.classList.remove('hidden');
+     const result=await response.json().catch(()=>({}));
+     if(epoch!==avatarThumbnailEpoch)return;
+     setAvatarStatus('3D avatar saved, but thumbnail unavailable: '+(result.error||'HTTP '+response.status)+'.');
+   }catch(error){if(epoch!==avatarThumbnailEpoch)return;spinner.classList.add('hidden');retry.classList.remove('hidden');
+     setAvatarStatus('Thumbnail request failed: '+error.message+'. The avatar remains saved.');}
  }
  const fmtAvatar=n=>(n/1_000_000).toFixed(2)+' MB';
  const setAvatarStatus=(m,working=false)=>{const node=$('profile3DAvatarStatus');node.textContent=m;node.classList.toggle('working',working);};
  async function encodeAvatar(file){const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=16000)binary+=String.fromCharCode(...bytes.subarray(i,i+16000));return 'data:model/gltf-binary;base64,'+btoa(binary);}
  async function watchAvatarJob(id){clearTimeout(avatarPoll);try{const job=await api('/me/avatar-3d/optimize/'+id);
-   if(job.status==='SUCCEEDED'){setAvatarStatus('Optimized to '+fmtAvatar(job.result_size)+' · saved for XR. Blender thumbnail rendering…');pendingAvatarFile=null;$('profile3DAvatarOptimize').classList.add('hidden');setAvatarThumbnail();void refresh3DAvatarThumbnail();return;}
+   if(job.status==='SUCCEEDED'){setAvatarStatus('Optimized to '+fmtAvatar(job.result_size)+' · saved for XR. Blender thumbnail rendering…');pendingAvatarFile=null;avatarSaved=true;updateAvatarButtons();$('profile3DAvatarOptimize').classList.add('hidden');setAvatarThumbnail();avatarRenderPollSince=Date.now();void refresh3DAvatarThumbnail();return;}
    if(job.status==='FAILED'){setAvatarStatus('Optimization unsuccessful: '+job.error+' · original model was not replaced.');return;}
    setAvatarStatus('Blender '+job.status.toLowerCase()+' · '+fmtAvatar(job.original_size)+' → target 4.00 MB. Continue using FREELAB while it works.',true);
    avatarPoll=setTimeout(()=>watchAvatarJob(id),6000);
@@ -533,12 +587,12 @@ async function init(){
  $('profile3DAvatarInput').onchange=async event=>{
   const file=event.target.files?.[0];if(!file)return;event.target.value='';
   if(file.size>16_000_000||file.size<20||!file.name.toLowerCase().endsWith('.glb')){setAvatarStatus('Choose a GLB between 20 bytes and 16 MB.');return;}
-  pendingAvatarFile=file;$('profile3DAvatarOptimize').classList.toggle('hidden',file.size<=4_000_000);
+  pendingAvatarFile=file;updateAvatarButtons();$('profile3DAvatarOptimize').classList.toggle('hidden',file.size<=4_000_000);
   if(file.size>4_000_000){setAvatarStatus('Local preview only · '+fmtAvatar(file.size)+' · '+fmtAvatar(file.size-4_000_000)+' reduction needed for XR. Select Optimize for XR or reduce it yourself.');window.FreeLabModelStage?.openLocal(file);return;}
   setAvatarStatus('Uploading '+fmtAvatar(file.size)+' GLB…',true);
   try{const data=await encodeAvatar(file);const reply=await api('/me/avatar-3d',{method:'PUT',body:JSON.stringify({glb:data})});
-   pendingAvatarFile=null;setAvatarStatus('3D avatar saved · '+fmtAvatar(reply.bytes)+' (XR-ready). Rendering thumbnail…');setAvatarThumbnail();void refresh3DAvatarThumbnail();}
-  catch(err){setAvatarStatus('3D avatar upload failed: '+err.message);}
+   pendingAvatarFile=null;avatarSaved=true;updateAvatarButtons();setAvatarStatus('3D avatar saved · '+fmtAvatar(reply.bytes)+' (XR-ready). Rendering thumbnail…');setAvatarThumbnail();avatarRenderPollSince=Date.now();void refresh3DAvatarThumbnail();}
+  catch(err){pendingAvatarFile=null;updateAvatarButtons();setAvatarStatus('3D avatar upload failed: '+err.message);}
  };
  $('profile3DAvatarOptimize').onclick=async()=>{const file=pendingAvatarFile;if(!file)return;
   const ok=await window.FreeLabDialog.confirm('Optimize this '+fmtAvatar(file.size)+' GLB to a 4 MB XR-ready avatar using the server Blender worker? Geometry or texture quality may be reduced.',{title:'Optimize avatar',ok:'Optimize'});if(!ok)return;
@@ -546,11 +600,22 @@ async function init(){
   try{const data=await encodeAvatar(file);const result=await api('/me/avatar-3d/optimize',{method:'POST',body:JSON.stringify({glb:data})});watchAvatarJob(result.id);}
   catch(err){setAvatarStatus('Optimization could not begin: '+err.message);}
  };
- $('profile3DAvatarPreview').onclick=()=>pendingAvatarFile?window.FreeLabModelStage?.openLocal(pendingAvatarFile):window.FreeLabModelStage?.open(null,true);
+ $('profile3DAvatarPreview').onclick=()=>{if(!pendingAvatarFile&&!avatarSaved)return;pendingAvatarFile?window.FreeLabModelStage?.openLocal(pendingAvatarFile):window.FreeLabModelStage?.open(null,true);};
  $('profile3DAvatarRemove').onclick=async()=>{if(!await window.FreeLabDialog.confirm('Remove your 3D avatar?'))return;
-   try{await api('/me/avatar-3d',{method:'DELETE'});clearTimeout(avatarThumbnailTimer);avatarThumbnailEpoch++;setAvatarThumbnail();$('profile3DAvatarSpinner').classList.add('hidden');$('profile3DAvatarStatus').textContent='3D avatar removed.';}
+   try{await api('/me/avatar-3d',{method:'DELETE'});clearTimeout(avatarThumbnailTimer);avatarThumbnailEpoch++;avatarSaved=false;pendingAvatarFile=null;updateAvatarButtons();setAvatarThumbnail();$('profile3DAvatarSpinner').classList.add('hidden');$('profile3DAvatarRetry').classList.add('hidden');$('profile3DAvatarStatus').textContent='No 3D avatar selected.';}
    catch(err){$('profile3DAvatarStatus').textContent=err.message;}};
- $('profileButton').onclick=()=>{$('profilePanel').classList.remove('hidden');profileTab(state.user?.role==='admin'?'apis':'experience');void refresh3DProviderUI();void refresh3DAvatarThumbnail();};$('profile3DProvider').onchange=async()=>{const chosen=$('profile3DProvider').value;try{await save3DPreference(chosen);await refresh3DProviderUI();notify('3D provider changed to '+chosen.toUpperCase());}catch(e){notify(e.message);await refresh3DProviderUI();}};for(const field of ['profile3DQuality','profile3DTexture','profile3DXRTexture'])$(field).onchange=async()=>{
+ $('profile3DAvatarRetry').onclick=async()=>{
+  $('profile3DAvatarRetry').disabled=true;
+  try{await api('/me/avatar-3d/thumbnail/retry',{method:'POST'});
+   avatarRenderPollSince=Date.now();$('profile3DAvatarRetry').classList.add('hidden');void refresh3DAvatarThumbnail();
+  }catch(error){setAvatarStatus('Could not retry thumbnail: '+error.message);}
+  finally{$('profile3DAvatarRetry').disabled=false;}
+ };
+ $('adminLogSource').onchange=()=>void loadAdminRuntimeLogs();
+ $('adminLogLimit').onchange=()=>void loadAdminRuntimeLogs();
+ $('adminLogRefresh').onclick=()=>void loadAdminRuntimeLogs();
+ $('adminLogCopy').onclick=()=>navigator.clipboard?.writeText($('adminLogOutput').textContent||'').then(()=>notify('Logs copied')).catch(()=>notify('Clipboard unavailable'));
+ $('profileButton').onclick=()=>{$('profilePanel').classList.remove('hidden');profileTab(state.user?.role==='admin'?'apis':'experience');void refresh3DProviderUI();void refresh3DAvatarState();};$('profile3DProvider').onchange=async()=>{const chosen=$('profile3DProvider').value;try{await save3DPreference(chosen);await refresh3DProviderUI();notify('3D provider changed to '+chosen.toUpperCase());}catch(e){notify(e.message);await refresh3DProviderUI();}};for(const field of ['profile3DQuality','profile3DTexture','profile3DXRTexture'])$(field).onchange=async()=>{
   const prefs={preset:$('profile3DQuality').value,texture_quality:$('profile3DTexture').value,xr_texture_edge:Number($('profile3DXRTexture').value)};
   try{await save3DQuality(prefs);await refresh3DProviderUI();notify('3D quality saved for new jobs');}catch(e){notify(e.message);}
  };$('closeProfile').onclick=()=>{$('profilePanel').classList.add('hidden');clearTimeout(avatarThumbnailTimer);avatarThumbnailEpoch++;};
@@ -745,7 +810,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.67');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.68');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{

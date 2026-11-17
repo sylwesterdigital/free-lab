@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.67",
-  "description": "Two-column profile and 3D avatar roundels, cached private Blender thumbnails, and redesigned public/private spatial room selection"
+  "version": "0.10.68",
+  "description": "Avatar thumbnail diagnostics, bounded Blender status and retry, contextual avatar buttons, admin-only runtime log viewer"
 }
