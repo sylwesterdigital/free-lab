@@ -69,6 +69,32 @@ def optimize_xr_preview(raw, blender=None):
     return _convert_glb(raw,blender,input_limit=MAX_MODEL,output_limit=8_000_000,xr_mode=True)
 
 
+def _thumbnail_error(stderr, stdout, code):
+    """Concise, actionable subprocess error without server paths or input contents.
+
+    Blender may print hundreds of traceback lines (e.g. ctypes.LoadLibrary),
+    so showing only the start of its final 440 bytes often hides the OSError.
+    """
+    import re
+    lines=[ln.strip() for ln in ((stderr or '')+'\n'+(stdout or '')).splitlines() if ln.strip()]
+    patterns=(r'^(?:OSError|ImportError|ModuleNotFoundError|RuntimeError|ValueError|PermissionError|FileNotFoundError|AttributeError|TypeError):\s*(.+)',
+              r'^(?:Error|ERROR):\s*(.+)',r'^(?:Blender|FREELAB)\s+(?:error|failed):\s*(.+)')
+    issue=''
+    for line in reversed(lines):
+        for pat in patterns:
+            match=re.search(pat,line,re.I)
+            if match:
+                issue=line
+                break
+        if issue:break
+    if not issue:
+        issue=next((line for line in reversed(lines) if 'not found' in line.lower() or 'cannot open shared object' in line.lower()),'Blender exited without a PNG')
+    # Keep driver/library names, but no full filesystem paths in UI or logs.
+    issue=re.sub(r'(?<![\w.-])/(?:[^\s:,]+/)+', '<path>/', issue)
+    issue=re.sub(r'[\r\n\x00-\x1f]+',' ',issue)[:185]
+    return f'Blender exit {code}: {issue}'
+
+
 def render_thumbnail(raw, blender=None, size=512):
     """Render a square PNG thumbnail from a private GLB using headless Blender."""
     from .model_cache import MAX_MODEL
@@ -81,14 +107,15 @@ def render_thumbnail(raw, blender=None, size=512):
         src=Path(work)/'input.glb';dst=Path(work)/'thumbnail.png'
         src.write_bytes(raw)
         cmd=[program,'--background','--factory-startup','--disable-autoexec','--threads','2',
-             '--python',str(root/'model_thumbnail_worker.py'),'--',str(src),str(dst),str(size)]
+             '--python-exit-code','12','--python',str(root/'model_thumbnail_worker.py'),
+             '--',str(src),str(dst),str(size)]
         env={k:v for k,v in os.environ.items() if not k.startswith(('PYTHONPATH','PYTHONSTARTUP'))}
         try:r=subprocess.run(cmd,capture_output=True,text=True,timeout=MAX_THUMBNAIL_SECONDS,env=env,cwd=work,check=False)
         except subprocess.TimeoutExpired:raise RuntimeError('Blender thumbnail render timed out') from None
         except OSError as e:raise RuntimeError('Blender executable cannot be launched') from e
         if r.returncode or not dst.is_file():
-            msg=(r.stderr or r.stdout or 'unknown render error')[-440:].replace('\n',' ')
-            raise RuntimeError('Blender could not render the thumbnail: '+msg)
+            raise RuntimeError('Blender could not render the thumbnail: '+
+                               _thumbnail_error(r.stderr,r.stdout,r.returncode))
         output=dst.read_bytes()
         if len(output)<100 or output[:8]!=b'\x89PNG\r\n\x1a\n':
             raise RuntimeError('Blender produced an invalid thumbnail')

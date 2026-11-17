@@ -1,4 +1,4 @@
-"""v0.10.68 checks: private bounded avatar workflow and no-camera text generation.
+"""v0.10.69 checks: private bounded avatar workflow and no-camera text generation.
 No paid services, live headset, or server Blender required.
 """
 import base64,io,json,struct,tempfile,time,unittest
@@ -208,3 +208,56 @@ class AvatarDiagnostics68(unittest.TestCase):
    self.assertEqual(data['user_id'],7)
    self.assertNotIn('/',data['message'])
    self.assertEqual(log.stat().st_mode&0o777,0o600)
+
+class AvatarThumbnail69(unittest.TestCase):
+ """Regression tests for asynchronous HTTP 202 and headless Blender exceptions."""
+ def test_headless_cycles_not_eevee(self):
+  worker=(ROOT/'backend/model_thumbnail_worker.py').read_text()
+  self.assertIn("scene.render.engine='CYCLES'",worker)
+  self.assertIn("scene.cycles.device='CPU'",worker)
+  self.assertIn('scene.cycles.samples=16',worker)
+  self.assertNotIn('BLENDER_EEVEE',worker)
+
+ def test_blender_error_exposes_root_cause_not_ctypes_trace_midpoint(self):
+  trace='Traceback (most recent call last):\n'+('  File /usr/lib/python3.12/ctypes/__init__.py, line 460, in LoadLibrary\n' * 45)
+  trace+='OSError: libextern_draco.so: cannot open shared object file: No such file or directory\n'
+  message=avatar_optimizer._thumbnail_error(trace,'',12)
+  self.assertIn('Blender exit 12:',message)
+  self.assertIn('libextern_draco.so',message)
+  self.assertIn('No such file or directory',message)
+  self.assertNotIn('/usr/lib',message)
+  from types import SimpleNamespace
+  with patch.object(avatar_optimizer.subprocess,'run',return_value=SimpleNamespace(returncode=12,stderr=trace,stdout='')):
+   with self.assertRaisesRegex(RuntimeError,'libextern_draco'):
+    avatar_optimizer.render_thumbnail(minimal_glb(),blender='/usr/bin/blender',size=384)
+
+ def test_202_is_polled_before_png_branch(self):
+  js=(ROOT/'frontend/assets/app.js').read_text()
+  block=js.split('async function refresh3DAvatarThumbnail(){',1)[1].split(' const fmtAvatar=',1)[0]
+  self.assertLess(block.index('if(response.status===202)'),block.index('if(response.ok)'))
+  self.assertIn("response.headers.get('content-type')",block)
+  import subprocess
+  # Run the production function in a bounded Node harness to test real behavior.
+  harness='''const assert=require('node:assert/strict');
+let avatarSaved=true,avatarThumbnailTimer=0,avatarThumbnailEpoch=0,avatarRenderPollSince=Date.now();
+let queued=[],responses=[],status='',image='',spinner={classList:{add(){},remove(){}}},retry={classList:{add(){},remove(){}}};
+const $=id=>({profile3DAvatarSpinner:spinner,profile3DAvatarRetry:retry,profilePanel:{classList:{contains:()=>false}}})[id];
+const clearTimeout=()=>{};
+const setTimeout=fn=>{queued.push(fn);return queued.length;};
+const fetch=async()=>responses.shift();
+const setAvatarStatus=s=>{status=s};const setAvatarThumbnail=x=>{image=x};
+const updateAvatarButtons=()=>{};
+const response202={status:202,ok:true,json:async()=>({status:'rendering'})};
+const response200={status:200,ok:true,headers:{get:()=> 'image/png'},blob:async()=>({size:350})};
+'''+ 'async function refresh3DAvatarThumbnail(){'+block + '''
+(async()=>{
+ responses=[response202,response200];
+ await refresh3DAvatarThumbnail();
+ assert.match(status,/rendering thumbnail/);assert.equal(queued.length,1);
+ await refresh3DAvatarThumbnail();
+ assert.match(status,/thumbnail ready/);assert.equal(image.size,350);
+ console.log('202 then PNG passed');
+})().catch(e=>{console.error(e);process.exitCode=1});'''
+  result=subprocess.run(['node','-e',harness],text=True,capture_output=True,timeout=15)
+  self.assertEqual(result.returncode,0,result.stderr)
+  self.assertIn('202 then PNG passed',result.stdout)

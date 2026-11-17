@@ -89,7 +89,7 @@ def _avatar_thumbnail_worker(owner,digest,raw):
     except Exception as e:
         # Explain failures to administrators, but never expose private Blender
         # stderr, server paths, or uploaded model content to other users.
-        _admin_event('avatar.thumbnail.failed',type(e).__name__+': '+str(e)[:150],owner)
+        _admin_event('avatar.thumbnail.failed',type(e).__name__+': '+str(e)[:210],owner)
         try:(AVATAR_THUMB_DIR/f'{owner}.error').write_text(digest)
         except OSError:pass
     finally:

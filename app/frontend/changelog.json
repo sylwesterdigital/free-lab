@@ -1,16 +1,27 @@
 {
-  "version": "0.10.68",
-  "title": "FREELAB v0.10.68 — Avatar preview and server diagnostics",
+  "version": "0.10.69",
+  "title": "FREELAB v0.10.69 — Headless avatar thumbnails and truthful render status",
   "datetime": "2026-11-17",
   "changes": [
-    "Disable avatar Preview 3D and Remove actions until an avatar is saved, while retaining local preview for an unsaved large GLB.",
-    "Give Blender avatar thumbnails bounded queued/running/error states and an explicit retry action; prevent silent worker cancellation and endless spinners.",
-    "Validate decoded PNG thumbnail responses and keep the placeholder visible until the image loads successfully, instead of showing broken alt text.",
-    "Add account-scoped, lightweight avatar model status endpoint without downloading the GLB.",
-    "Provide a protected Settings → Logs tab for administrators: persistent operational events, recent API timings and service journal when readable.",
-    "Keep server log requests bounded, redact likely credentials and never expose model data or raw request payloads."
+    "Handle HTTP 202 thumbnail processing responses before HTTP 200 PNG success; continue polling rather than showing an incorrect content-type failure.",
+    "Render Blender avatar thumbnails with CPU Cycles on headless Linux instead of requiring Eevee graphics/display initialization.",
+    "Report the final Blender exception and process exit code in protected admin runtime events, preserving useful shared-library diagnostics without exposing private model data.",
+    "Keep the saved GLB, avatar placeholder and retry controls intact if native Blender dependencies are unavailable."
   ],
   "history": [
+    {
+      "version": "0.10.68",
+      "title": "FREELAB v0.10.68 — Avatar preview and server diagnostics",
+      "datetime": "2026-11-17",
+      "changes": [
+        "Disable avatar Preview 3D and Remove actions until an avatar is saved, while retaining local preview for an unsaved large GLB.",
+        "Give Blender avatar thumbnails bounded queued/running/error states and an explicit retry action; prevent silent worker cancellation and endless spinners.",
+        "Validate decoded PNG thumbnail responses and keep the placeholder visible until the image loads successfully, instead of showing broken alt text.",
+        "Add account-scoped, lightweight avatar model status endpoint without downloading the GLB.",
+        "Provide a protected Settings → Logs tab for administrators: persistent operational events, recent API timings and service journal when readable.",
+        "Keep server log requests bounded, redact likely credentials and never expose model data or raw request payloads."
+      ]
+    },
     {
       "version": "0.10.67",
       "title": "FREELAB v0.10.67 — Profile avatar roundels and spatial room cards",

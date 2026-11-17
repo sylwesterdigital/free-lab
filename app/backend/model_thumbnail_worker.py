@@ -21,10 +21,13 @@ meshes=[o for o in bpy.data.objects if o.type=='MESH']
 if not meshes:raise RuntimeError('GLB has no mesh objects')
 
 scene=bpy.context.scene
-try:scene.render.engine='BLENDER_EEVEE_NEXT'
-except TypeError:scene.render.engine='BLENDER_EEVEE'
-if getattr(scene,'eevee',None) is not None and hasattr(scene.eevee,'taa_render_samples'):
-    scene.eevee.taa_render_samples=32
+# The deployment server is headless. Eevee requires a graphics/display backend;
+# Cycles CPU renders privately without depending on X11, EGL or a GPU context.
+scene.render.engine='CYCLES'
+scene.cycles.device='CPU'
+scene.cycles.samples=16
+scene.render.threads_mode='FIXED'
+scene.render.threads=2
 scene.render.film_transparent=False
 scene.render.resolution_x=size
 scene.render.resolution_y=size

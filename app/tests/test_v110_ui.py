@@ -1,4 +1,4 @@
-"""XR v0.10.68: persistent visual preferences, image modes and spatial lineage."""
+"""XR v0.10.69: persistent visual preferences, image modes and spatial lineage."""
 import io,subprocess,unittest
 from pathlib import Path
 from PIL import Image

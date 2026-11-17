@@ -551,13 +551,6 @@ async function init(){
    try{
      const response=await fetch('/api/me/avatar-3d/thumbnail',{credentials:'same-origin',cache:'no-store'});
      if(epoch!==avatarThumbnailEpoch)return;
-     if(response.ok){if(!response.headers.get('content-type')?.toLowerCase().startsWith('image/png'))throw Error('Expected a PNG thumbnail, received '+(response.headers.get('content-type')||'unknown content type'));
-       const blob=await response.blob();if(epoch!==avatarThumbnailEpoch)return;
-       if(blob.size<100)throw Error('Thumbnail image is unexpectedly empty');
-       setAvatarThumbnail(blob);spinner.classList.add('hidden');retry.classList.add('hidden');
-       setAvatarStatus('3D avatar saved · Blender thumbnail ready.');avatarRenderPollSince=0;return;}
-     if(response.status===404){avatarSaved=false;updateAvatarButtons();setAvatarThumbnail();spinner.classList.add('hidden');
-       retry.classList.add('hidden');setAvatarStatus('No 3D avatar selected.');return;}
      if(response.status===202){
        const result=await response.json();if(epoch!==avatarThumbnailEpoch)return;
        const elapsed=Math.round((Date.now()-avatarRenderPollSince)/1000);
@@ -568,6 +561,13 @@ async function init(){
          setAvatarStatus('Thumbnail did not complete within 290 seconds. Check Admin → Logs or retry.');return;}
        avatarThumbnailTimer=setTimeout(()=>{if(!$('profilePanel').classList.contains('hidden'))void refresh3DAvatarThumbnail();},3000);
        return;}
+     if(response.ok){if(!response.headers.get('content-type')?.toLowerCase().startsWith('image/png'))throw Error('Expected a PNG thumbnail, received '+(response.headers.get('content-type')||'unknown content type'));
+       const blob=await response.blob();if(epoch!==avatarThumbnailEpoch)return;
+       if(blob.size<100)throw Error('Thumbnail image is unexpectedly empty');
+       setAvatarThumbnail(blob);spinner.classList.add('hidden');retry.classList.add('hidden');
+       setAvatarStatus('3D avatar saved · Blender thumbnail ready.');avatarRenderPollSince=0;return;}
+     if(response.status===404){avatarSaved=false;updateAvatarButtons();setAvatarThumbnail();spinner.classList.add('hidden');
+       retry.classList.add('hidden');setAvatarStatus('No 3D avatar selected.');return;}
      spinner.classList.add('hidden');retry.classList.remove('hidden');
      const result=await response.json().catch(()=>({}));
      if(epoch!==avatarThumbnailEpoch)return;
@@ -810,7 +810,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.68');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.69');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{
