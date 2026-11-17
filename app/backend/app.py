@@ -26,6 +26,57 @@ db.init(DB)
 avatar_optimizer.init(DB)
 IMAGE_DIR.mkdir(parents=True,exist_ok=True)
 MODEL_DIR.mkdir(parents=True,exist_ok=True)
+AVATAR_THUMB_DIR=DATA_DIR/'avatar-thumbnails'
+AVATAR_THUMB_DIR.mkdir(parents=True,exist_ok=True)
+_avatar_thumb_guard=threading.Lock()
+_avatar_thumb_active=set()
+
+
+def _avatar_thumbnail_file(owner,digest):
+    # The owner and server-computed digest prevent stale uploads from reappearing.
+    return AVATAR_THUMB_DIR/f'{int(owner)}_{digest[:20]}.png'
+
+
+def _avatar_thumbnail_worker(owner,digest,raw):
+    import fcntl
+    try:
+        # Existing Blender renderer is bounded by 120 seconds, runs with
+        # --disable-autoexec, and never reads external GLB dependencies.
+        with (AVATAR_THUMB_DIR/'.render.lock').open('a+b') as lock:
+            try:fcntl.flock(lock.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+            except BlockingIOError:return
+            try:
+                target=_avatar_thumbnail_file(owner,digest)
+                if target.is_file():return
+                png=avatar_optimizer.render_thumbnail(raw,size=384)
+                # Never commit an old render after an avatar was replaced/deleted.
+                with db.connect(DB) as con:
+                    latest=con.execute('SELECT glb FROM user_avatar_models WHERE user_id=?',(owner,)).fetchone()
+                if not latest or hashlib.sha256(latest['glb']).hexdigest()!=digest:return
+                temporary=AVATAR_THUMB_DIR/f'.avatar-{owner}-{threading.get_ident()}.tmp'
+                try:
+                    temporary.write_bytes(png)
+                    temporary.replace(target)
+                    for stale in AVATAR_THUMB_DIR.glob(f'{int(owner)}_*.png'):
+                        if stale!=target:stale.unlink(missing_ok=True)
+                    (AVATAR_THUMB_DIR/f'{owner}.error').unlink(missing_ok=True)
+                finally:temporary.unlink(missing_ok=True)
+            finally:fcntl.flock(lock.fileno(),fcntl.LOCK_UN)
+    except Exception:
+        # Generic error marker; no private Blender logs exposed to clients.
+        try:(AVATAR_THUMB_DIR/f'{owner}.error').write_text(digest)
+        except OSError:pass
+    finally:
+        with _avatar_thumb_guard:_avatar_thumb_active.discard((owner,digest))
+
+
+def _schedule_avatar_thumbnail(owner,digest,raw):
+    with _avatar_thumb_guard:
+        if (owner,digest) in _avatar_thumb_active:return
+        if len(_avatar_thumb_active)>=1:return
+        _avatar_thumb_active.add((owner,digest))
+    threading.Thread(target=_avatar_thumbnail_worker,args=(owner,digest,raw),daemon=True,
+                     name=f'freelab-avatar-thumb-{owner}').start()
 
 # XR preview preparation is a bounded read-only conversion of an already completed
 # paid job. Never regenerate or submit a provider task from a preview request.
@@ -745,6 +796,34 @@ def avatar_optimization_status(job_id):
     if not job:abort(404)
     return jsonify(**job)
 
+@app.get('/api/me/avatar-3d/thumbnail')
+@require_user
+def own_avatar_thumbnail():
+    """Only the signed-in owner may request the cached Blender render.
+
+    A 202 response indicates async rendering; JS polls without blocking Flask.
+    No media is returned or cached for users who do not own an avatar.
+    """
+    row=g.con.execute('SELECT glb FROM user_avatar_models WHERE user_id=?',(g.user['id'],)).fetchone()
+    if not row:return jsonify(status='missing'),404
+    raw=bytes(row['glb']);digest=hashlib.sha256(raw).hexdigest()
+    target=_avatar_thumbnail_file(g.user['id'],digest)
+    if target.is_file():
+        res=send_file(target,mimetype='image/png',max_age=0)
+        res.headers['Cache-Control']='private, no-store'
+        res.headers['X-Content-Type-Options']='nosniff'
+        return res
+    if not avatar_optimizer.blender_command():return jsonify(status='unavailable',error='Blender renderer is not configured'),503
+    failed=AVATAR_THUMB_DIR/f"{g.user['id']}.error"
+    if failed.is_file() and failed.read_text()==digest and time.time()-failed.stat().st_mtime<300:
+        return jsonify(status='unavailable',error='Blender thumbnail rendering failed'),503
+    _schedule_avatar_thumbnail(g.user['id'],digest,raw)
+    response=jsonify(status='rendering');response.status_code=202
+    response.headers['Cache-Control']='private, no-store'
+    response.headers['Retry-After']='3'
+    return response
+
+
 @app.get('/api/me/avatar-3d')
 @require_user
 def own_3d_avatar():
@@ -758,6 +837,9 @@ def own_3d_avatar():
 @require_user
 def remove_3d_avatar():
     with g.con:g.con.execute('DELETE FROM user_avatar_models WHERE user_id=?',(g.user['id'],))
+    for thumbnail in AVATAR_THUMB_DIR.glob(f"{g.user['id']}_*.png"):
+        thumbnail.unlink(missing_ok=True)
+    (AVATAR_THUMB_DIR/f"{g.user['id']}.error").unlink(missing_ok=True)
     return jsonify(ok=True)
 
 @app.get('/api/me/avatar-3d/preview')

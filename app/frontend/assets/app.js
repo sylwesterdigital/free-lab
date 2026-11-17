@@ -497,12 +497,35 @@ async function init(){
     const data=cv.toDataURL('image/jpeg',.76);await api('/me/avatar',{method:'PUT',body:JSON.stringify({image:data})});
     const portrait=$('profileAvatar');portrait.src='/api/me/avatar?v='+Date.now();notify('Profile picture saved');
    }catch(err){notify('Profile image: '+err.message);}e.target.value='';};
- let pendingAvatarFile=null,avatarPoll=null;
+ let pendingAvatarFile=null,avatarPoll=null,avatarThumbnailTimer=null,avatarThumbnailUrl=null,avatarThumbnailEpoch=0;
+ const setAvatarThumbnail=(blob=null)=>{
+   const img=$('profile3DAvatarThumbnail'),placeholder=$('profile3DAvatarPlaceholder');
+   if(avatarThumbnailUrl){URL.revokeObjectURL(avatarThumbnailUrl);avatarThumbnailUrl=null;}
+   if(blob){avatarThumbnailUrl=URL.createObjectURL(blob);img.src=avatarThumbnailUrl;img.classList.remove('hidden');placeholder.classList.add('hidden');}
+   else{img.removeAttribute('src');img.classList.add('hidden');placeholder.classList.remove('hidden');}
+ };
+ async function refresh3DAvatarThumbnail(){
+   clearTimeout(avatarThumbnailTimer);
+   const epoch=++avatarThumbnailEpoch;
+   const spinner=$('profile3DAvatarSpinner');
+   try{
+     const response=await fetch('/api/me/avatar-3d/thumbnail',{credentials:'same-origin',cache:'no-store'});
+     if(epoch!==avatarThumbnailEpoch)return;
+     if(response.ok){const blob=await response.blob();if(epoch!==avatarThumbnailEpoch)return;
+       setAvatarThumbnail(blob);spinner.classList.add('hidden');return;}
+     if(response.status===404){setAvatarThumbnail();spinner.classList.add('hidden');return;}
+     if(response.status===202){spinner.classList.remove('hidden');
+       avatarThumbnailTimer=setTimeout(()=>{if(!$('profilePanel').classList.contains('hidden'))void refresh3DAvatarThumbnail();},3000);
+       return;}
+     spinner.classList.add('hidden');
+     if(response.status===503){const result=await response.json();setAvatarStatus('3D avatar saved; '+(result.error||'thumbnail unavailable')+'. Preview 3D remains available.');}
+   }catch(_error){spinner.classList.add('hidden');}
+ }
  const fmtAvatar=n=>(n/1_000_000).toFixed(2)+' MB';
  const setAvatarStatus=(m,working=false)=>{const node=$('profile3DAvatarStatus');node.textContent=m;node.classList.toggle('working',working);};
  async function encodeAvatar(file){const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=16000)binary+=String.fromCharCode(...bytes.subarray(i,i+16000));return 'data:model/gltf-binary;base64,'+btoa(binary);}
  async function watchAvatarJob(id){clearTimeout(avatarPoll);try{const job=await api('/me/avatar-3d/optimize/'+id);
-   if(job.status==='SUCCEEDED'){setAvatarStatus('Optimized to '+fmtAvatar(job.result_size)+' · saved for XR. Preview avatar to inspect.');pendingAvatarFile=null;$('profile3DAvatarOptimize').classList.add('hidden');return;}
+   if(job.status==='SUCCEEDED'){setAvatarStatus('Optimized to '+fmtAvatar(job.result_size)+' · saved for XR. Blender thumbnail rendering…');pendingAvatarFile=null;$('profile3DAvatarOptimize').classList.add('hidden');setAvatarThumbnail();void refresh3DAvatarThumbnail();return;}
    if(job.status==='FAILED'){setAvatarStatus('Optimization unsuccessful: '+job.error+' · original model was not replaced.');return;}
    setAvatarStatus('Blender '+job.status.toLowerCase()+' · '+fmtAvatar(job.original_size)+' → target 4.00 MB. Continue using FREELAB while it works.',true);
    avatarPoll=setTimeout(()=>watchAvatarJob(id),6000);
@@ -514,7 +537,7 @@ async function init(){
   if(file.size>4_000_000){setAvatarStatus('Local preview only · '+fmtAvatar(file.size)+' · '+fmtAvatar(file.size-4_000_000)+' reduction needed for XR. Select Optimize for XR or reduce it yourself.');window.FreeLabModelStage?.openLocal(file);return;}
   setAvatarStatus('Uploading '+fmtAvatar(file.size)+' GLB…',true);
   try{const data=await encodeAvatar(file);const reply=await api('/me/avatar-3d',{method:'PUT',body:JSON.stringify({glb:data})});
-   pendingAvatarFile=null;setAvatarStatus('3D avatar saved · '+fmtAvatar(reply.bytes)+' (XR-ready).');}
+   pendingAvatarFile=null;setAvatarStatus('3D avatar saved · '+fmtAvatar(reply.bytes)+' (XR-ready). Rendering thumbnail…');setAvatarThumbnail();void refresh3DAvatarThumbnail();}
   catch(err){setAvatarStatus('3D avatar upload failed: '+err.message);}
  };
  $('profile3DAvatarOptimize').onclick=async()=>{const file=pendingAvatarFile;if(!file)return;
@@ -525,12 +548,12 @@ async function init(){
  };
  $('profile3DAvatarPreview').onclick=()=>pendingAvatarFile?window.FreeLabModelStage?.openLocal(pendingAvatarFile):window.FreeLabModelStage?.open(null,true);
  $('profile3DAvatarRemove').onclick=async()=>{if(!await window.FreeLabDialog.confirm('Remove your 3D avatar?'))return;
-   try{await api('/me/avatar-3d',{method:'DELETE'});$('profile3DAvatarStatus').textContent='3D avatar removed.';}
+   try{await api('/me/avatar-3d',{method:'DELETE'});clearTimeout(avatarThumbnailTimer);avatarThumbnailEpoch++;setAvatarThumbnail();$('profile3DAvatarSpinner').classList.add('hidden');$('profile3DAvatarStatus').textContent='3D avatar removed.';}
    catch(err){$('profile3DAvatarStatus').textContent=err.message;}};
- $('profileButton').onclick=()=>{$('profilePanel').classList.remove('hidden');profileTab(state.user?.role==='admin'?'apis':'experience');void refresh3DProviderUI();};$('profile3DProvider').onchange=async()=>{const chosen=$('profile3DProvider').value;try{await save3DPreference(chosen);await refresh3DProviderUI();notify('3D provider changed to '+chosen.toUpperCase());}catch(e){notify(e.message);await refresh3DProviderUI();}};for(const field of ['profile3DQuality','profile3DTexture','profile3DXRTexture'])$(field).onchange=async()=>{
+ $('profileButton').onclick=()=>{$('profilePanel').classList.remove('hidden');profileTab(state.user?.role==='admin'?'apis':'experience');void refresh3DProviderUI();void refresh3DAvatarThumbnail();};$('profile3DProvider').onchange=async()=>{const chosen=$('profile3DProvider').value;try{await save3DPreference(chosen);await refresh3DProviderUI();notify('3D provider changed to '+chosen.toUpperCase());}catch(e){notify(e.message);await refresh3DProviderUI();}};for(const field of ['profile3DQuality','profile3DTexture','profile3DXRTexture'])$(field).onchange=async()=>{
   const prefs={preset:$('profile3DQuality').value,texture_quality:$('profile3DTexture').value,xr_texture_edge:Number($('profile3DXRTexture').value)};
   try{await save3DQuality(prefs);await refresh3DProviderUI();notify('3D quality saved for new jobs');}catch(e){notify(e.message);}
- };$('closeProfile').onclick=()=>$('profilePanel').classList.add('hidden');
+ };$('closeProfile').onclick=()=>{$('profilePanel').classList.add('hidden');clearTimeout(avatarThumbnailTimer);avatarThumbnailEpoch++;};
  $('logout').onclick=async()=>{state.sessionKeys.clear();stopScan();closeCamera();await api('/logout',{method:'POST'});location.reload()};
  $('createProfile').onsubmit=async e=>{e.preventDefault();try{await api('/admin/profiles',{method:'POST',body:JSON.stringify({username:$('newUsername').value,display_name:$('newDisplayName').value,password:$('newPassword').value})});e.target.reset();notify('New private profile created');await loadAdminProfiles();}catch(error){notify(error.message)}};
  $('logLatest').onclick=()=>logTab('latest');$('logHistory').onclick=()=>logTab('history');$('showChangelog').onclick=()=>presentLog(true);$('dismissChangelog').onclick=dismissLog;$('continueChangelog').onclick=dismissLog;
@@ -722,7 +745,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.66');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.67');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{

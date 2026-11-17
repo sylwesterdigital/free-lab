@@ -1,14 +1,14 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.66">
+<meta name="theme-color" content="#090d0d"><meta name="free-lab-version" content="0.10.67">
 <title>FREELAB — Cognitive Agency · My Stuff &amp; Agency</title>
 <meta name="description" content="FREELAB Cognitive Agency — privately organise your world and explore gentle spatial games with hands, controllers or desktop.">
-<link rel="stylesheet" href="/assets/style.css?v=0.10.66">
+<link rel="stylesheet" href="/assets/style.css?v=0.10.67">
 </head><body>
 <div id="app" class="app-shell">
 <header class="header" aria-label="Site navigation">
-  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.66</span></a>
+  <a class="brand" href="/" aria-label="FREELAB home"><span class="brand-logo"><span class="brand-logo-inner"></span></span><span class="brand-word">FREELAB</span><span class="brand-version" id="brandVersion">0.10.67</span></a>
   <nav class="header-right" aria-label="Workspace">
     <span class="live-pill"><span class="server-dot" id="connectionDot"></span><span id="healthStatus">Connecting</span></span>
     <button id="roomButton" class="nav-pill" type="button">Rooms</button>
@@ -75,10 +75,20 @@
 </div>
 
 <div id="roomChooser" class="modal hidden" data-visibility="private"><div class="modal-card room-chooser">
-<div class="modal-title"><h2>Start your spatial room</h2><button id="roomCancel" class="round-btn">×</button></div>
-<p>Who can join this XR session?</p><div class="room-choice"><button id="roomPrivate" class="secondary-btn">Private · invited guests</button><button id="roomPublic" class="secondary-btn">Public · server profiles</button></div>
-<p class="small-muted">Private is the default. People cannot view your images until they join your room. You can invite specific signed-in profiles later.</p>
-<button id="roomConfirm" class="primary-btn">Enter XR and start room</button></div></div>
+<div class="modal-title"><div><p class="eyebrow">YOUR SPATIAL WORLD</p><h2>Start your spatial room</h2></div><button id="roomCancel" class="round-btn" aria-label="Cancel room selection">×</button></div>
+<p class="room-chooser-description">Choose who can join your immersive room. Your saved photos stay private until you share them.</p>
+<div class="room-choice" role="group" aria-label="Room visibility">
+  <button type="button" id="roomPrivate" class="room-visibility-card chosen" aria-pressed="true">
+    <span class="room-visibility-art private-art"><span class="room-visibility-badge">INVITE ONLY</span><span class="room-visibility-symbol" aria-hidden="true">&#128274;</span><span class="room-visibility-orbits" aria-hidden="true"></span></span>
+    <span class="room-visibility-body"><strong>Private room</strong><small>Only people you invite can join.</small><span class="room-visibility-select">SELECTED <span aria-hidden="true">✓</span></span></span>
+  </button>
+  <button type="button" id="roomPublic" class="room-visibility-card" aria-pressed="false">
+    <span class="room-visibility-art public-art"><span class="room-visibility-badge">DISCOVERABLE</span><span class="room-visibility-symbol" aria-hidden="true">◎</span><span class="room-visibility-orbits" aria-hidden="true"></span></span>
+    <span class="room-visibility-body"><strong>Public room</strong><small>Other signed-in members can find and join.</small><span class="room-visibility-select">CHOOSE THIS ROOM <span aria-hidden="true">○</span></span></span>
+  </button>
+</div>
+<div class="room-chooser-footer"><p class="small-muted">You can change visibility next time you enter XR.</p><button id="roomConfirm" class="primary-btn">Enter private room</button></div>
+</div></div>
 <div id="desktopGallery" class="hidden" role="dialog" aria-label="Image gallery"><header><strong id="galleryTitle">Gallery</strong><div class="gallery-tools"><details id="galleryToolMenu"><summary aria-label="Image AI actions" title="Image actions">⋯</summary><div class="gallery-tool-list"><button type="button" data-gallery-action="describe">Describe</button><button type="button" data-gallery-action="extract">Extract objects</button><button type="button" data-gallery-action="segment">Extract named object</button><button type="button" data-gallery-action="refine">Refine image</button><button type="button" data-gallery-action="prompt">Edit / prompt</button><button type="button" data-gallery-action="voice">Voice</button><button type="button" data-gallery-action="3d">Generate 3D</button><button type="button" data-gallery-action="download">Download photo</button></div></details><button id="galleryClose" aria-label="Close gallery">×</button></div></header>
 <div class="gallery-stage"><button id="galleryPrev" aria-label="Previous image">‹</button><img id="galleryImage" alt="Selected collection image"><button id="galleryNext" aria-label="Next image">›</button></div><p id="galleryDetail"></p><p id="galleryAIStatus" class="hidden" role="status"></p><form id="galleryComposer" class="gallery-composer hidden"><select id="galleryMode" aria-label="Image editing mode"><option value="prompt">Edit image</option><option value="refine">Refine quality</option></select><textarea id="galleryPromptText" rows="2" maxlength="750" aria-label="Image editing instruction" placeholder="Describe what to change in this picture…"></textarea><button id="galleryPromptSend" type="submit" aria-label="Send image edit">↑</button></form><div id="galleryFilmstrip"></div></div>
 <div id="roomsPanel" class="rooms-modal hidden" role="dialog" aria-label="Spatial rooms"><header><h2>Shared spatial rooms</h2><button id="roomsClose">×</button></header>
@@ -148,7 +158,29 @@
   </div>
   <div class="profile-scroll" id="profileScroll">
    <section id="profileExperience" role="tabpanel" data-profile-view="experience">
-    <p class="profile-account" id="profileSummary"></p><div class="profile-photo-setting"><span>PROFILE PICTURE</span><label for="profileAvatarInput" class="profile-avatar-round" title="Upload or take a profile photo" aria-label="Upload or take profile photo"><img id="settingsAvatar" class="hidden" alt="Current profile picture"><span id="settingsAvatarInitials">+</span></label><input type="file" id="profileAvatarInput" accept="image/png,image/jpeg" class="visually-hidden"><span class="small-muted">Tap the circle to upload or take a photograph</span></div><section class="avatar3d-section"><strong>3D AVATAR</strong><p>Upload a self-contained GLB up to 4 MB for XR. Preview larger GLBs locally up to 16 MB, then optionally optimize on the server with Blender. Room guests see a static preview; animation is not synced.</p><input type="file" id="profile3DAvatarInput" accept=".glb,model/gltf-binary" aria-label="Upload 3D avatar GLB"><div class="avatar3d-actions"><button type="button" id="profile3DAvatarPreview">Preview avatar</button><button type="button" id="profile3DAvatarOptimize" class="hidden">Optimize for XR (Blender)</button><button type="button" id="profile3DAvatarRemove">Remove 3D avatar</button></div><p id="profile3DAvatarStatus" role="status">No 3D avatar selected.</p></section>
+    <p class="profile-account" id="profileSummary"></p>
+    <div class="profile-avatar-overview">
+      <section class="profile-photo-setting" aria-labelledby="profilePhotoLabel">
+        <strong id="profilePhotoLabel">PROFILE PICTURE</strong>
+        <label for="profileAvatarInput" class="profile-avatar-round" title="Upload or take a profile photo" aria-label="Upload or take profile photo"><img id="settingsAvatar" class="hidden" alt="Current profile picture"><span id="settingsAvatarInitials">+</span></label>
+        <input type="file" id="profileAvatarInput" accept="image/png,image/jpeg" class="visually-hidden">
+        <span class="small-muted">Tap to change your profile photo</span>
+      </section>
+      <section class="avatar3d-section" aria-labelledby="avatar3dTitle">
+        <strong id="avatar3dTitle">3D AVATAR</strong>
+        <div class="avatar3d-row">
+          <label for="profile3DAvatarInput" class="profile-avatar-round avatar3d-round" title="Upload a 3D avatar GLB" aria-label="Upload a 3D avatar GLB">
+            <img id="profile3DAvatarThumbnail" class="hidden" alt="3D avatar thumbnail rendered in Blender">
+            <svg id="profile3DAvatarPlaceholder" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200" fill="#b1c5bb" aria-hidden="true" focusable="false"><path d="M719.57,272.035c18.461,0,35.451,3.565,50.975,10.698  c46.078,23.193,73.285,67.272,73.631,116.424V737.73c-8.643,53.824-70.25,39.188-71.742,0V418.037  c-5.49-18.231-40.693-10.672-41.535,0v733.785c-8.951,74.928-105.773,52.934-108.242-1.258c0-149.778,0-299.558,0-449.334  c-6.191-28.982-46.936-15.813-47.829,1.259c1.728,149.353,1.259,298.715,1.259,448.075c-9.656,74.543-106.007,55.47-108.243,1.258  l-1.258-733.785c-5.643-17.838-38.263-10.996-39.019,0V737.73c-8.644,53.824-70.25,39.188-71.742,0V399.157  c0.871-47.056,18.117-94.197,59.156-116.424c13.426-7.133,29.788-10.699,49.087-10.699  C549.235,272.035,634.402,272.035,719.57,272.035L719.57,272.035z M718.301,118.277c0,65.323-52.955,118.278-118.278,118.278  c-65.322,0-118.277-52.955-118.277-118.278C481.745,52.955,534.7,0,600.021,0C665.346,0,718.301,52.955,718.301,118.277z"/></svg>
+            <span id="profile3DAvatarSpinner" class="avatar3d-spinner hidden" aria-hidden="true"></span>
+          </label>
+          <input type="file" id="profile3DAvatarInput" accept=".glb,model/gltf-binary" aria-label="Upload 3D avatar GLB" class="visually-hidden">
+          <div class="avatar3d-copy"><p>Tap the avatar circle to upload a GLB. Up to 4 MB for XR, or 16 MB with optional Blender optimization.</p>
+            <div class="avatar3d-actions"><button type="button" id="profile3DAvatarPreview">Preview 3D</button><button type="button" id="profile3DAvatarOptimize" class="hidden">Optimize for XR</button><button type="button" id="profile3DAvatarRemove">Remove</button></div></div>
+        </div>
+        <p id="profile3DAvatarStatus" role="status" aria-live="polite">No 3D avatar selected.</p>
+      </section>
+    </div>
     <section class="model-provider-settings"><strong>3D GENERATION PROVIDER</strong><p>Choose which configured service creates 3D models in Quest XR, desktop and mobile. Test connections separately from paid generation.</p><label for="profile3DProvider">Provider<select id="profile3DProvider"><option value="auto">Auto (configured service)</option><option value="aholo">AHOLO Lux3D</option><option value="meshy">Meshy 3D</option><option value="tripo">Tripo 3D (v3)</option></select></label><p id="profile3DProviderStatus" role="status">Provider choice applies across devices.</p>
       <label for="profile3DQuality">Asset type<select id="profile3DQuality"><option value="xr">XR-ready · low-poly (P2 · 12k triangles)</option><option value="balanced">Balanced · textured (P2 · 30k triangles)</option><option value="studio">High-detail original (H3.1 · 120k triangles)</option></select></label>
       <label for="profile3DTexture">Original texture quality<select id="profile3DTexture"><option value="standard">Standard · efficient</option><option value="detailed">Detailed · higher fidelity</option><option value="extreme">Extreme · 8K (higher Tripo cost)</option></select></label>
@@ -219,22 +251,22 @@
 <div id="modelStage" class="model-stage hidden" role="dialog" aria-label="Interactive 3D model viewer" aria-modal="true"><header><div><span class="eyebrow">FREELAB / MODEL VIEWER</span><h2 id="modelStageTitle">3D model</h2></div><div class="model-stage-tools"><button id="modelStageAxis" class="secondary-btn" type="button" title="Change model viewing orientation">Upright · Auto</button><a id="modelStageDownload" class="secondary-btn hidden" download>Download GLB</a><button id="modelStageClose" type="button" aria-label="Close 3D model viewer">×</button></div></header><div id="modelStageViewport" class="model-stage-viewport"><img id="modelStagePoster" class="hidden" alt="3D model thumbnail preview"><canvas id="modelStageCanvas" aria-label="Interactive 3D model. Drag to rotate, scroll to zoom."></canvas></div><p id="modelStageStatus" role="status">Preparing 3D scene…</p><p class="model-stage-hint">Drag to rotate · scroll or pinch to zoom · model loads privately</p></div>
 <div id="toast" class="toast hidden" role="status"></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.181.0/build/three.module.js"}}</script>
-<script type="module" src="/assets/model-stage.mjs?v=0.10.66"></script>
-<script src="/assets/sound.js?v=0.10.66" defer></script>
-<script src="/assets/gestures.js?v=0.10.66" defer></script>
-<script src="/assets/strand-geometry.js?v=0.10.66" defer></script>
-<script src="/assets/string-lab.js?v=0.10.66" defer></script>
-<script src="/assets/finger-lab.js?v=0.10.66" defer></script>
-<script src="/assets/frame-lab.js?v=0.10.66" defer></script>
-<script src="/assets/frame-photo.js?v=0.10.66" defer></script>
-<script src="/assets/frame-games.js?v=0.10.66" defer></script>
-<script src="/assets/agency-video.js?v=0.10.66" defer></script>
-<script src="/assets/shape-sort.js?v=0.10.66" defer></script>
-<script src="/assets/rooms.js?v=0.10.66" defer></script>
-<script src="/assets/cloud-tree.js?v=0.10.66" defer></script>
-<script src="/assets/xr-ui.js?v=0.10.66" defer></script>
-<script src="/assets/dialog.js?v=0.10.66" defer></script>
-<script src="/assets/app.js?v=0.10.66" defer></script><script src="/assets/xr.js?v=0.10.66" defer></script>
-<script src="/assets/capture-studio.js?v=0.10.66" defer></script>
-<script src="/assets/scene.mjs?v=0.10.66" type="module"></script>
+<script type="module" src="/assets/model-stage.mjs?v=0.10.67"></script>
+<script src="/assets/sound.js?v=0.10.67" defer></script>
+<script src="/assets/gestures.js?v=0.10.67" defer></script>
+<script src="/assets/strand-geometry.js?v=0.10.67" defer></script>
+<script src="/assets/string-lab.js?v=0.10.67" defer></script>
+<script src="/assets/finger-lab.js?v=0.10.67" defer></script>
+<script src="/assets/frame-lab.js?v=0.10.67" defer></script>
+<script src="/assets/frame-photo.js?v=0.10.67" defer></script>
+<script src="/assets/frame-games.js?v=0.10.67" defer></script>
+<script src="/assets/agency-video.js?v=0.10.67" defer></script>
+<script src="/assets/shape-sort.js?v=0.10.67" defer></script>
+<script src="/assets/rooms.js?v=0.10.67" defer></script>
+<script src="/assets/cloud-tree.js?v=0.10.67" defer></script>
+<script src="/assets/xr-ui.js?v=0.10.67" defer></script>
+<script src="/assets/dialog.js?v=0.10.67" defer></script>
+<script src="/assets/app.js?v=0.10.67" defer></script><script src="/assets/xr.js?v=0.10.67" defer></script>
+<script src="/assets/capture-studio.js?v=0.10.67" defer></script>
+<script src="/assets/scene.mjs?v=0.10.67" type="module"></script>
 </body></html>

@@ -594,7 +594,7 @@
 #profilePanel #xrGraphicsStatus{border-left:3px solid #9cf6e1;padding:8px 12px;background:rgba(255,255,255,.045);border-radius:0 12px 12px 0;color:#dffcf4;white-space:pre-line}
 @media(max-width:650px){#profilePanel .xr-graphics-grid{grid-template-columns:1fr}#profilePanel .xr-graphics-settings{padding:14px}}
 
-/* v0.10.66 — responsive collection facets and research-style progress metrics */
+/* v0.10.67 — responsive collection facets and research-style progress metrics */
 .collection-facets{display:flex;flex-direction:column;gap:10px;padding:9px 0 14px;border-bottom:1px solid #a4cdb12c}
 .facet-date-row{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.facet-date-row label{color:#b7d0c1;display:grid;gap:5px;font-size:11px;letter-spacing:.035em}.facet-date-row input{color:#eafbf0;background:#12231d;border:1px solid #809f9065;border-radius:12px;padding:10px;color-scheme:dark;min-height:42px}
 .facet-clear{background:transparent;color:#bdedcc;border:1px solid #7b9d8969;border-radius:12px;padding:11px 14px;min-height:42px}
@@ -640,3 +640,43 @@
 .progress-trend-rail{height:11px;background:#30483c;border-radius:20px;overflow:hidden}
 .progress-trend-rail>span{display:block;height:100%;background:#b4efd0;border-radius:20px}
 @media(max-width:620px){.progress-input-trend{padding:16px}.progress-trend-row{grid-template-columns:1fr 1fr;gap:6px}.progress-trend-row small{grid-column:2;grid-row:1;font-size:11px}.progress-trend-rail{grid-column:1/-1}}
+
+/* v0.10.67: paired profile photographs and 3D avatar, touch-first upload roundels */
+#profilePanel .profile-avatar-overview{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.4fr);gap:18px;align-items:stretch;margin:14px 0 22px}
+#profilePanel .profile-avatar-overview>section{margin:0;padding:18px;border:1px solid #526d61;border-radius:19px;background:#192a24;min-width:0}
+#profilePanel .profile-avatar-overview strong{font-size:13px;letter-spacing:.075em;color:#eefbf1}
+#profilePanel .profile-photo-setting{gap:13px}
+#profilePanel .avatar3d-section{display:flex;flex-direction:column;gap:13px}
+#profilePanel .avatar3d-row{display:flex;align-items:center;gap:18px;min-width:0}
+#profilePanel .avatar3d-round{flex:none;background:radial-gradient(circle at 50% 38%,#365546,#14251e);border-color:#b2ddc3}
+#profilePanel .avatar3d-round #profile3DAvatarPlaceholder{width:52%;height:52%;object-fit:contain;opacity:.74}
+#profilePanel .avatar3d-round #profile3DAvatarThumbnail{width:100%;height:100%;object-fit:cover}
+#profilePanel .avatar3d-copy{min-width:0;flex:1;display:grid;gap:11px}
+#profilePanel .avatar3d-actions button{min-height:36px;padding:8px 11px;font-size:12px;transition:background .16s,border-color .16s,color .16s}
+#profilePanel .avatar3d-actions button:hover,#profilePanel .avatar3d-actions button:focus-visible{background:#385b47;color:#e6fff0;border-color:#b7f7c9}
+#profilePanel #profile3DAvatarStatus{font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+#profilePanel .avatar3d-spinner{position:absolute;inset:10px;border:3px solid #ecfff22e;border-top-color:#b3ffc9;border-radius:50%;animation:avatar-thumb-spin 1.2s linear infinite;pointer-events:none}
+@keyframes avatar-thumb-spin{to{transform:rotate(360deg)}}
+@media(max-width:720px){#profilePanel .profile-avatar-overview{grid-template-columns:1fr}#profilePanel .avatar3d-row{gap:14px}}
+@media(max-width:430px){#profilePanel .avatar3d-row{align-items:flex-start}#profilePanel .avatar3d-round,#profilePanel .profile-avatar-round{width:95px;height:95px}#profilePanel .avatar3d-actions{gap:6px}#profilePanel .avatar3d-actions button{padding:7px 9px}}
+/* Spatial room privacy chooser, same composition as the shared-rooms cards */
+.room-chooser{width:min(760px,94vw);background:#14231f;border:1px solid #476a5b;border-radius:25px;padding:clamp(18px,3vw,30px);max-height:92dvh;overflow-y:auto}
+.room-chooser .modal-title{align-items:flex-start}.room-chooser .modal-title h2{font-size:clamp(24px,3.4vw,35px);letter-spacing:-.04em;margin:4px 0 0}
+.room-chooser-description{font-size:14px;color:#b5cdc0;line-height:1.55;margin:13px 0 22px}
+.room-chooser .room-choice{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.room-chooser .room-visibility-card{display:flex;flex-direction:column;text-align:left;min-width:0;padding:0;border:2px solid #365249;border-radius:19px;overflow:hidden;background:#1b3229;color:#e9f8ef;transition:border-color .18s,background .18s,box-shadow .18s,transform .18s}
+.room-chooser .room-visibility-card:hover,.room-chooser .room-visibility-card:focus-visible{border-color:#aaf5c9;transform:translateY(-2px);background:#234336;outline:none}
+.room-chooser .room-visibility-card.chosen{border-color:#bff7d1;box-shadow:0 0 0 2px #a3efbc44;background:#254434}
+.room-visibility-art{height:145px;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;background:radial-gradient(circle at 55% 56%,#3b7563,#192a2b 68%,#15241f)}
+.room-visibility-art.public-art{background:radial-gradient(circle at 56% 50%,#476c7e,#1e383c 68%,#152828)}
+.room-visibility-orbits{position:absolute;border:1px solid #ddfff61e;width:145px;height:145px;border-radius:50%;box-shadow:0 0 0 26px #ddfff60b,0 0 0 58px #ddfff607;pointer-events:none}
+.room-visibility-symbol{font-size:54px;color:#d4ffeb;z-index:1;filter:drop-shadow(0 3px 14px #020a0860)}
+.room-visibility-badge{position:absolute;top:13px;left:14px;padding:6px 10px;border:1px solid #b5e9cc65;background:#0a1e1999;border-radius:100px;font-size:10px;font-weight:760;letter-spacing:.1em;color:#e6fff0;z-index:2}
+.room-visibility-body{padding:17px;display:grid;gap:7px;min-height:124px}
+.room-visibility-body strong{font-size:20px;font-weight:760}.room-visibility-body small{color:#bed0c7;font-size:12px;line-height:1.4;min-height:32px}
+.room-visibility-select{display:flex;align-items:center;justify-content:space-between;font-size:10px;font-weight:800;letter-spacing:.095em;color:#96c4ae;margin-top:3px}
+.room-visibility-card.chosen .room-visibility-select{color:#baffd0}
+.room-chooser-footer{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:18px}
+.room-chooser-footer p{max-width:240px;margin:0}.room-chooser-footer .primary-btn{background:#bfe9ce;color:#14231b;min-width:200px;border-color:#bfe9ce}
+.room-chooser-footer .primary-btn:hover{background:#d8ffe4}
+@media(max-width:540px){.room-chooser .room-choice{grid-template-columns:1fr}.room-visibility-art{height:100px}.room-visibility-body{min-height:95px}.room-chooser-footer{flex-wrap:wrap}.room-chooser-footer .primary-btn{width:100%}}

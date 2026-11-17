@@ -1,16 +1,28 @@
 {
-  "version": "0.10.66",
-  "title": "FREELAB v0.10.66 — XR search, world-fixed theatre and near/far previews",
+  "version": "0.10.67",
+  "title": "FREELAB v0.10.67 — Profile avatar roundels and spatial room cards",
   "datetime": "2026-11-17",
   "changes": [
-    "Normalize voice and keyboard library searches using Unicode tokenization, removing punctuation and diacritics so speech like Bottle. matches saved bottle objects; search all source and segment types.",
-    "Turn the whole XR library panel towards the headset viewer while it is being dragged, then preserve the resulting world-space orientation across pagination and filters.",
-    "Anchor theatrical image previews to a stationary room stage, with the image lower edge aligned to floor level and arrows/exit grouped at a fixed floor-relative row across image changes.",
-    "Apply XL 8, M 16 and S 32 library density consistently to the experimental Sphere Mosaic without switching back to grid.",
-    "Add opt-in Near/far preview movement below Voice Features in XR Personalize: either controller thumbstick moves source/segment previews closer and back with fast smoothing; tracked-hand pinch and pull/push provides equivalent control without changing saved positions.",
-    "Preserve private thumbnail caching, AI budgets, Agency activities, HLS media and watcher-compatible deployment."
+    "Arrange profile picture and 3D avatar in two responsive columns, keeping the existing upload, local preview, optimization and deletion controls.",
+    "Replace the visible avatar file picker with a tap-to-upload circular roundel and a sanitized human silhouette from the provided SVG.",
+    "Render owner-only 3D avatar preview thumbnails asynchronously with the existing bounded headless Blender renderer; cache a hash-specific PNG, and refresh on uploads and optimization.",
+    "Redesign the private/public XR room chooser as two responsive spatial cards with clear visibility, selection feedback and direct room launch.",
+    "Preserve private-by-default room choice and existing watcher compatibility without adding archive entries."
   ],
   "history": [
+    {
+      "version": "0.10.66",
+      "title": "FREELAB v0.10.66 — XR search, world-fixed theatre and near/far previews",
+      "datetime": "2026-11-17",
+      "changes": [
+        "Normalize voice and keyboard library searches using Unicode tokenization, removing punctuation and diacritics so speech like Bottle. matches saved bottle objects; search all source and segment types.",
+        "Turn the whole XR library panel towards the headset viewer while it is being dragged, then preserve the resulting world-space orientation across pagination and filters.",
+        "Anchor theatrical image previews to a stationary room stage, with the image lower edge aligned to floor level and arrows/exit grouped at a fixed floor-relative row across image changes.",
+        "Apply XL 8, M 16 and S 32 library density consistently to the experimental Sphere Mosaic without switching back to grid.",
+        "Add opt-in Near/far preview movement below Voice Features in XR Personalize: either controller thumbstick moves source/segment previews closer and back with fast smoothing; tracked-hand pinch and pull/push provides equivalent control without changing saved positions.",
+        "Preserve private thumbnail caching, AI budgets, Agency activities, HLS media and watcher-compatible deployment."
+      ]
+    },
     {
       "version": "0.10.65",
       "title": "FREELAB v0.10.65 — Library mosaic and XR stability",

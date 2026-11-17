@@ -1,4 +1,4 @@
-"""v0.10.66 checks: private bounded avatar workflow and no-camera text generation.
+"""v0.10.67 checks: private bounded avatar workflow and no-camera text generation.
 No paid services, live headset, or server Blender required.
 """
 import base64,io,json,struct,tempfile,time,unittest
@@ -62,6 +62,57 @@ class Avatar125(unittest.TestCase):
   self.assertIn('export_animations=True',(ROOT/'backend/avatar_blender_worker.py').read_text())
   with self.assertRaises(ValueError):avatar_optimizer.optimize(b'0'*16_000_001,blender='blender')
   with self.assertRaises(RuntimeError):avatar_optimizer.optimize(b'0'*20,blender='/not/a/real/blender')
+
+class AvatarRoundel67(unittest.TestCase):
+ def test_settings_layout_and_spatial_room_cards(self):
+  css=(ROOT/'frontend/assets/style.css').read_text()
+  rooms=(ROOT/'frontend/assets/rooms.js').read_text()
+  self.assertIn('class="profile-avatar-overview"',HTML)
+  self.assertIn('id="profile3DAvatarThumbnail"',HTML)
+  self.assertIn('id="profile3DAvatarPlaceholder"',HTML)
+  self.assertIn('class="visually-hidden"',HTML)
+  self.assertIn('id="roomPrivate" class="room-visibility-card chosen"',HTML)
+  self.assertIn('id="roomPublic" class="room-visibility-card"',HTML)
+  self.assertIn('grid-template-columns:repeat(2,minmax(0,1fr))',css)
+  self.assertIn("function selectXRVisibility(value)",rooms)
+  self.assertIn("card.setAttribute('aria-pressed',String(selected))",rooms)
+  self.assertIn("'Enter public room'",rooms)
+  self.assertIn('profile3DAvatarSpinner',APP)
+  self.assertIn("'/api/me/avatar-3d/thumbnail'",APP)
+ def test_thumbnail_stale_avatar_not_saved_and_render_once(self):
+  import ast,hashlib,threading
+  backend=ast.parse(BACK)
+  functions=[n for n in backend.body if isinstance(n,ast.FunctionDef) and n.name in ('_avatar_thumbnail_file','_avatar_thumbnail_worker')]
+  self.assertEqual(len(functions),2)
+  with tempfile.TemporaryDirectory() as tmp:
+   data=Path(tmp);path=data/'main.sqlite';db.init(path)
+   with db.connect(path) as con:
+    uid=db.create_user(con,'roundeltest','longpassword-roundel')
+    raw=minimal_glb();digest=hashlib.sha256(raw).hexdigest()
+    with con:con.execute('INSERT INTO user_avatar_models(user_id,glb) VALUES(?,?)',(uid,raw))
+   namespace=dict(AVATAR_THUMB_DIR=data,DB=path,avatar_optimizer=avatar_optimizer,hashlib=hashlib,
+                  threading=threading,db=db,_avatar_thumb_guard=threading.Lock(),_avatar_thumb_active={(uid,digest)})
+   exec(compile(ast.Module(body=functions,type_ignores=[]),'<thumbnail-test>','exec'),namespace)
+   with patch.object(avatar_optimizer,'render_thumbnail',return_value=b'PNG mock') as render:
+    namespace['_avatar_thumbnail_worker'](uid,digest,raw)
+   target=namespace['_avatar_thumbnail_file'](uid,digest)
+   self.assertEqual(target.read_bytes(),b'PNG mock')
+   self.assertEqual(render.call_count,1)
+   # A late Blender result for an outdated upload must not replace the new one.
+   target.unlink()
+   with db.connect(path) as con:
+    with con:con.execute('UPDATE user_avatar_models SET glb=? WHERE user_id=?',(raw+b'changed',uid))
+   with patch.object(avatar_optimizer,'render_thumbnail',return_value=b'OLD'):
+    namespace['_avatar_thumbnail_worker'](uid,digest,raw)
+   self.assertFalse(target.exists())
+ def test_owner_only_preview_and_async_status(self):
+  self.assertIn("@app.get('/api/me/avatar-3d/thumbnail')",BACK)
+  self.assertIn('def own_avatar_thumbnail():',BACK)
+  self.assertIn("if not row:return jsonify(status='missing'),404",BACK)
+  self.assertIn("res.headers['Cache-Control']='private, no-store'",BACK)
+  self.assertIn("response.status_code=202",BACK)
+  self.assertIn('avatar_optimizer.render_thumbnail(raw,size=384)',BACK)
+  self.assertIn('hashlib.sha256(raw).hexdigest()',BACK)
 
 class VoiceText125(unittest.TestCase):
  def test_text_to_image_meta_contract(self):

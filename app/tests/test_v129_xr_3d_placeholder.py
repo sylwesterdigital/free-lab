@@ -1,4 +1,4 @@
-"""v0.10.66: offline XR 3D job cubes and private GLB preview preparation."""
+"""v0.10.67: offline XR 3D job cubes and private GLB preview preparation."""
 import struct, unittest
 from pathlib import Path
 from unittest.mock import patch

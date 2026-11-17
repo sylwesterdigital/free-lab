@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.66",
-  "description": "XR speech search normalization, camera-facing draggable library, floor-fixed cinema, sphere density and opt-in near/far preview control"
+  "version": "0.10.67",
+  "description": "Two-column profile and 3D avatar roundels, cached private Blender thumbnails, and redesigned public/private spatial room selection"
 }

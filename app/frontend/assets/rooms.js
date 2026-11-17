@@ -107,7 +107,7 @@ async function invite(){const profiles=(await req('/rooms/users')).users;const b
 }}
 async function ensureViewer(){
  if(viewer)return viewer;
- if(!viewerLoad)viewerLoad=import('/assets/room-viewer.mjs?v=0.10.66').then(m=>m.createRoomViewer({
+ if(!viewerLoad)viewerLoad=import('/assets/room-viewer.mjs?v=0.10.67').then(m=>m.createRoomViewer({
   canvas:$('roomCanvas'),inspector:$('roomInspector'),viewer:$('roomViewer'),
   status:$('roomState'),count:$('roomImageCount'),back:()=>leave(),
  })).catch(e=>{viewerLoad=null;throw e;});
@@ -161,14 +161,23 @@ function init(){if(!$('roomButton'))return;
   roomListTimer=setInterval(()=>{if(!$('roomsPanel').classList.contains('hidden')&&$('roomViewer').classList.contains('hidden')&&document.visibilityState!=='hidden')void list().catch(()=>{});},30000);
  };
  $('roomsClose').onclick=()=>{if(roomListTimer)clearInterval(roomListTimer);roomListTimer=null;$('roomsPanel').classList.add('hidden');leave();};$('roomLeave').onclick=leave;
- const chooser=$('roomChooser');$('roomPrivate').onclick=()=>{chooser.dataset.visibility='private';$('roomPrivate').classList.add('chosen');$('roomPublic').classList.remove('chosen');};
- $('roomPublic').onclick=()=>{chooser.dataset.visibility='public';$('roomPublic').classList.add('chosen');$('roomPrivate').classList.remove('chosen');};
+ const chooser=$('roomChooser');$('roomPrivate').onclick=()=>selectXRVisibility('private');
+ $('roomPublic').onclick=()=>selectXRVisibility('public');
  $('roomConfirm').onclick=()=>{const visibility=chooser.dataset.visibility||'private';chooser.classList.add('hidden');
   const creating=start(visibility).catch(e=>window.FreeLab?.notify?.('Room setup: '+e.message));
   window.FreeLabXR.start({requireDepth:chooser.dataset.depth==='true'}).catch(e=>{end();window.FreeLab?.notify?.(e.message);});void creating;
  };
  $('roomCancel').onclick=()=>chooser.classList.add('hidden');
 }
-function chooseXR(requireDepth=false){const p=$('roomChooser');p.dataset.depth=String(Boolean(requireDepth));p.dataset.visibility='private';$('roomPrivate').classList.add('chosen');$('roomPublic').classList.remove('chosen');p.classList.remove('hidden');}
+function selectXRVisibility(value){
+ const chooser=$('roomChooser'),isPrivate=value!=='public';chooser.dataset.visibility=isPrivate?'private':'public';
+ for(const [id,selected] of [['roomPrivate',isPrivate],['roomPublic',!isPrivate]]){
+  const card=$(id);card.classList.toggle('chosen',selected);card.setAttribute('aria-pressed',String(selected));
+  const mark=card.querySelector('.room-visibility-select');
+  if(mark){mark.textContent=selected?'SELECTED ✓':'CHOOSE THIS ROOM ○';}
+ }
+ $('roomConfirm').textContent=isPrivate?'Enter private room':'Enter public room';
+}
+function chooseXR(requireDepth=false){const p=$('roomChooser');p.dataset.depth=String(Boolean(requireDepth));selectXRVisibility('private');p.classList.remove('hidden');}
 window.FreeLabRooms={init,chooseXR,previewLocal,start,end,publish,list};
 })();

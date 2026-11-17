@@ -71,7 +71,7 @@ const result=e.update({left:a,right:null,time:450});if(result.mode!=='idle'||e.f
                       "window.FreeLab?.pref?.('frameHoldSeconds')",'gl.TRIANGLE_STRIP'):
             self.assertIn(token,XR)
         self.assertNotIn('lab-selector.js',PAGE)
-        self.assertIn('frame-lab.js?v=0.10.66',PAGE)
+        self.assertIn('frame-lab.js?v=0.10.67',PAGE)
         self.assertIn('id="pref-frameHoldSeconds"',PAGE)
         for name in ('frame-lab.js',):
             self.assertNotIn('fetch(', (ROOT/'frontend/assets'/name).read_text())

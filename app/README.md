@@ -1,6 +1,6 @@
-# FREELAB v0.10.66 — XR library, cinema and preview control
+# FREELAB v0.10.67 — XR library, cinema and preview control
 
-Adds Quest landing mascot parity, semantic names for repeated image edits, responsive collection name/date filters, and a private descriptive Agency activity dashboard. Place `FREE_LAB_RELEASE_v0.10.66.zip` in `updates/` as a complete release. HLS videos remain in the independently managed `videos/` directory.
+Adds Quest landing mascot parity, semantic names for repeated image edits, responsive collection name/date filters, and a private descriptive Agency activity dashboard. Place `FREE_LAB_RELEASE_v0.10.67.zip` in `updates/` as a complete release. HLS videos remain in the independently managed `videos/` directory.
 
 ## Progress data and scientific interpretation
 
@@ -525,7 +525,7 @@ Quest GPU safety and the spherical selection/placement flow require headset
 verification after deploying, including a source with an attached 3D model.
 
 
-## v0.10.66 — XR interactions
+## v0.10.67 — XR interactions
 
 - **Voice/keyboard search** normalizes punctuation, accents and case (for example, `Bottle.` finds `bottle` and `bottles`). Search matches both sources and saved segments by default; filter pills can then narrow the results.
 - **Gallery placement** turns the complete library toward the user while the header is dragged, then stays fixed in the room at the new pose; page changes and filtering preserve that pose.
