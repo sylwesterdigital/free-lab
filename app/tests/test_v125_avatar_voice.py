@@ -1,4 +1,4 @@
-"""v0.10.69 checks: private bounded avatar workflow and no-camera text generation.
+"""v0.10.70 checks: private bounded avatar workflow and no-camera text generation.
 No paid services, live headset, or server Blender required.
 """
 import base64,io,json,struct,tempfile,time,unittest
@@ -261,3 +261,72 @@ const response200={status:200,ok:true,headers:{get:()=> 'image/png'},blob:async(
   result=subprocess.run(['node','-e',harness],text=True,capture_output=True,timeout=15)
   self.assertEqual(result.returncode,0,result.stderr)
   self.assertIn('202 then PNG passed',result.stdout)
+
+class AvatarThumbnail70(unittest.TestCase):
+ """Client fallback and authenticated, hash-bound thumbnail persistence."""
+ def test_final_blender_library_error_outweighs_generic_trailer(self):
+  trace=('Traceback (most recent call last):\n'
+         '  File "/usr/lib/python3.12/ctypes/__init__.py", line 460, in LoadLibrary\n'
+         'OSError: libdraco.so.9: cannot open shared object file: No such file or directory\n'
+         'Blender quit\nError: Python: Traceback (most recent call last):\n')
+  detail=avatar_optimizer._thumbnail_error('',trace,12)
+  self.assertIn('libdraco.so.9',detail)
+  self.assertIn('decoder library',detail)
+  self.assertNotIn('Traceback',detail)
+  self.assertNotIn('/usr/lib',detail)
+
+ def test_browser_renderer_is_owner_scoped_threejs_draco_and_bounded(self):
+  self.assertIn('async function renderAvatarThumbnail()',STAGE)
+  self.assertIn("fetch('/api/me/avatar-3d',{credentials:'same-origin'",STAGE)
+  self.assertIn("loader.setDRACOLoader(draco)",STAGE)
+  self.assertIn("crypto.subtle.digest('SHA-256',raw)",STAGE)
+  self.assertIn('preserveDrawingBuffer:true',STAGE)
+  self.assertIn('renderer?.dispose()',STAGE)
+  self.assertIn("window.FreeLabModelStage={open,openLocal:file=>open(null,false,file),close,renderAvatarThumbnail}",STAGE)
+  self.assertIn("api('/me/avatar-3d/thumbnail/browser'",APP)
+  self.assertIn('avatarBrowserThumbnailTried=true',APP)
+  self.assertIn("response.status===503&&!avatarBrowserThumbnailTried",APP)
+  self.assertIn("response.headers.get('X-FREELAB-Thumbnail-Source')",APP)
+
+ def test_png_is_validated_reencoded_and_bound_to_latest_glb(self):
+  import ast,types,base64,hashlib,binascii,threading
+  from backend import db
+  route=next(n for n in ast.parse(BACK).body if isinstance(n,ast.FunctionDef) and n.name=='save_browser_avatar_thumbnail')
+  self.assertEqual(route.name,'save_browser_avatar_thumbnail')
+  route.decorator_list=[]  # Exercise implementation without Flask decorators locally.
+  import io as _io
+  from PIL import Image
+  with tempfile.TemporaryDirectory() as tmp:
+   path=Path(tmp)/'store.sqlite3';db.init(path)
+   with db.connect(path) as con:
+    uid=db.create_user(con,'roundel_browser_user','very_secure_password_1234')
+    original=minimal_glb()
+    with con:con.execute('INSERT INTO user_avatar_models(user_id,glb) VALUES(?,?)',(uid,original))
+    preview=_io.BytesIO();Image.new('RGB',(384,384),(24,83,71)).save(preview,'PNG')
+    png=preview.getvalue()
+    value='data:image/png;base64,'+base64.b64encode(png).decode()
+    digest=hashlib.sha256(original).hexdigest()
+    payload={'sha256':digest,'image':value}
+    req=types.SimpleNamespace(get_json=lambda silent=True:payload)
+    events=[];thumb=Path(tmp)/'thumb';thumb.mkdir()
+    scope=dict(g=types.SimpleNamespace(con=con,user={'id':uid}),request=req,AVATAR_THUMB_DIR=thumb,
+               _avatar_thumbnail_file=lambda owner,digest:thumb/f'{owner}_{digest[:20]}.png',
+               Image=Image,io=_io,base64=base64,binascii=binascii,hashlib=hashlib,
+               threading=threading,_admin_event=lambda *args:events.append(args),
+               jsonify=lambda **kwargs:kwargs)
+    exec(compile(ast.Module(body=[route],type_ignores=[]),'<thumb-route>','exec'),scope)
+    save=scope['save_browser_avatar_thumbnail']
+    self.assertEqual(save()[1],201)
+    target=scope['_avatar_thumbnail_file'](uid,digest)
+    self.assertTrue(target.is_file())
+    self.assertTrue(target.with_suffix('.browser').is_file())
+    with Image.open(target) as image:self.assertEqual((image.size,image.mode),((384,384),'RGB'))
+    self.assertEqual(events[-1][0],'avatar.thumbnail.browser_ready')
+    # Another user's or previous avatar's hash cannot overwrite a thumbnail.
+    payload['sha256']='0'*64
+    self.assertEqual(save()[1],409)
+    payload['sha256']=digest;payload['image']='data:image/png;base64,'+base64.b64encode(b'notpng').decode()
+    self.assertEqual(save()[1],400)
+    payload['image']=value
+    with con:con.execute('UPDATE user_avatar_models SET glb=? WHERE user_id=?',(original+b'new',uid))
+    self.assertEqual(save()[1],409)

@@ -1,8 +1,8 @@
-# FREELAB v0.10.69 — Avatar reliability and admin diagnostics
+# FREELAB v0.10.70 — Avatar reliability and admin diagnostics
 
-This complete release makes avatar preview actions conditional on an actual saved avatar, replaces misleading indefinite thumbnail rendering with bounded status and retry feedback, and adds **Settings → Logs** for administrators. Blender thumbnails remain private and asynchronous. The app event log is stored under the persistent `FREE_LAB_DATA_DIR` (`runtime-events.jsonl`); service journal access depends on system permissions. No private GLB, API key or request body is recorded in app events. Upload `FREE_LAB_RELEASE_v0.10.69.zip` to `updates/`.
+This complete release makes avatar preview actions conditional on an actual saved avatar, replaces misleading indefinite thumbnail rendering with bounded status and retry feedback, and adds **Settings → Logs** for administrators. Blender thumbnails remain private and asynchronous. The app event log is stored under the persistent `FREE_LAB_DATA_DIR` (`runtime-events.jsonl`); service journal access depends on system permissions. No private GLB, API key or request body is recorded in app events. Upload `FREE_LAB_RELEASE_v0.10.70.zip` to `updates/`.
 
-## v0.10.69 — Thumbnail states and admin runtime logs
+## v0.10.70 — Thumbnail states and admin runtime logs
 
 - Preview 3D and Remove are disabled when no saved avatar is present.
 - Blender queue status reports elapsed time, failures and a Retry thumbnail option; model preview remains available if rendering fails.

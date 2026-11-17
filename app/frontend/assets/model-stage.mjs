@@ -174,4 +174,51 @@ if(typeof ResizeObserver!=='undefined'){
  if(viewport){resizingObserver=new ResizeObserver(()=>resize());resizingObserver.observe(viewport);}
 }
 
-window.FreeLabModelStage={open,openLocal:file=>open(null,false,file),close};
+// Capture the authenticated user's current GLB as a 384px WebGL thumbnail.
+// Used only if private server Blender cannot decode the model (e.g. missing Draco).
+// This is a temporary, isolated renderer; it does not open the model viewer.
+async function renderAvatarThumbnail(){
+ await loadThree();
+ if(!THREE||!GLTFLoader)throw Error('This browser cannot load the GLB decoder');
+ if(!globalThis.crypto?.subtle)throw Error('Secure browser hashing unavailable');
+ const response=await fetch('/api/me/avatar-3d',{credentials:'same-origin',cache:'no-store'});
+ if(!response.ok)throw Error('Avatar GLB unavailable (HTTP '+response.status+')');
+ const raw=await response.arrayBuffer();
+ if(raw.byteLength<20||raw.byteLength>4_000_000)throw Error('Avatar exceeds safe browser thumbnail budget');
+ const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',raw));
+ const sha256=Array.from(digest,b=>b.toString(16).padStart(2,'0')).join('');
+ const loader=new GLTFLoader();if(draco)loader.setDRACOLoader(draco);
+ let object=null,renderer=null;
+ try{
+  object=(await new Promise((resolve,reject)=>loader.parse(raw,'',g=>resolve(g.scene),reject)));
+  const bounds=new THREE.Box3().setFromObject(object);
+  if(bounds.isEmpty())throw Error('GLB has no visible geometry');
+  const center=bounds.getCenter(new THREE.Vector3());
+  const size=bounds.getSize(new THREE.Vector3());
+  const span=Math.max(size.x,size.y,size.z);
+  if(!Number.isFinite(span)||span<=0)throw Error('GLB bounds are invalid');
+  const group=new THREE.Group();group.add(object);
+  const scale=1.75/span;group.scale.setScalar(scale);group.position.copy(center).multiplyScalar(-scale);
+  const scene=new THREE.Scene();scene.background=new THREE.Color(0x19302b);scene.add(group);
+  scene.add(new THREE.HemisphereLight(0xf3fffb,0x28443e,2.4));
+  const key=new THREE.DirectionalLight(0xffe6cc,2.6);key.position.set(3,5,4);scene.add(key);
+  const edge=new THREE.DirectionalLight(0xb6dafa,1.2);edge.position.set(-3,1,-3);scene.add(edge);
+  const camera=new THREE.PerspectiveCamera(38,1,.01,50);
+  if(size.z>Math.max(size.x,size.y)*1.3){camera.up.set(0,0,1);camera.position.set(2.2,3.2,1.7);}
+  else{camera.position.set(2.2,1.5,3.5);}
+  camera.lookAt(0,0,0);
+  const canvas=document.createElement('canvas');canvas.width=384;canvas.height=384;
+  renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false,preserveDrawingBuffer:true,powerPreference:'low-power'});
+  renderer.outputColorSpace=THREE.SRGBColorSpace;
+  renderer.setSize(384,384,false);renderer.setPixelRatio(1);
+  renderer.render(scene,camera);
+  const image=canvas.toDataURL('image/png');
+  if(!image.startsWith('data:image/png;base64,')||image.length>1_500_000)throw Error('Browser thumbnail exceeds safe upload size');
+  return {sha256,image};
+ }finally{
+  if(object)object.traverse(o=>{o.geometry?.dispose?.();for(const m of (Array.isArray(o.material)?o.material:[o.material])){m?.map?.dispose?.();m?.dispose?.();}});
+  renderer?.dispose();renderer?.forceContextLoss();
+ }
+}
+
+window.FreeLabModelStage={open,openLocal:file=>open(null,false,file),close,renderAvatarThumbnail};

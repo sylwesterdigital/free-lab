@@ -79,9 +79,12 @@ def _avatar_thumbnail_worker(owner,digest,raw):
                 temporary=AVATAR_THUMB_DIR/f'.avatar-{owner}-{threading.get_ident()}.tmp'
                 try:
                     temporary.write_bytes(png)
+                    if target.is_file():return  # Browser fallback finished while Blender was still working.
                     temporary.replace(target)
                     for stale in AVATAR_THUMB_DIR.glob(f'{int(owner)}_*.png'):
-                        if stale!=target:stale.unlink(missing_ok=True)
+                        if stale!=target:
+                            stale.unlink(missing_ok=True)
+                            stale.with_suffix('.browser').unlink(missing_ok=True)
                     (AVATAR_THUMB_DIR/f'{owner}.error').unlink(missing_ok=True)
                     _admin_event('avatar.thumbnail.ready',f'{len(png)} PNG bytes',owner)
                 finally:temporary.unlink(missing_ok=True)
@@ -849,6 +852,7 @@ def own_avatar_thumbnail():
         res=send_file(target,mimetype='image/png',max_age=0)
         res.headers['Cache-Control']='private, no-store'
         res.headers['X-Content-Type-Options']='nosniff'
+        res.headers['X-FREELAB-Thumbnail-Source']='browser' if target.with_suffix('.browser').is_file() else 'blender'
         return res
     if not avatar_optimizer.blender_command():return jsonify(status='unavailable',error='Blender renderer is not configured on this server'),503
     failed=AVATAR_THUMB_DIR/f"{g.user['id']}.error"
@@ -875,6 +879,54 @@ def own_avatar_thumbnail():
     response.headers['Cache-Control']='private, no-store'
     response.headers['Retry-After']='3'
     return response
+
+@app.post('/api/me/avatar-3d/thumbnail/browser')
+@require_user
+def save_browser_avatar_thumbnail():
+    """Persist an on-device Three.js preview when the server lacks a GLB decoder.
+
+    The payload contains only a bounded preview PNG and its original GLB hash.
+    The saved avatar is never modified, and only its owner can write a thumbnail.
+    """
+    import base64, binascii
+    from PIL import Image, UnidentifiedImageError
+    row=g.con.execute('SELECT glb FROM user_avatar_models WHERE user_id=?',(g.user['id'],)).fetchone()
+    if not row:return jsonify(error='No saved avatar'),404
+    digest=hashlib.sha256(row['glb']).hexdigest()
+    payload=request.get_json(silent=True)
+    if not isinstance(payload,dict) or payload.get('sha256')!=digest:
+        return jsonify(error='Avatar was replaced; re-open settings to refresh'),409
+    value=payload.get('image')
+    prefix='data:image/png;base64,'
+    if not isinstance(value,str) or not value.startswith(prefix) or len(value)>1_500_000:
+        return jsonify(error='Invalid browser thumbnail'),400
+    try:
+        raw=base64.b64decode(value[len(prefix):],validate=True)
+        if not 100<=len(raw)<=1_000_000 or not raw.startswith(b'\x89PNG\r\n\x1a\n'):
+            raise ValueError('Invalid PNG')
+        with Image.open(io.BytesIO(raw)) as check:
+            if check.format!='PNG' or check.size!=(384,384):raise ValueError('Unexpected thumbnail dimensions')
+            check.load()
+            clean=check.convert('RGB')
+            output=io.BytesIO();clean.save(output,format='PNG',optimize=True)
+        png=output.getvalue()
+        if len(png)>1_000_000:raise ValueError('Thumbnail too large')
+    except (ValueError,binascii.Error,UnidentifiedImageError,OSError,Image.DecompressionBombError):
+        return jsonify(error='Invalid thumbnail image'),400
+    # A long-running client capture may finish after a second avatar upload.
+    current=g.con.execute('SELECT glb FROM user_avatar_models WHERE user_id=?',(g.user['id'],)).fetchone()
+    if not current or hashlib.sha256(current['glb']).hexdigest()!=digest:
+        return jsonify(error='Avatar changed during thumbnail creation'),409
+    target=_avatar_thumbnail_file(g.user['id'],digest)
+    temporary=AVATAR_THUMB_DIR/f'.browser-{g.user["id"]}-{threading.get_ident()}.tmp'
+    try:
+        temporary.write_bytes(png)
+        temporary.replace(target)
+        target.with_suffix('.browser').touch()
+        (AVATAR_THUMB_DIR/f'{g.user["id"]}.error').unlink(missing_ok=True)
+        _admin_event('avatar.thumbnail.browser_ready',f'{len(png)} PNG bytes rendered by authenticated browser',g.user['id'])
+    finally:temporary.unlink(missing_ok=True)
+    return jsonify(ok=True,source='browser'),201
 
 @app.post('/api/me/avatar-3d/thumbnail/retry')
 @require_user
@@ -908,6 +960,7 @@ def remove_3d_avatar():
     with g.con:g.con.execute('DELETE FROM user_avatar_models WHERE user_id=?',(g.user['id'],))
     for thumbnail in AVATAR_THUMB_DIR.glob(f"{g.user['id']}_*.png"):
         thumbnail.unlink(missing_ok=True)
+        thumbnail.with_suffix('.browser').unlink(missing_ok=True)
     (AVATAR_THUMB_DIR/f"{g.user['id']}.error").unlink(missing_ok=True)
     _admin_event('avatar.deleted','3D avatar removed',g.user['id'])
     return jsonify(ok=True)

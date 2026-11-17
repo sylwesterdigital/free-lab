@@ -70,29 +70,28 @@ def optimize_xr_preview(raw, blender=None):
 
 
 def _thumbnail_error(stderr, stdout, code):
-    """Concise, actionable subprocess error without server paths or input contents.
+    """Report a subprocess's terminal exception, not Blender's traceback wrapper.
 
-    Blender may print hundreds of traceback lines (e.g. ctypes.LoadLibrary),
-    so showing only the start of its final 440 bytes often hides the OSError.
+    Blender typically prints the real Python exception, then finishes with the
+    misleading generic 'Error: Python: Traceback (most recent call last):'.
+    Prefer actionable terminal errors, including glTF/Draco shared libraries.
     """
     import re
-    lines=[ln.strip() for ln in ((stderr or '')+'\n'+(stdout or '')).splitlines() if ln.strip()]
-    patterns=(r'^(?:OSError|ImportError|ModuleNotFoundError|RuntimeError|ValueError|PermissionError|FileNotFoundError|AttributeError|TypeError):\s*(.+)',
-              r'^(?:Error|ERROR):\s*(.+)',r'^(?:Blender|FREELAB)\s+(?:error|failed):\s*(.+)')
-    issue=''
-    for line in reversed(lines):
-        for pat in patterns:
-            match=re.search(pat,line,re.I)
-            if match:
-                issue=line
-                break
-        if issue:break
-    if not issue:
-        issue=next((line for line in reversed(lines) if 'not found' in line.lower() or 'cannot open shared object' in line.lower()),'Blender exited without a PNG')
-    # Keep driver/library names, but no full filesystem paths in UI or logs.
-    issue=re.sub(r'(?<![\w.-])/(?:[^\s:,]+/)+', '<path>/', issue)
-    issue=re.sub(r'[\r\n\x00-\x1f]+',' ',issue)[:185]
-    return f'Blender exit {code}: {issue}'
+    lines=[line.strip() for line in ((stderr or '')+'\n'+(stdout or '')).splitlines() if line.strip()]
+    terminal=re.compile(r'^(?:OSError|ImportError|ModuleNotFoundError|RuntimeError|ValueError|PermissionError|FileNotFoundError|AttributeError|TypeError|KeyError|Exception):\s*.+',re.I)
+    actual=next((line for line in reversed(lines) if terminal.search(line)),None)
+    if not actual:
+        actual=next((line for line in reversed(lines)
+                     if re.search(r'\b(?:lib\S+\.so(?:\.\d+)?|cannot open shared object file|not found|DLL load failed)\b',line,re.I)),None)
+    if not actual:
+        actual=next((line for line in reversed(lines) if not re.search(r'^(?:Error:\s*)?(?:Python:\s*)?Traceback|^Blender quit|^Blender .*\bquit\b',line,re.I)),
+                    'Renderer exited without a PNG')
+    # Do not include any private input file paths or credentials in application events.
+    actual=re.sub(r'(?<![\w.-])/(?:[^\s:,]+/)+', '<path>/', actual)
+    actual=re.sub(r'[\r\n\x00-\x1f]+',' ',actual)[:175]
+    if re.search(r'(?:draco|meshopt)',actual,re.I) and re.search(r'(?:\.so|library|shared object|not found)',actual,re.I):
+        actual+=' (GLB decoder library missing or broken in server Blender)'
+    return f'Blender exit {code}: {actual}'
 
 
 def render_thumbnail(raw, blender=None, size=512):
