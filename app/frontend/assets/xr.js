@@ -7,7 +7,7 @@
 let gl,canvas,program,lineProgram,quad,rayBuffer,refSpace,session,root,poseReady=false,floorReference=false;
 let xrGraphicsRequested=null,xrGraphicsApplied=null,xrGraphicsFailures=[],xrGraphicsDefaultFoveation=null;
 
-let pending3dJobs=[],galleryPage=0,xrGalleryFacet='',xrGalleryDays=0,darkroom=null,darkBackdrop=null,darkClose=null,darkFloor=null,descriptionContext=null,descriptionQuestionMode=false,frameTouch=null,frameErase=null,lastMascotQuip=0,statusBorn=0,jobProvider='auto';
+let pending3dJobs=[],galleryPage=0,xrGalleryFacet='',xrGalleryDays=0,xrGallerySort='newest',xrGalleryQuery='',xrGalleryRecent=[],xrGalleryOwner='',xrGalleryAnchor=null,xrGalleryVoiceSearch=false,xrGalleryInput=null,darkroom=null,darkBackdrop=null,darkClose=null,darkFloor=null,descriptionContext=null,descriptionQuestionMode=false,frameTouch=null,frameErase=null,lastMascotQuip=0,statusBorn=0,jobProvider='auto';
 let meshUniforms=null,meshProgram=null,meshJobProgram=null,meshWhite=null,meshGeneration=0,meshSyncAt=0,meshSyncBusy=false;
 let configPanel=null,configShowing=false,configPage='personalize',config3DChoice='aholo',config3DAvailable=false,uiSettings=window.FreeLabXRUI?.read?.()||{},lastConfigTick=0,mascotTrailAt=0;
 let toolbar=null,editbar=null,statusCard=null,cloud=null,clouds=[],cards=[],zones=[],selected=null,held=null,selectedMesh=null,meshTools=null,meshGizmoMode="move";
@@ -51,7 +51,7 @@ function xrGLErrors(){
 window.FreeLabXR3DDiagnostics={getLog:()=>xr3DLog.slice(),clear:()=>{xr3DLog.length=0;xr3DOnce.clear();},setVerbose:value=>{xr3DVerbose=Boolean(value);return xr3DVerbose;}};
 
 // One navigation pill. Image-specific actions belong only to the selected card.
-const mainTools=[['home','⌂'],['gallery','▣'],['filter','⌕'],['createimage','✎'],['follow','◎'],['debug','≡'],['config','⚙'],['exit','×']];
+const mainTools=[['home','⌂'],['gallery','▣'],['createimage','✎'],['follow','◎'],['debug','≡'],['config','⚙'],['exit','×']];
 // Experimental activities are launched inside Agency; My Stuff has no lab toolbar.
 // A context menu only exists after clicking the image's ···, never in parallel by default.
 const sourceTools=[['describe','☷'],['segment','✳'],['refine','✦'],['prompt','✎'],['voice','🎤'],['3d','⬡'],['closemenu','×']];
@@ -1194,7 +1194,7 @@ function ray(frame,src){try{const sp=src.targetRaySpace?frame.getPose(src.target
  if(src.hand){const a=frame.getJointPose(src.hand.get('index-finger-tip'),refSpace),b=frame.getJointPose(src.hand.get('wrist'),refSpace);if(a&&b){const o=[a.transform.position.x,a.transform.position.y,a.transform.position.z];const w=[b.transform.position.x,b.transform.position.y,b.transform.position.z];return {o,d:norm(vsub(o,w))};}}
  }catch{}return null;}
 function hitTest(r,c){if(!r||!c.visible||!c.front||c.animScale===0)return null;const m=cardModel(c),inv=inverse(m);if(!inv)return null;const o=point(inv,r.o),d=point(inv,r.d,0);if(Math.abs(d[2])<1e-6)return null;const k=-o[2]/d[2];if(k<=0||k>6)return null;const x=o[0]+d[0]*k,y=o[1]+d[1]*k;if(Math.abs(x)>.5||Math.abs(y)>.5)return null;const hitWorld=point(m,[x,y,0]);const dist=length(vsub(hitWorld,r.o));return {card:c,x,y,dist};}
-function pick(r){if(darkroom){const hits=[darkClose,darkPrevious,darkNext].filter(Boolean).map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return hits[0]||null;}const opts=[...cards.filter(c=>c.kind!=='galleryheader'),...meshJobBadges.values(),toolbar,...(voicePhase==='listening'||voicePhase==='processing'?[]:[captureEye]),...(voicePhase==='listening'||voicePhase==='processing'?[]:[extractButton]),...(uiSettings.voice===false?[]:[voiceButton]),voiceOk,voiceCancel,promptPanel,editbar,...(debugShowing?[debugPanel]:[]),descriptionPanel,...(configShowing?[configPanel]:[])].filter(Boolean),all=[...opts.map(c=>hitTest(r,c)).filter(Boolean),...meshPreviews.map(m=>meshHitTest(r,m)).filter(Boolean),...(meshTools?[hitTest(r,meshTools)].filter(Boolean):[])].filter(Boolean).sort((a,b)=>a.dist-b.dist);return all[0]||null;}
+function pick(r){if(darkroom){const hits=[darkClose,darkPrevious,darkNext].filter(Boolean).map(c=>hitTest(r,c)).filter(Boolean).sort((a,b)=>a.dist-b.dist);return hits[0]||null;}const opts=[...cards,...meshJobBadges.values(),toolbar,...(voicePhase==='listening'||voicePhase==='processing'?[]:[captureEye]),...(voicePhase==='listening'||voicePhase==='processing'?[]:[extractButton]),...(uiSettings.voice===false?[]:[voiceButton]),voiceOk,voiceCancel,promptPanel,editbar,...(debugShowing?[debugPanel]:[]),descriptionPanel,...(configShowing?[configPanel]:[])].filter(Boolean),all=[...opts.map(c=>hitTest(r,c)).filter(Boolean),...meshPreviews.map(m=>meshHitTest(r,m)).filter(Boolean),...(meshTools?[hitTest(r,meshTools)].filter(Boolean):[])].filter(Boolean).sort((a,b)=>a.dist-b.dist);return all[0]||null;}
 function imageButtonAt(card,x,y){
  // Hit regions are in the SAME 600-pixel canvas coordinates as cardTexture.
  // Image aspect ratios change canvas height; fixed normalized-Y thresholds do not work.
@@ -1208,6 +1208,7 @@ function imageButtonAt(card,x,y){
  return null;
 }
 function buttonFromHit(h){if(!h)return null;
+ if(h.card.kind==='galleryheader')return xrGalleryHeaderHit(h);
  if(h.card.kind==='3djob')return '3djobdiagnostics';
  if(h.card.kind==='3dtools')return 'meshgizmo-reset';
  if(h.card.kind==='3dmesh')return null;
@@ -1250,6 +1251,7 @@ function grabStart(frame,src,manual=false){const r=ray(frame,src);let h=pick(r);
  startQuat:poseQuat(frame,src),initialQuat:[...(h.card.q||[0,0,0,1])],
  worldStart:!id&&['source','object'].includes(h.card.kind)?point(root,rootPos(h.card)):null,
  attach:!id&&['source','object'].includes(h.card.kind)?attachGrab(frame,src,h.card,h):null};
+ if(h.card.kind==='galleryheader'&&!id){held.worldStart=point(root,[0,0,0]);held.anchor=vadd(r.o,vmul(r.d,h.dist));}
  if(h.card.kind==='3dmesh'){
   const pose=meshWorldPose(h.card);if(!pose){held=null;return;}
   selectedMesh=h.card;selected=null;imageMenuOpen=false;updateEditbar();syncMeshTools();
@@ -1275,6 +1277,7 @@ async function grabEnd(src,frame){if(held?.second?.src===src){held.second=null;r
  // XR controllers rotate slightly between trigger-down and trigger-up. Once a
  // button was hit, release must ACTIVATE it and never be interpreted as a drag.
  if(h.id){window.FreeLab?.traceEvent?.('XR image action: '+h.id,'info');if(h.id==='3djobdiagnostics')return showMeshDiagnostics(h.card.jobId);return action(h.id);}
+ if(h.card.kind==='galleryheader'){if(h.moved)setStatus('LIBRARY POSITION PINNED · grab the header to move again',5200);return;}
  if(h.card.kind==='3dmesh'){
   selectedMesh=h.card;syncMeshTools();if(h.moved){await saveMeshTransform(h.card);xr3D('MODEL_GIZMO_TRANSFORM_SAVED',{jobId:h.card.jobId,mode:h.gizmoMode||'direct',offset:h.card.offset,rotation:h.card.rotation,scale:h.card.modelScale,axisScale:h.card.axisScale});setStatus('3D MODEL · transform saved',6000);}
   else setStatus('3D MODEL · grab and turn naturally · two hands resize proportionally · RESET available',8500);
@@ -1293,12 +1296,6 @@ async function grabEnd(src,frame){if(held?.second?.src===src){held.second=null;r
  else if(h.card.kind==='config'){/* the panel remains at the released world position */}
  else if(h.card.kind==='gallery'){await showCloud(h.card.data.id);}
  else if(h.card.kind==='gallerynav'){await openGallery(galleryPage+h.card.data.direction);}
- else if(h.card.kind==='galleryfilter'){
-  if(h.card.data.type==='date')xrGalleryDays=h.card.data.value;
-  else xrGalleryFacet=h.card.data.value;
-  await openGallery(0);
-  setStatus('LIBRARY FILTER · '+(xrGalleryFacet||'all objects').toUpperCase()+' · '+(xrGalleryDays?'last '+xrGalleryDays+' days':'all dates'),7000);
- }
  else if(h.card.kind==='3dbranch'){selectedMesh=meshPreviews.find(m=>m.jobId===h.card.data?.jobId)||null;setStatus('3D BRANCH · '+h.card.data.label+' · model #'+h.card.data.jobId+' · open linked model or check its status',8500);}
  else if(h.card.kind==='ancestor'){await showCloud(cloud.id,h.card.data.id??null,0);}
  else if(h.card.kind==='branchpage'){await flipBranchPage(h.card.data.direction);}
@@ -1321,6 +1318,11 @@ function toggleImageMenu(card){if(selected===card&&imageMenuOpen){closeImageMenu
 function advanceGrab(frame){
  if(!held||held.id)return;const r=ray(frame,held.src);if(!r)return;
  const card=held.card;
+ if(card.kind==='galleryheader'&&held.anchor){
+  const now=vadd(r.o,vmul(r.d,held.rayDist)),delta=vsub(now,held.anchor);
+  if(length(delta)>.002){root[12]+=delta[0];root[13]+=delta[1];root[14]+=delta[2];xrGalleryAnchor=new Float32Array(root);held.anchor=now;held.moved=true;}
+  return;
+ }
  if(card.kind==='3dmesh'){
   const anchor=meshAnchor(card);if(!anchor)return;
   const handNow=posePosition(frame,held.src),quatNow=poseQuat(frame,held.src);
@@ -1379,7 +1381,7 @@ function pinchPoll(frame,src){if(!src.hand||typeof frame.getJointPose!=='functio
  else if(prev&&dist>.047){handPinch.set(src,false);if(xrExperience!=='stuff'){agencyPointerEnd(frame,src);}else if(held?.src===src)grabEnd(src,frame);}
  }catch{}}
 function updateHover(frame){let found=null,source=null;for(const src of session.inputSources){const hit=pick(ray(frame,src));if(hit){found=buttonFromHit(hit)||hit.card.id;source=src;break;}}
- if(pointerHover===found)return;pointerHover=found;if(found){window.FreeLabSound?.hover();haptic(source,.17,25);}refreshToolbar();if(imageMenuOpen)updateEditbar();}
+ if(pointerHover===found)return;pointerHover=found;if(found){window.FreeLabSound?.hover();haptic(source,.17,25);}refreshToolbar();if(imageMenuOpen)updateEditbar();if(mode==='gallery')xrGalleryRefreshHeader();}
 
 const handBones=[['wrist','thumb-metacarpal'],['thumb-metacarpal','thumb-phalanx-proximal'],['thumb-phalanx-proximal','thumb-phalanx-distal'],['thumb-phalanx-distal','thumb-tip'],
  ...['index','middle','ring','pinky'].flatMap(n=>[['wrist',n+'-finger-metacarpal'],[n+'-finger-metacarpal',n+'-finger-phalanx-proximal'],[n+'-finger-phalanx-proximal',n+'-finger-phalanx-intermediate'],[n+'-finger-phalanx-intermediate',n+'-finger-phalanx-distal'],[n+'-finger-phalanx-distal',n+'-finger-tip']])];
@@ -1574,7 +1576,7 @@ function placeRoomVisitors(pose){const m=pose.transform.matrix,eye=[m[12],m[13],
 // exercises and receiving bins are real perspective-lit 3D geometry.
 // Agency is local-first; optional public explainer streams are read from /videos/.
 // Descriptive Agency sessions. One account-scoped row per actual launch; no inference calls.
-let agencyRecording=null,agencyProgressData=null,agencyProgressWindow=30;
+let agencyRecording=null,agencyProgressData=null,agencyProgressWindow=30,agencyQuestionSince=0;
 function agencyTelemetryMetrics(r){
  const snap=agencySession?.snapshot?.();const now=performance.now();
  const total=r.pausedAt===null?now-r.startedAt-r.pausedTotal:r.pausedAt-r.startedAt-r.pausedTotal;
@@ -1588,6 +1590,16 @@ function agencyTelemetrySend(r,finished=false){
   await window.FreeLab.api('/agency/sessions/'+id,{method:'PATCH',body:JSON.stringify({...sample,finished}),keepalive:finished});
  }).catch(e=>window.FreeLab?.traceEvent?.('Agency activity record: '+e.message,'warn'));
 }
+function agencyTelemetryAnswer(correct,hand='none',src=null){
+ const r=agencyRecording;if(!r||r.finished)return;
+ const info={correct:Boolean(correct),handedness:['left','right'].includes(hand)?hand:'none',
+  input_kind:src?.hand?'hand':src?.gamepad?'controller':'unknown',
+  response_ms:Math.min(600000,Math.max(0,Math.round(performance.now()-agencyQuestionSince))),
+  offset_minutes:-new Date().getTimezoneOffset()};
+ r.queue=r.queue.then(async()=>{const id=await r.idPromise;if(!id)return;
+  await window.FreeLab.api('/agency/sessions/'+id+'/events',{method:'POST',body:JSON.stringify(info)});
+ }).catch(e=>window.FreeLab?.traceEvent?.('Agency interaction record: '+e.message,'warn'));
+}
 function agencyTelemetryStart(activity,mode='free',level=0){
  agencyTelemetryStop();const r={activity,startedAt:performance.now(),pausedAt:null,pausedTotal:0,lastUpdate:performance.now(),queue:Promise.resolve(),finished:false};
  agencyRecording=r;r.idPromise=window.FreeLab?.api?.('/agency/sessions',{method:'POST',body:JSON.stringify({activity,mode,level})})
@@ -1597,6 +1609,7 @@ function agencyTelemetryPause(){const r=agencyRecording;if(r&&!r.finished&&r.pau
 function agencyTelemetryResume(){const r=agencyRecording;if(r&&!r.finished&&r.pausedAt!==null){r.pausedTotal+=performance.now()-r.pausedAt;r.pausedAt=null;}}
 function agencyTelemetryTick(now){const r=agencyRecording;if(r&&!r.finished&&now-r.lastUpdate>=30000){r.lastUpdate=now;agencyTelemetrySend(r);}}
 function agencyTelemetryStop(){const r=agencyRecording;if(!r)return;agencyRecording=null;agencyTelemetrySend(r,true);}
+
 let xrExperience='entrance',agencyCards=[],agencyNodes=[],agencyRoot=null,agencyGeometryCache=new Map(),agencyScreen='lobby',agencyGame='shapes',agencyMode='free',agencyLevel=0,agencySession=null,agencyGrab=null,agencyChosen=null,agencyTouched=new WeakMap(),agencyRefreshSecond=-1,agencyDistance=1.19,agencyTransition=null,agencyLaunchMode=null,agencyLabMode=null,agencyHoverId=null,agencyHoverInfo=null,agencyFollow=null,agencyDrag=null,agencyThrow=null,agencyHandSeed=0,agencyInputUntil=0,agencyTouchWait=false,agencyTouchClearAt=0,agencyPendingRoundAt=0,agencyTransitionStarted=0,agencyFadingCards=[],agencySavedTable=null,agencySceneEntered=0,agencyProfileImage=null,agencyProfileLoading=false,agencyLabBurstUntil=0,agencyExitConfirmUntil=0,agencyRoundFinished=false,agencyThrowScoreCache=-1,agencyExplainer=null,agencyExplainerToken=0;
 // The entrance is a spatial composition: two glass-outline panels, NOT dark blocks.
 let entranceFollow=null,entranceHover=null,entranceLastHover=0;const ENTRANCE_DEPTH=.99;
@@ -2259,7 +2272,7 @@ function agencyStartGame(){
  if(agencySession&&!agencySession.completed)agencySession.finish();
  let store=null;try{store=window.localStorage;}catch{}
  agencySession=new window.FreeLabAgency.Session({game:agencyGame,mode:agencyMode,level:agencyLevel,user:window.FreeLab?.getState?.()?.user?.id||'guest',storage:store});
- agencyTelemetryStart(agencyGame,agencyMode,agencyLevel);
+ agencyTelemetryStart(agencyGame,agencyMode,agencyLevel);agencyQuestionSince=performance.now();
  agencyScreen='play';agencyRefreshSecond=-1;agencyGrab=null;agencyDrag=null;agencyThrow=null;
  if(agencySavedTable){agencyRoot=matmul(translate(...agencySavedTable.pos),rotateY(agencySavedTable.yaw));agencyFollow={...agencySavedTable,last:0,manual:true,lastEye:null};}
  else if(latestPose)agencyResetFollow(latestPose,.78);
@@ -2323,17 +2336,17 @@ function agencyNavigate(id,src=null){if(!id||!['agency','entrance','agency-lab']
  if(id==='agency-finish'){agencyToLobby();return;}
  if(id==='agency-generate'&&agencySession?.generate()){agencyChosen=null;agencyBuild();return;}
  if(agencyScreen!=='play'||!agencySession)return;
- if(id.startsWith('agency-answer:')){agencySubmit(id.slice(14));return;}
+ if(id.startsWith('agency-answer:')){agencySubmit(id.slice(14),src?.handedness,src);return;}
  if(id==='agency-target'){
   if(src?.handedness!=='left'&&src?.handedness!=='right'){setStatus('Use a tracked left or right hand/controller',3000);return;}
-  agencySubmit(src.handedness,src.handedness);
+  agencySubmit(src.handedness,src.handedness,src);
  }
 }
-function agencySubmit(value,hand){if(!agencySession||!agencyCanInteract())return;
+function agencySubmit(value,hand,src=null){if(!agencySession||!agencyCanInteract())return;
  // One accepted answer disarms BOTH hands/controllers immediately.
  agencyLock(1050,{touch:true});const result=agencySession.answer(value,hand);
  if(!result.accepted)return;
- agencyTelemetrySend(agencyRecording);
+ agencyTelemetryAnswer(result.correct,hand,src);agencyTelemetrySend(agencyRecording);
  cue(result.correct?'agency-correct':'agency-wrong');agencyGrab=null;agencyChosen=null;
  if(result.correct&&agencyGame==='hands')agencyHandSeed=(agencyHandSeed+1)%5;
  agencyPendingRoundAt=performance.now()+920;
@@ -2397,7 +2410,7 @@ function agencyPointerEnd(frame,src){
  const bins=agencyNodes.filter(n=>n.id.startsWith('agency-bin:'));
  const nearest=bins.map(n=>({node:n,dist:length(vsub(world,agencyWorldPoint(n.pos)))})).sort((a,b)=>a.dist-b.dist)[0];
  const rayHit=agencyPick(ray(frame,src));const bin=nearest?.dist<.22?nearest.node:rayHit?.node?.id.startsWith('agency-bin:')?rayHit.node:null;
- if(bin)agencySubmit(bin.id.slice('agency-bin:'.length));else{
+ if(bin)agencySubmit(bin.id.slice('agency-bin:'.length),src?.handedness,src);else{
   agencyChosen=null;const original=grabbed.node.pos.slice();
   agencyThrow={node:grabbed.node,initial:original,startedAt:performance.now(),velocity:[.11,.20,.04]};
   cue('release',src);
@@ -2603,7 +2616,7 @@ function renderAgencyView(t,frame,pose){
   else{const g=agencyThrow;g.node.pos=[g.initial[0]+g.velocity[0]*age,g.initial[1]+g.velocity[1]*age-.4*age*age,g.initial[2]+g.velocity[2]*age];g.node.angle+=.03;}}
  if(agencyPendingRoundAt&&t>=agencyPendingRoundAt){agencyPendingRoundAt=0;
   if(agencyRoundFinished){agencyTelemetryStop();agencyRoundFinished=false,agencyThrowScoreCache=-1;agencyScreen='summary';}
-  agencyBuild();agencyLock(220,{touch:true});
+  agencyBuild();agencyQuestionSince=performance.now();agencyLock(220,{touch:true});
  }
  agencyEndTransition(t);
  if(xrExperience==='agency'&&agencySession&&agencyScreen==='play'){
@@ -2735,12 +2748,31 @@ async function flipBranchPage(direction){if(!cloud?.id)return;
 }
 
 function spatialLoc(o,i,n){const pos=ringPosition(i,n);if(o.spatial&&typeof o.spatial.x==='number')return [o.spatial.x,o.spatial.y,o.spatial.z];return pos;}
+// The header is the only gallery filter surface; no filter is represented as a media card.
 function galleryHeadingTexture(total,page,start,end){
- const [c,ctx]=canvas2d(1050,148);rrect(ctx,0,0,1050,148,30,'rgba(15,31,28,.94)');
- text(ctx,'LIBRARY  /  SAVED SOURCES',40,49,33,'#e9fff2',720);
- text(ctx,'NEWEST FIRST  ·  SELECT A PHOTO TO OPEN',40,104,23,'#c5dcd4',580);
- text(ctx,`${start}–${end} / ${total}   ·   PAGE ${page}`,1011,55,29,'#a3ffe2',700,'right');
- return texture(c);
+ const w=1440,h=300,[c,ctx]=canvas2d(w,h),regions=[];
+ rrect(ctx,0,0,w,h,34,'rgba(14,34,29,.96)');
+ text(ctx,'LIBRARY / SAVED SOURCES',32,44,34,'#e8fff0',730);
+ text(ctx,`${start}–${end} / ${total} · PAGE ${page} · GRAB HEADER TO MOVE`,w-30,44,23,'#a6edd0',630,'right');
+ const button=(id,label,x,y,width,height,selected=false)=>{
+  const hovering=pointerHover===id;
+  rrect(ctx,x,y,width,height,Math.min(19,height/2),selected||hovering?'rgba(174,247,204,.96)':'rgba(54,85,72,.93)');
+  text(ctx,label,x+width/2,y+height*.67,20,selected||hovering?'#152920':'#f1fff4',690,'center');
+  regions.push({id,x,y,w:width,h:height});
+ };
+ const row1=[['gallery-voice','MIC'],['gallery-type','TYPE'],['gallery-clear','CLEAR'],['gallery-sort-top','POPULAR'],['gallery-sort-az','A–Z'],['gallery-sort-za','Z–A'],['gallery-sort-oldest','OLDEST'],['gallery-sort-newest','NEWEST']];
+ let x=28;for(const [id,label] of row1){const wd=id==='gallery-sort-top'?138:122;button(id,label,x,66,wd,52,(id==='gallery-sort-'+xrGallerySort));x+=wd+10;}
+ const choices=xrGalleryFilterChoices();
+ const row2=[['gallery-date-0','ANY DATE'],['gallery-date-7','7 DAYS'],['gallery-date-30','30 DAYS'],['gallery-date-365','YEAR'],
+  ...choices.slice(0,4).map(([term,count])=>['gallery-facet-'+term,term.toUpperCase()+' · '+count])];
+ x=28;for(const [id,label] of row2){const wd=id==='gallery-date-0'?142:id.startsWith('gallery-facet')?190:123;
+  button(id,label.slice(0,20),x,130,wd,49,id==='gallery-date-'+xrGalleryDays||id==='gallery-facet-'+xrGalleryFacet);x+=wd+10;}
+ text(ctx,'RECENT SEARCHES',33,224,19,'#a6edd0',560);
+ let rx=270;for(let i=0;i<xrGalleryRecent.length;i++){
+  button('gallery-recent-'+i,xrGalleryRecent[i].toUpperCase().slice(0,20),rx,192,295,48,xrGalleryQuery===xrGalleryRecent[i]);rx+=306;
+ }
+ text(ctx,(xrGalleryQuery?'SEARCH: '+xrGalleryQuery: xrGalleryFacet?'FILTER: '+xrGalleryFacet:'ALL SAVED SOURCES')+' · '+(xrGalleryDays?'LAST '+xrGalleryDays+' DAYS':'ALL DATES'),33,280,20,'#d5eee2',550);
+ return {tex:texture(c),regions,w,h};
 }
 function xrGalleryFilterChoices(){
  const counts=new Map();for(const c of clouds)for(const o of c.objects||[]){
@@ -2750,31 +2782,73 @@ function xrGalleryFilterChoices(){
    counts.set(name,(counts.get(name)||0)+1);}
  }return [...counts].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,5);
 }
-function xrGalleryFilterPanel(){
- if(mode!=='gallery')return;
- for(const c of cards.filter(c=>c.kind==='galleryfilter'))for(const tex of c.resources||[])gl?.deleteTexture(tex);
- cards=cards.filter(c=>c.kind!=='galleryfilter');
- const options=[['date',0,'ALL DATES'],['date',7,'LAST 7 DAYS'],['date',30,'LAST 30 DAYS'],['date',365,'LAST YEAR'],['name','','ALL OBJECTS'],
-  ...xrGalleryFilterChoices().map(([name,count])=>['name',name,name.toUpperCase()+' · '+count])];
- options.forEach(([type,value,label],i)=>{
-  const col=i%3,row=Math.floor(i/3);const button=addCard('facet-'+i,'galleryfilter',
-   {label,subtitle:type==='date'?'CREATED DATE':'OBJECT NAME',type,value},[(col-1)*.43,.50-row*.26,.17],[.37,.17]);
-  button.data.type=type;button.data.value=value;
- });
- setStatus('FILTER · choose a name or time window · selection applies to source galleries',7500);
+function xrGalleryHeaderHit(hit){
+ const c=hit.card,x=(hit.x+.5)*(c.data?.w||1440),y=(.5-hit.y)*(c.data?.h||254);
+ return c.data?.regions?.find(z=>x>=z.x&&x<=z.x+z.w&&y>=z.y&&y<=z.y+z.h)?.id||null;
 }
-async function openGallery(page=galleryPage){if(latestPose){root=viewerAnchor(latestPose,-.03,1.42);rootYaw=cameraYaw(latestPose);}mode='gallery';selected=null;updateEditbar();clearCards();cloud=null;branchFocusId=null;branchPage=0;
+function xrGalleryRefreshHeader(){
+ const c=cards.find(c=>c.kind==='galleryheader');if(!c||!gl)return;
+ const {tex,regions,w,h}=galleryHeadingTexture(c.data.total,c.data.page,c.data.start,c.data.end);
+ if(c.front)gl.deleteTexture(c.front);c.front=c.back=tex;c.resources=[tex];c.data.regions=regions;c.data.w=w;c.data.h=h;
+}
+function xrGalleryRemember(term){const normalized=String(term||'').trim().toLowerCase().slice(0,60);
+ if(!normalized)return;
+ xrGalleryRecent=[normalized,...xrGalleryRecent.filter(v=>v!==normalized)].slice(0,3);
+ try{localStorage.setItem('freelab-gallery-searches:'+xrGalleryOwner,JSON.stringify(xrGalleryRecent));}catch{}
+}
+async function xrGalleryKeyboard(){
+ if(!xrGalleryInput){xrGalleryInput=document.createElement('input');xrGalleryInput.type='search';xrGalleryInput.placeholder='Search saved objects and sources';xrGalleryInput.maxLength=80;
+  xrGalleryInput.setAttribute('aria-label','Search XR library');
+  Object.assign(xrGalleryInput.style,{position:'fixed',top:'14px',left:'14px',width:'min(92vw,490px)',height:'52px',border:'2px solid #b5f2d0',borderRadius:'18px',background:'#14291e',color:'white',fontSize:'20px',padding:'12px',zIndex:'90'});
+  document.body.appendChild(xrGalleryInput);
+  let submitted=false;
+  const submit=()=>{if(submitted)return;submitted=true;xrGalleryQuery=xrGalleryInput.value.trim().toLowerCase();if(xrGalleryQuery)xrGalleryRemember(xrGalleryQuery);xrGalleryInput.style.display='none';void openGallery(0);};
+  xrGalleryInput.addEventListener('change',submit);xrGalleryInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();submit();}});
+  xrGalleryInput.addEventListener('blur',()=>setTimeout(()=>{if(xrGalleryInput?.style.display!=='none')submit();},320));
+  xrGalleryInput._prepare=()=>{submitted=false;};
+ }
+ xrGalleryInput._prepare();xrGalleryInput.value=xrGalleryQuery;xrGalleryInput.style.display='block';xrGalleryInput.focus();setStatus('LIBRARY SEARCH · type, then Enter to filter',8000);
+}
+async function xrGalleryControl(id){
+ if(id==='gallery-type')return xrGalleryKeyboard();
+ if(id==='gallery-voice'){await voicePrompt();xrGalleryVoiceSearch=voicePhase==='listening';return;}
+ if(id==='gallery-clear'){xrGalleryFacet='';xrGalleryQuery='';xrGalleryDays=0;xrGallerySort='newest';}
+ else if(id.startsWith('gallery-recent-')){const n=Number(id.slice(15));xrGalleryQuery=xrGalleryRecent[n]||'';xrGalleryFacet='';}
+ else if(id.startsWith('gallery-date-'))xrGalleryDays=Number(id.slice(13));
+ else if(id.startsWith('gallery-facet-')){xrGalleryFacet=id.slice(14);xrGalleryQuery='';xrGalleryRemember(xrGalleryFacet);}
+ else if(id.startsWith('gallery-sort-')){
+  xrGallerySort=id.slice(13);
+ }
+ return openGallery(0);
+}
+function xrGalleryArrowTexture(direction){const [c,ctx]=canvas2d(196,196);rrect(ctx,8,8,180,180,90,'rgba(249,255,251,.99)');
+ text(ctx,direction<0?'‹':'›',98,139,104,'#15241b',550,'center');return texture(c);}
+async function openGallery(page=galleryPage){
+ const owner=String(window.FreeLab?.getState?.()?.user?.id||window.FreeLab?.getState?.()?.user?.username||'guest');
+ if(owner!==xrGalleryOwner){xrGalleryOwner=owner;xrGalleryRecent=[];
+  try{xrGalleryRecent=JSON.parse(localStorage.getItem('freelab-gallery-searches:'+owner)||'[]').filter(s=>typeof s==='string').slice(0,3);}catch{}
+ }
+ if(mode!=='gallery'||!xrGalleryAnchor){if(latestPose)xrGalleryAnchor=viewerAnchor(latestPose,-.03,1.42);}
+ if(xrGalleryAnchor)root=new Float32Array(xrGalleryAnchor);
+ mode='gallery';selected=null;updateEditbar();clearCards();cloud=null;branchFocusId=null;branchPage=0;
  try{clouds=await window.FreeLab.listXRClouds();refreshToolbar();}catch(e){setStatus(e.message);return;}
- // Always begin at the most recent source; the legacy archive remains last.
- const available=clouds.filter(x=>!x.hidden&&(!xrGalleryFacet||(x.objects||[]).some(o=>o.shelf!=='bin'&&String(o.label||'').toLowerCase().includes(xrGalleryFacet)))&&(!xrGalleryDays||(Date.now()-new Date(x.created_at).getTime())<=xrGalleryDays*86400000)).sort((a,b)=>b.id-a.id),pageCount=Math.max(1,Math.ceil(available.length/8));
+ const words=[xrGalleryFacet,xrGalleryQuery].filter(Boolean);
+ const available=clouds.filter(c=>!c.hidden&&(!words.length||words.every(term=>[c.label,c.description,...(c.objects||[]).filter(o=>o.shelf!=='bin').map(o=>(o.label||'')+' '+(o.description||''))].join(' ').toLowerCase().includes(term)))&&
+  (!xrGalleryDays||(Date.now()-Date.parse(c.created_at))<=xrGalleryDays*86400000));
+ if(xrGallerySort==='oldest')available.sort((a,b)=>a.id-b.id);
+ else if(xrGallerySort==='az'||xrGallerySort==='za')available.sort((a,b)=>{const label=c=>(c.objects||[]).find(o=>o.shelf!=='bin')?.label||c.label||('SOURCE '+c.id);return (xrGallerySort==='az'?1:-1)*label(a).localeCompare(label(b));});
+ else if(xrGallerySort==='top')available.sort((a,b)=>(b.objects?.length||0)-(a.objects?.length||0)||b.id-a.id);
+ else available.sort((a,b)=>b.id-a.id);
+ const pageCount=Math.max(1,Math.ceil(available.length/8));
  galleryPage=clamp(page,0,pageCount-1);const previews=available.slice(galleryPage*8,galleryPage*8+8),start=available.length?galleryPage*8+1:0,end=galleryPage*8+previews.length;
- const title=galleryHeadingTexture(available.length,galleryPage+1,start,end);
- cards.push({id:'gallery-heading',kind:'galleryheader',data:{},pos:[0,.67,-.04],from:[0,.67,-.04],to:[0,.67,-.04],start:0,duration:0,q:[0,0,0,1],scale:1,size:[1.52,.20],visible:true,front:title,back:title,resources:[title]});
+ const header=galleryHeadingTexture(available.length,galleryPage+1,start,end);
+ cards.push({id:'gallery-heading',kind:'galleryheader',data:{total:available.length,page:galleryPage+1,start,end,regions:header.regions,w:header.w,h:header.h},pos:[0,.68,-.04],q:[0,0,0,1],scale:1,size:[1.75,.365],visible:true,front:header.tex,back:header.tex,resources:[header.tex]});
  for(let i=0;i<previews.length;i++){const c=previews[i],col=i%4,row=Math.floor(i/4);const date=String(c.created_at||'').slice(0,10),count=c.objects?.length||0;
   addCard('gallery'+c.id,'gallery',{id:c.id,image:c.image_url,label:c.legacy?'OLDER ARCHIVE':'SOURCE '+c.id,subtitle:`${date?date+' · ':''}${count} BRANCHES · OPEN`},[(col-1.5)*.38,.20-row*.43,-.05],[.31,.35]);}
  for(const direction of [-1,1]){if(direction<0&&galleryPage===0||direction>0&&galleryPage+1>=pageCount)continue;
-  addCard('gallerynav'+direction,'gallerynav',{direction,label:direction>0?'OLDER  →':'←  NEWER',subtitle:`PAGE ${galleryPage+1+direction} / ${pageCount}`},[direction*.53,-.67,.02],[.28,.16]);}
- setStatus(available.length?`LIBRARY · MOST RECENT FIRST · ${start}–${end} of ${available.length} · page ${galleryPage+1}/${pageCount}`:'LIBRARY EMPTY · press EYE to capture',9000);}
+  const tex=xrGalleryArrowTexture(direction);cards.push({id:'gallerynav'+direction,kind:'gallerynav',data:{direction},pos:[direction*.86,-.12,.08],q:[0,0,0,1],scale:1,size:[.095,.095],visible:true,front:tex,back:tex,resources:[tex]});}
+ setStatus(available.length?`LIBRARY · ${start}–${end} OF ${available.length} · PAGE ${galleryPage+1}/${pageCount}`:'LIBRARY · NO RESULTS · MIC / TYPE / CLEAR ABOVE',8500);
+}
 async function binSource(){if(!selected||selected.kind!=='source'||!cloud?.id)return setStatus('Choose a source capture first');
  const id=cloud.id;try{await window.FreeLab.updateXRCloud(id,{hidden:true});cue('paper');
   setStatus('Capture stored in hidden Bin · reopen from BIN to restore',10000);
@@ -2941,7 +3015,7 @@ async function respondFind(name){const word=name.toLowerCase();const visible=car
  if(matches.length&&window.FreeLab?.pref?.('troll'))window.FreeLab?.speakUpdate?.('There it is. Excellent hiding skills, very suspicious.');
 }
 function dismissVoice(){
- voicePending=null;for(const c of [voiceOk,voiceCancel])if(c?.front&&gl)gl.deleteTexture(c.front);voiceOk=null;voiceCancel=null;setVoicePhase('idle','',0);
+ xrGalleryVoiceSearch=false;voicePending=null;for(const c of [voiceOk,voiceCancel])if(c?.front&&gl)gl.deleteTexture(c.front);voiceOk=null;voiceCancel=null;setVoicePhase('idle','',0);
 }
 function parseGlobalStyle(utterance){
  const cleaned=String(utterance).toLowerCase().trim().replace(/[.!?]+$/,'');
@@ -2971,6 +3045,7 @@ async function confirmVoice(){
  const pending=voicePending;
  if(pending.batch){dismissVoice();cue('ready');return applyGlobalStyle(pending.batch);}
  const transcript=pending.text;const context=pending.context;
+ if(xrGalleryVoiceSearch){xrGalleryVoiceSearch=false;dismissVoice();xrGalleryQuery=transcript.trim().toLowerCase().slice(0,80);xrGalleryFacet='';xrGalleryRemember(xrGalleryQuery);cue('ready');return openGallery(0);}
  dismissVoice();cue('ready');if(descriptionQuestionMode&&descriptionContext){descriptionQuestionMode=false;return askDescription(transcript);}
  const finding=findLabel(transcript);if(finding)return respondFind(finding);
  const style=parseGlobalStyle(transcript);
@@ -3692,6 +3767,7 @@ function graphicsCycle(id){
  refreshConfig();
 }
 async function action(id){const t=performance.now();if(t-lastAction<200)return;lastAction=t;
+ if(id.startsWith('gallery-facet-')||id.startsWith('gallery-recent-'))return xrGalleryControl(id);
  if(busy&&['capture','extract','segment','voice','refine','prompt','describe','3d','submit3d','apply'].includes(id))return;
  switch(id){case 'home':agencyEnter('entrance');return;case 'capture':return makeCapture();case 'extract':return runExtract();
  case 'describe':return describeSelected();case 'descriptionclose':hideDescription();return;case 'descriptionask':return descriptionAskKeyboard();case 'descriptionretry':return askDescription('');case 'descriptionvoice':if(descriptionContext){descriptionQuestionMode=true;return voicePrompt();}return;
@@ -3722,10 +3798,9 @@ async function action(id){const t=performance.now();if(t-lastAction<200)return;l
  case 'imagemenu':return toggleImageMenu(selected);case 'imageclose':return selected?.kind==='source'?collapse():closeSelectedCard();
  case 'debug':debugShowing=!debugShowing;modelDiagnosticLines=[];modelDiagnosticJob=null;modelDiagnosticViewedAt=0;if(debugShowing){serverPoll=0;loadServerDiagnostic();}return setStatus(debugShowing?'LOG OPEN · API errors and server request status':'LOG CLOSED',6500);
  case 'branch':return selected?.kind==='object'?openBranch(selected.data.id):null;case 'parent':return upBranch();
+ case 'gallery-voice':case 'gallery-type':case 'gallery-clear':case 'gallery-sort-top':case 'gallery-sort-az':case 'gallery-sort-za':case 'gallery-sort-oldest':case 'gallery-sort-newest':case 'gallery-date-0':case 'gallery-date-7':case 'gallery-date-30':case 'gallery-date-365':return xrGalleryControl(id);
  case 'createimage':return openPrompt();case 'prompt':return openPrompt();case 'segment':return selected?.kind==='source'?runExtract():extractParts();case 'refine':return restoreSelected();case 'apply':return applyPrompt();
- case 'filter':if(mode==='gallery'){xrGalleryFilterPanel();return;}
-  await openGallery(0);xrGalleryFilterPanel();return;
- case 'follow':return toggleFollow();case 'gallery':galleryPage=0;return openGallery(0);
+ case 'follow':return toggleFollow();case 'gallery':galleryPage=0;xrGalleryAnchor=null;return openGallery(0);
  case 'exit':held=null;return darkroom?closeDarkroom():session?.end();}}
 
 function xrGraphicsRead(){return window.FreeLabXRGraphics?.read?.()||{preset:'balanced',scale:1,antialias:true,foveation:'auto'};}
@@ -3774,7 +3849,7 @@ async function start(options={}){if(session)return;xrExperience='entrance';agenc
  session.addEventListener('selectend',e=>{lastNative.set(e.inputSource,performance.now());if(xrExperience!=='stuff'){agencyPointerEnd(e.frame,e.inputSource);return;}grabEnd(e.inputSource,e.frame);});
  session.addEventListener('squeezestart',e=>{lastNative.set(e.inputSource,performance.now());if(xrExperience!=='stuff'){agencyPointerStart(e.frame,e.inputSource);return;}grabStart(e.frame,e.inputSource);});
  session.addEventListener('squeezeend',e=>{lastNative.set(e.inputSource,performance.now());if(xrExperience!=='stuff'){agencyPointerEnd(e.frame,e.inputSource);return;}grabEnd(e.inputSource,e.frame);});
- session.addEventListener('end',()=>{agencyTelemetryStop();agencyExplainerToken++;agencyExplainer=null;window.FreeLabAgencyMedia?.stop?.();agencySession?.finish();agencySession=null;agencyClearCards();agencyFreeCards(agencyFadingCards.map(v=>v.card));agencyFadingCards=[];for(const g of agencyGeometryCache.values())gl?.deleteBuffer(g.buffer);agencyGeometryCache.clear();agencyRoot=null;entranceFollow=null;entranceHover=null;agencyGrab=null;xrExperience='entrance';window.FreeLabRooms?.end?.();for(const v of visitorBadges)if(v.front&&gl)gl.deleteTexture(v.front);visitorBadges=[];visitorPollAt=0;for(const photo of framePhotos){if(photo.texture&&gl)gl.deleteTexture(photo.texture);if(photo.buffer&&gl)gl.deleteBuffer(photo.buffer);}framePhotos=[];framePhotoBusy=false;frameLab?.clear();frameLab=null;triangleLab=null;shapeTargets=[];frameGames?.clear();frameGames=null;mascotHitUntil=0;if(mascotImpactSprite){gl.deleteTexture(mascotImpactSprite);mascotImpactSprite=null;}if(frameGameCubeBuffer){gl.deleteBuffer(frameGameCubeBuffer);frameGameCubeBuffer=null;}frameTouch=null;frameErase=null;frameLabState=null;window.FreeLabSound?.fingersStopAll?.();fingerLab?.setEnabled(false);fingerLab=null;fingerLabState=null;leftStickDown=false;window.FreeLabSound?.stringStop?.();stringLab?.setEnabled(false);stringLab=null;stringLabState=null;rightStickDown=false;cue('release');session=null;poseReady=false;held=null;clearCards();if(darkroom?.ownedTexture&&darkroom.front)gl.deleteTexture(darkroom.front);if(darkFloor?.front)gl.deleteTexture(darkFloor.front);if(darkClose?.front)gl.deleteTexture(darkClose.front);for(const b of [darkPrevious,darkNext])if(b?.front)gl.deleteTexture(b.front);darkPrevious=null;darkNext=null;darkroom=null;darkBackdrop=null;darkClose=null;darkFloor=null;descriptionQuestionMode=false;if(voiceBadge?.front)gl.deleteTexture(voiceBadge.front);voiceBadge=null;dismissVoice();gestureDebounce.clear();gestureSpeechTimes.clear();lastGestureAnnouncement=-100000;if(mascotSpeech?.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(cameraHint?.front)gl.deleteTexture(cameraHint.front);cameraHint=null;cameraHintState='';if(captureEye?.front)gl.deleteTexture(captureEye.front);if(voiceButton?.front)gl.deleteTexture(voiceButton.front);if(extractButton?.front)gl.deleteTexture(extractButton.front);voiceButton=null;extractButton=null;extractVisualActive=null;inferenceCard=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;document.getElementById('xrPromptEditor')?.classList.add('hidden');document.getElementById('xrPromptEditor')?.classList.remove('xr-native-open');if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;modelDiagnosticLines=[];modelDiagnosticJob=null;modelDiagnosticViewedAt=0;if(configPanel?.front)gl.deleteTexture(configPanel.front);configPanel=null;configShowing=false;if(descriptionPanel?.front)gl.deleteTexture(descriptionPanel.front);descriptionPanel=null;for(const m of meshPreviews)releaseMeshPreview(m);meshPreviews=[];voiceRecord?.cancel?.();voiceRecord=null;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;window.FreeLab?.notify?.('Exited spatial collection');});
+ session.addEventListener('end',()=>{agencyTelemetryStop();agencyExplainerToken++;agencyExplainer=null;window.FreeLabAgencyMedia?.stop?.();agencySession?.finish();agencySession=null;agencyClearCards();agencyFreeCards(agencyFadingCards.map(v=>v.card));agencyFadingCards=[];for(const g of agencyGeometryCache.values())gl?.deleteBuffer(g.buffer);agencyGeometryCache.clear();agencyRoot=null;entranceFollow=null;entranceHover=null;agencyGrab=null;xrExperience='entrance';window.FreeLabRooms?.end?.();for(const v of visitorBadges)if(v.front&&gl)gl.deleteTexture(v.front);visitorBadges=[];visitorPollAt=0;for(const photo of framePhotos){if(photo.texture&&gl)gl.deleteTexture(photo.texture);if(photo.buffer&&gl)gl.deleteBuffer(photo.buffer);}framePhotos=[];framePhotoBusy=false;frameLab?.clear();frameLab=null;triangleLab=null;shapeTargets=[];frameGames?.clear();frameGames=null;mascotHitUntil=0;if(mascotImpactSprite){gl.deleteTexture(mascotImpactSprite);mascotImpactSprite=null;}if(frameGameCubeBuffer){gl.deleteBuffer(frameGameCubeBuffer);frameGameCubeBuffer=null;}frameTouch=null;frameErase=null;frameLabState=null;window.FreeLabSound?.fingersStopAll?.();fingerLab?.setEnabled(false);fingerLab=null;fingerLabState=null;leftStickDown=false;window.FreeLabSound?.stringStop?.();stringLab?.setEnabled(false);stringLab=null;stringLabState=null;rightStickDown=false;cue('release');session=null;poseReady=false;held=null;clearCards();if(darkroom?.ownedTexture&&darkroom.front)gl.deleteTexture(darkroom.front);if(darkFloor?.front)gl.deleteTexture(darkFloor.front);if(darkClose?.front)gl.deleteTexture(darkClose.front);for(const b of [darkPrevious,darkNext])if(b?.front)gl.deleteTexture(b.front);darkPrevious=null;darkNext=null;darkroom=null;darkBackdrop=null;darkClose=null;darkFloor=null;descriptionQuestionMode=false;if(voiceBadge?.front)gl.deleteTexture(voiceBadge.front);voiceBadge=null;dismissVoice();gestureDebounce.clear();gestureSpeechTimes.clear();lastGestureAnnouncement=-100000;if(mascotSpeech?.front)gl.deleteTexture(mascotSpeech.front);mascotSpeech=null;cloud=null;for(const z of zones)gl.deleteTexture(z.front);zones=[];if(toolbar?.front)gl.deleteTexture(toolbar.front);if(editbar?.front)gl.deleteTexture(editbar.front);if(statusCard?.front)gl.deleteTexture(statusCard.front);if(cameraHint?.front)gl.deleteTexture(cameraHint.front);cameraHint=null;cameraHintState='';if(captureEye?.front)gl.deleteTexture(captureEye.front);if(voiceButton?.front)gl.deleteTexture(voiceButton.front);if(extractButton?.front)gl.deleteTexture(extractButton.front);voiceButton=null;extractButton=null;extractVisualActive=null;inferenceCard=null;captureEye=null;eyeResource=null;toolbar=null;statusCard=null;editbar=null;if(promptPanel?.front)gl.deleteTexture(promptPanel.front);promptPanel=null;document.getElementById('xrPromptEditor')?.classList.add('hidden');document.getElementById('xrPromptEditor')?.classList.remove('xr-native-open');if(debugPanel?.front)gl.deleteTexture(debugPanel.front);debugPanel=null;debugShowing=false;modelDiagnosticLines=[];modelDiagnosticJob=null;modelDiagnosticViewedAt=0;if(configPanel?.front)gl.deleteTexture(configPanel.front);configPanel=null;configShowing=false;if(descriptionPanel?.front)gl.deleteTexture(descriptionPanel.front);descriptionPanel=null;for(const m of meshPreviews)releaseMeshPreview(m);meshPreviews=[];voiceRecord?.cancel?.();voiceRecord=null;if(mascotPointer?.front)gl.deleteTexture(mascotPointer.front);mascotPointer=null;mixBucket=[];xrKeyboard?.remove();xrKeyboard=null;xrGalleryInput?.remove();xrGalleryInput=null;xrGalleryVoiceSearch=false;xrGalleryAnchor=null;window.FreeLab?.notify?.('Exited spatial collection');});
  // Render the immersive entrance immediately. Storage/model metadata loads must
  // never hold the first headset frame hostage to slow network responses.
  setStatus('XR ENTRANCE · Choose MY STUFF or AGENCY in your headset',6700);window.FreeLabSound?.unlock?.();cue('arrival');

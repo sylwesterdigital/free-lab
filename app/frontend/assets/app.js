@@ -351,6 +351,7 @@ async function toggleProgress(open){
 }
 async function loadProgress(){const period=$('progressPeriod').value,metrics=$('progressKpis'),bars=$('progressBars'),activities=$('progressActivities'),insight=$('progressInsight');
  $('progressExport').href='/api/agency/export.csv?days='+encodeURIComponent(period);
+ $('progressEventsExport').href='/api/agency/events.csv?days='+encodeURIComponent(period);
  metrics.textContent='Loading your private activity history…';bars.replaceChildren();activities.replaceChildren();insight.textContent='';
  try{const data=await api('/agency/dashboard?days='+encodeURIComponent(period)),summary=data.total||{};
   metrics.replaceChildren();for(const [name,value] of [['Sessions',String(summary.sessions||0)],['Total play',fmtDuration(summary.duration_ms||0)],['Free play',fmtDuration(summary.free_ms||0)],['Correct',String(summary.correct||0)],['Points',String(summary.points||0)],['Accuracy',summary.correct+summary.errors?Math.round(summary.correct/(summary.correct+summary.errors)*100)+'%':'—']]){
@@ -362,9 +363,36 @@ async function loadProgress(){const period=$('progressPeriod').value,metrics=$('
   if(!data.activities?.length)activities.append(el('p','small-muted','No activity breakdown yet.'));
   else for(const a of data.activities){const row=el('div','progress-activity'),top=el('div','progress-activity-top');top.append(el('span','',activityLabels[a.activity]||a.activity),el('span','',a.sessions+' played · '+fmtDuration(a.duration_ms)));
    const rail=el('div','progress-activity-rail'),fill=el('span');fill.style.width=a.sessions/maxSessions*100+'%';rail.append(fill);row.append(top,rail);activities.append(row);}
-  const n=Number(summary.sessions||0),active=data.activities?.[0];insight.textContent=n===0?'No baseline yet. This dashboard starts recording with v0.10.63; earlier sessions are not represented.':
+  const formatObservation=(r)=>r.attempts?`${r.correct}/${r.attempts} correct · ${Math.round(100*r.correct/r.attempts)}% · mean ${Math.round(r.response_ms/r.attempts)}ms`:'No recorded answers';
+  for(const [id,rows,label] of [['progressInputs',data.observation?.inputs||[],'Input'],['progressDayparts',data.observation?.dayparts||[],'Period']]){
+   const dest=$(id);dest.replaceChildren();
+   if(!rows.some(r=>r.attempts))dest.append(el('p','small-muted','No accepted-answer events recorded yet. This measure starts in v0.10.64.'));
+   else for(const row of rows){if(!row.attempts)continue;const box=el('div','progress-stat-row');
+    box.append(el('strong','',row.input||row.period||label),el('span','',formatObservation(row)));dest.append(box);}
+  }
+  const trends=$('progressInputTrend');trends.replaceChildren();
+  const observations=data.observation?.by_day||[];
+  if(!observations.length)trends.append(el('p','small-muted','No dated input observations yet.'));
+  else for(const d of observations.slice(-30)){
+   const row=el('div','progress-trend-row'),name=el('span','',d.day.slice(5)+' · '+d.input);
+   const accuracy=d.attempts?Math.round(d.correct/d.attempts*100):0;
+   const rail=el('div','progress-trend-rail'),bar=el('span');bar.style.width=accuracy+'%';rail.append(bar);
+   const detail=el('small','',`${d.correct}/${d.attempts} · ${accuracy}% · ${Math.round(d.response_ms/d.attempts)}ms`);
+   row.append(name,rail,detail);trends.append(row);
+  }
+  const n=Number(summary.sessions||0),active=data.activities?.[0];insight.textContent=n===0?'No baseline yet. This dashboard starts recording with v0.10.64; earlier sessions are not represented.':
    'OBSERVED · '+n+' recorded session'+(n===1?'':'s')+' · '+(active?activityLabels[active.activity]+' was played most often. ':'')+'Comparisons are descriptive; task difficulty and sample size influence scores.';
  }catch(e){metrics.textContent='Progress unavailable · '+e.message;}}
+let progressAIComment='';
+async function analyseProgress(){
+ const consent=$('progressAIConsent'),button=$('progressAIAnalyse'),result=$('progressAIResult');
+ if(!consent.checked)return;
+ button.disabled=true;result.textContent='Requesting a non-diagnostic observation from Meta…';$('progressAISpeak').disabled=true;
+ try{const data=await api('/agency/analyse',{method:'POST',body:JSON.stringify({style:$('progressAIStyle').value,days:$('progressPeriod').value,consent:true})});
+  progressAIComment=String(data.comment||'').slice(0,1800);result.textContent=progressAIComment||'No commentary returned';$('progressAISpeak').disabled=!progressAIComment;
+ }catch(e){progressAIComment='';result.textContent='Analysis unavailable: '+e.message;}
+ finally{button.disabled=!consent.checked;}
+}
 function selectTab(tab){state.tab=tab;document.querySelectorAll('.tab').forEach(e=>e.classList.toggle('active',e.dataset.list===tab));}
 let currentLog=null;
 function logTab(tab){
@@ -417,6 +445,11 @@ async function init(){
  $('openProgress').onclick=()=>void toggleProgress(true);
  $('closeProgress').onclick=()=>void toggleProgress(false);
  $('progressPeriod').onchange=()=>void loadProgress();$('progressMetric').onchange=()=>void loadProgress();
+ $('progressAIConsent').onchange=()=>{$('progressAIAnalyse').disabled=!$('progressAIConsent').checked;};
+ $('progressAIAnalyse').onclick=()=>void analyseProgress();
+ $('progressAISpeak').onclick=()=>{if(!progressAIComment)return;window.FreeLab.speakUpdate(progressAIComment.slice(0,500));
+  if(!pref('spoken'))notify('Enable spoken updates in Settings to hear the mascot.');};
+
  $('closeLibrary').onclick=()=>setLibrary(false);$('galleryClose').onclick=()=>$('desktopGallery').classList.add('hidden');$('galleryPrev').onclick=()=>browseGallery(-1);$('galleryNext').onclick=()=>browseGallery(1);let swipeX=null;$('galleryImage').addEventListener('touchstart',e=>{swipeX=e.changedTouches[0].clientX;},{passive:true});$('galleryImage').addEventListener('touchend',e=>{if(swipeX!==null&&Math.abs(e.changedTouches[0].clientX-swipeX)>35)browseGallery(e.changedTouches[0].clientX<swipeX?1:-1);swipeX=null;},{passive:true});document.addEventListener('keydown',e=>{if($('desktopGallery').classList.contains('hidden'))return;if(e.key==='Escape')$('galleryClose').click();else if(e.key==='ArrowLeft')browseGallery(-1);else if(e.key==='ArrowRight')browseGallery(1);});
  document.querySelectorAll('.model-option').forEach(btn=>btn.onclick=()=>{$('modelChoice').value=btn.dataset.model;document.querySelectorAll('.model-option').forEach(b=>b.classList.toggle('selected',b===btn));});
  $('saveUploadCloud')?.addEventListener('click',async()=>{const button=$('saveUploadCloud');button.disabled=true;
@@ -688,7 +721,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.63');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.64');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{

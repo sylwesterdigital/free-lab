@@ -76,6 +76,38 @@ class ActivityHistoryTests(unittest.TestCase):
   db.init(self.path)
   with db.connect(self.path) as c:self.assertEqual(c.execute('SELECT COUNT(*) FROM agency_sessions').fetchone()[0],1)
 
+class DetailedActivityObservationTests(unittest.TestCase):
+ def test_actual_backend_aggregation_handles_hands_local_time_and_user_isolation(self):
+  # Execute the same aggregation function used by dashboard and Meta analyser;
+  # no Flask service, network or AI account is required for this calculation.
+  import ast,types
+  root=Path(__file__).parents[1]
+  tree=ast.parse((root/'backend/app.py').read_text())
+  fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='agency_observations')
+  code=compile(ast.Module(body=[fn],type_ignores=[]),'<agency-observations>','exec')
+  with tempfile.TemporaryDirectory() as temp:
+   path=Path(temp)/'db.sqlite3';db.init(path)
+   with db.connect(path) as con:
+    first=db.create_user(con,'metricsfirst','longsecurepassword123')
+    other=db.create_user(con,'metricssecond','longsecurepassword456')
+    with con:
+     con.execute('INSERT INTO agency_sessions(id,owner_id,activity,mode,level) VALUES(?,?,?,?,?)',('a'*32,first,'math','free',1))
+     con.execute('INSERT INTO agency_sessions(id,owner_id,activity,mode,level) VALUES(?,?,?,?,?)',('b'*32,other,'math','free',1))
+     for session,owner,ts,hand,kind,correct,latency in [
+      ('a'*32,first,'2026-11-17T08:00:00.000Z','left','hand',1,400),
+      ('a'*32,first,'2026-11-17T10:00:00.000Z','left','hand',0,600),
+      ('a'*32,first,'2026-11-17T12:00:00.000Z','right','controller',1,250),
+      ('b'*32,other,'2026-11-17T08:00:00.000Z','right','hand',1,20)]:
+      con.execute('INSERT INTO agency_events(session_id,owner_id,at_utc,handedness,input_kind,correct,response_ms,offset_minutes) VALUES(?,?,?,?,?,?,?,?)',
+                 (session,owner,ts,hand,kind,correct,latency,60))
+    scope={'g':types.SimpleNamespace(con=con,user={'id':first})};exec(code,scope)
+    obs=scope['agency_observations']('all')
+    self.assertEqual(obs['events'],3)
+    self.assertEqual([(r['input'],r['attempts'],r['correct']) for r in obs['inputs']], [('hand left',2,1),('controller right',1,1)])
+    self.assertEqual([(r['period'],r['attempts']) for r in obs['dayparts'] if r['attempts']], [('Morning',2),('Afternoon',1)])
+    self.assertEqual(sum(r['attempts'] for r in obs['by_day']),3)
+    self.assertEqual(obs['inputs'][0]['response_ms'],1000)
+
 class ProductProgressGuards(unittest.TestCase):
  def test_progress_metadata_and_xr_entry_are_present(self):
   root=Path(__file__).parents[1]
@@ -83,15 +115,24 @@ class ProductProgressGuards(unittest.TestCase):
   app=(root/'frontend/assets/app.js').read_text();scene=(root/'frontend/assets/scene.mjs').read_text()
   for selector in ('progressDashboard','progressPeriod','progressMetric','collectionTags','collectionFrom','collectionTo'):
    self.assertIn(f'id="{selector}"',html)
-  for action in ('agencyTelemetryStart(', 'agencyTelemetryStop(',"'agency-progress'",'xrGalleryFilterPanel()'):
+  for action in ('agencyTelemetryStart(', 'agencyTelemetryStop(',"'agency-progress'",'xrGalleryHeaderHit(', 'xrGalleryControl(', 'xrGalleryArrowTexture('):
    self.assertIn(action,xr)
+  self.assertNotIn('function xrGalleryFilterPanel(',xr)
+  self.assertNotIn("['filter','⌕']",xr)
   self.assertIn("api('/agency/dashboard?days='",app)
   self.assertIn('collectionDateOkay(',app)
   self.assertIn("if(canvas&&stage){",scene)
   self.assertNotIn('if(canvas&&stage&&!/OculusBrowser',scene)
- def test_api_routes_are_private_and_opt_out_of_ai(self):
+ def test_api_routes_are_private_and_meta_requires_opt_in(self):
   source=(Path(__file__).parents[1]/'backend/app.py').read_text()
-  for endpoint in ('/api/agency/sessions','/api/agency/dashboard','/api/agency/export.csv'):
+  for endpoint in ('/api/agency/sessions','/api/agency/dashboard','/api/agency/export.csv',
+                   '/api/agency/sessions/<session_id>/events','/api/agency/events.csv','/api/agency/analyse'):
    self.assertIn(endpoint,source)
   self.assertIn('scores\':\'self-reported by the client',source)
   self.assertIn('private to the signed-in profile',source)
+  self.assertIn("v.get('consent') is not True",source)
+  self.assertIn("provider_key('meta')",source)
+  self.assertIn("'Satire'",source)
+  self.assertIn("'inputs':observations['inputs']",source)
+  self.assertIn("'day_by_input':observations['by_day'][-60:]",source)
+  self.assertNotIn("g.user['username']",source.split("def agency_analyse():",1)[1].split("@app.get('/api/agency/events.csv')",1)[0])

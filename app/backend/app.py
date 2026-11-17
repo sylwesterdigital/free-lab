@@ -482,6 +482,25 @@ def agency_session_update(session_id):
              int(v.get('finished',False)),session_id,g.user['id']))
     return jsonify(ok=True,finished=v.get('finished',False))
 
+@app.post('/api/agency/sessions/<session_id>/events')
+@require_user
+def agency_event(session_id):
+    # An accepted answer, not headset pose or motion tracking. Bounded and profile scoped.
+    if not re.fullmatch(r'[a-f0-9]{32}',session_id):abort(404)
+    v=body();hand=v.get('handedness','none');kind=v.get('input_kind','unknown')
+    correct=v.get('correct');response_ms=v.get('response_ms',0);offset=v.get('offset_minutes',0)
+    if hand not in ('left','right','none') or kind not in ('hand','controller','unknown') or type(correct) is not bool or type(response_ms) is not int or not 0<=response_ms<=600_000 or type(offset) is not int or not -840<=offset<=840:
+        return jsonify(error='Invalid interaction metadata'),400
+    with g.con:
+        row=g.con.execute('SELECT finished FROM agency_sessions WHERE id=? AND owner_id=?',(session_id,g.user['id'])).fetchone()
+        if not row:abort(404)
+        if row['finished']:return jsonify(ok=True,recorded=False)
+        count=g.con.execute('SELECT COUNT(*) FROM agency_events WHERE session_id=?',(session_id,)).fetchone()[0]
+        if count>=2000:return jsonify(error='Session event limit reached'),429
+        g.con.execute('INSERT INTO agency_events(session_id,owner_id,handedness,input_kind,correct,response_ms,offset_minutes) VALUES(?,?,?,?,?,?,?)',
+                      (session_id,g.user['id'],hand,kind,int(correct),response_ms,offset))
+    return jsonify(ok=True,recorded=True),201
+
 def agency_days():
     days=request.args.get('days','30')
     if days not in ('7','30','90','365','all'):abort(400)
@@ -492,6 +511,25 @@ def agency_rows(days):
     if days=='all':return g.con.execute('SELECT * FROM agency_sessions WHERE owner_id=? ORDER BY started_at DESC',(g.user['id'],)).fetchall()
     return g.con.execute("SELECT * FROM agency_sessions WHERE owner_id=? AND started_at>=strftime('%Y-%m-%dT%H:%M:%fZ','now',?) ORDER BY started_at DESC",
                          (g.user['id'],f'-{days} days')).fetchall()
+
+def agency_observations(days):
+    # No raw event data leaves this function; chart data retains only daily aggregates.
+    import datetime as _dt
+    event_rows=g.con.execute('''SELECT e.* FROM agency_events e JOIN agency_sessions s ON s.id=e.session_id
+        WHERE e.owner_id=? AND s.owner_id=? '''+('' if days=='all' else "AND e.at_utc>=strftime('%Y-%m-%dT%H:%M:%fZ','now',?) ")+'ORDER BY e.at_utc',
+        (g.user['id'],g.user['id']) if days=='all' else (g.user['id'],g.user['id'],f'-{days} days')).fetchall()
+    inputs={};by_day={};dayparts={name:{'period':name,'attempts':0,'correct':0,'response_ms':0} for name in ('Night','Morning','Afternoon','Evening')}
+    for e in event_rows:
+        name=e['input_kind']+' '+e['handedness'];row=inputs.setdefault(name,{'input':name,'attempts':0,'correct':0,'response_ms':0})
+        local=_dt.datetime.fromisoformat(e['at_utc'].replace('Z','+00:00'))+_dt.timedelta(minutes=e['offset_minutes'])
+        hour=local.hour;part='Night' if hour<6 else 'Morning' if hour<12 else 'Afternoon' if hour<18 else 'Evening'
+        day=local.date().isoformat()
+        d=by_day.setdefault((day,name),{'day':day,'input':name,'attempts':0,'correct':0,'response_ms':0})
+        for group in (row,dayparts[part],d):
+            group['attempts']+=1;group['correct']+=e['correct'];group['response_ms']+=e['response_ms']
+    return {'events':len(event_rows),'inputs':sorted(inputs.values(),key=lambda r:-r['attempts']),
+            'by_day':[v for k,v in sorted(by_day.items())], 'dayparts':list(dayparts.values()),
+            'time_context':'Device local offset at each interaction; time-of-day comparisons are observational, not controlled'}
 
 @app.get('/api/agency/dashboard')
 @require_user
@@ -505,12 +543,13 @@ def agency_dashboard():
         for metric,val in (('sessions',1),('duration_ms',duration),('free_ms',duration if r['mode']=='free' else 0),
                            ('correct',r['correct']),('errors',r['errors']),('points',r['points'])):
             total[metric]+=val;d[metric]+=val;a[metric]+=val
+    observation=agency_observations(days)
     return jsonify(period=days,timezone='UTC',total=total,daily=sorted(daily.values(),key=lambda x:x['day']),
-                   activities=sorted(activities.values(),key=lambda x:x['sessions'],reverse=True),
+                   activities=sorted(activities.values(),key=lambda x:x['sessions'],reverse=True),observation=observation,
                    methodology={'metric':'descriptive play telemetry','scores':'self-reported by the client; not a cognitive assessment',
                    'duration':'elapsed time in an activity, excluding HOW TO PLAY playback; pauses and idle time may be included',
                    'start':'recording begins with this release; historical sessions cannot be reconstructed from the server',
-                   'privacy':'private to the signed-in profile; no external AI processing'} )
+                   'privacy':'private to the signed-in profile; external aggregate analysis only on explicit consent'} )
 
 @app.get('/api/agency/export.csv')
 @require_user
@@ -521,6 +560,68 @@ def agency_export():
         writer.writerow((row['id'],row['started_at'],row['activity'],row['mode'],row['level'],
                         round(row['duration_ms']/1000,3),row['correct'],row['errors'],row['points'],row['finished']))
     return Response(output.getvalue(),mimetype='text/csv',headers={'Content-Disposition':'attachment; filename="freelab-agency-'+days+'d.csv"','Cache-Control':'private, no-store'})
+
+@app.post('/api/agency/analyse')
+@require_user
+def agency_analyse():
+    # This is a user-initiated, paid, external request. No individual event log is sent.
+    v=body();voice=v.get('style','Scientist');days=str(v.get('days','30'))
+    if voice not in ('Scientist','Coach','Buddy','Satire') or days not in ('7','30','90','365','all') or v.get('consent') is not True:
+        return jsonify(error='Choose a style and explicitly consent to sharing aggregated play metrics with Meta'),400
+    key=provider_key('meta')
+    if not key:return jsonify(error='Meta Model API key is not configured. No data was shared.'),503
+    rows=agency_rows(days)
+    if not rows:return jsonify(error='No recorded sessions in this period; play activities before requesting analysis'),409
+    totals={'sessions':len(rows),'play_minutes':round(sum(r['duration_ms'] for r in rows)/60000,1),
+            'correct':sum(r['correct'] for r in rows),'mistakes':sum(r['errors'] for r in rows)}
+    activities={}
+    for r in rows:
+        item=activities.setdefault(r['activity'],{'sessions':0,'correct':0,'mistakes':0,'minutes':0})
+        item['sessions']+=1;item['correct']+=r['correct'];item['mistakes']+=r['errors'];item['minutes']+=r['duration_ms']/60000
+    # Only aggregates leave this server. No identity, source images, raw prompts, precise timestamps or event records.
+    observations=agency_observations(days)
+    prompt={'app':'FREELAB: exploratory XR activities including matching, gestures, arithmetic, throwing and free play',
+            'measurement':'user-reported in-game outcomes, session time, not a standardized cognitive test',
+            'days':days,'total':totals,'activities':activities,
+            'inputs':observations['inputs'],'dayparts':observations['dayparts'],
+            'day_by_input':observations['by_day'][-60:]}
+    tone={'Scientist':'A careful observational research assistant. Note limits, confounds and sample size.',
+          'Coach':'Encouraging, specific practice suggestions with uncertainty.',
+          'Buddy':'Friendly, plain-language, light humor, factual.',
+          'Satire':'Gentle playful satire about the games, no ridicule of the player or clinical insinuations.'}[voice]
+    instructions=('Write 90-140 words addressing the user. '+tone+' Only describe patterns supported by the provided aggregates. '
+        'Never diagnose, estimate IQ/brain health, attribute causes, or claim improvement without controlled comparable tasks. '
+        'When evidence is weak say so. Do not assume that more correct answers mean improved cognition. '
+        'Finish with one optional next experiment the user can try.')
+    digest=hashlib.sha256(json.dumps(prompt,sort_keys=True).encode()).hexdigest()
+    try:call=db.begin_inference(g.con,g.user['id'],digest,'meta',daily_cap=60,user_cap=6,cooldown=45)
+    except ValueError as e:return jsonify(error=str(e)),429
+    payload=json.dumps({'model':os.getenv('META_ANALYSIS_MODEL','muse-spark-1.3'),
+       'messages':[{'role':'system','content':instructions},{'role':'user','content':json.dumps(prompt)}],
+       'max_tokens':300,'temperature':0.55}).encode()
+    req=urllib.request.Request('https://api.meta.ai/v1/chat/completions',data=payload,method='POST',
+        headers={'Authorization':'Bearer '+key,'Content-Type':'application/json','Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(req,timeout=35) as res: result=json.load(res)
+        comment=str(result['choices'][0]['message']['content']).strip()[:1800]
+        if not comment:raise ValueError('Model returned empty text')
+        db.finish_inference(g.con,call,'succeeded',result.get('usage',{}))
+        return jsonify(comment=comment,style=voice,provider='Meta Model API',shared='aggregated sessions only',diagnostic=False)
+    except (urllib.error.HTTPError,urllib.error.URLError,KeyError,ValueError,TimeoutError) as e:
+        db.finish_inference(g.con,call,'failed')
+        return jsonify(error='Meta analysis unavailable; no interpretation generated'),502
+
+@app.get('/api/agency/events.csv')
+@require_user
+def agency_events_export():
+    days=agency_days();output=io.StringIO()
+    writer=csv.writer(output);writer.writerow(('session_id','at_utc','handedness','input_kind','correct','response_ms','offset_minutes'))
+    rows=g.con.execute('''SELECT e.session_id,e.at_utc,e.handedness,e.input_kind,e.correct,e.response_ms,e.offset_minutes
+        FROM agency_events e JOIN agency_sessions s ON s.id=e.session_id WHERE e.owner_id=? AND s.owner_id=? '''+
+        ('' if days=='all' else "AND e.at_utc>=strftime('%Y-%m-%dT%H:%M:%fZ','now',?) ")+'ORDER BY e.at_utc',
+        (g.user['id'],g.user['id']) if days=='all' else (g.user['id'],g.user['id'],f'-{days} days')).fetchall()
+    for row in rows:writer.writerow(tuple(row))
+    return Response(output.getvalue(),mimetype='text/csv',headers={'Content-Disposition':'attachment; filename="freelab-interactions.csv"','Cache-Control':'private, no-store'})
 
 @app.get('/api/health')
 def health():

@@ -1,4 +1,4 @@
-"""v0.10.63 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
+"""v0.10.64 Tripo result recovery, trusted signed URLs and no unsolicited XR logs."""
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -188,7 +188,7 @@ class Tripo31(unittest.TestCase):
 if __name__=='__main__':unittest.main()
 
 
-# v0.10.63: private Blender thumbnails and XR GPU lifecycle diagnostics.
+# v0.10.64: private Blender thumbnails and XR GPU lifecycle diagnostics.
 class ModelThumbnailTests(unittest.TestCase):
  def test_backend_exposes_thumbnail_and_source_fallback(self):
   self.assertIn('def _model_thumb_path(owner,jid):',APP)
@@ -235,7 +235,7 @@ class XR3DDiagnosticsTests(unittest.TestCase):
   self.assertIn("'Cache-Control'",source)
 
 class XRMeshOwnershipAndLibraryRegressionTests(unittest.TestCase):
- """v0.10.63 regression: GPU buffers must remain owned by the XR model."""
+ """v0.10.64 regression: GPU buffers must remain owned by the XR model."""
  def test_ownership_transfer_preserves_mesh_parts_during_finally_cleanup(self):
   xr=(ROOT/'frontend/assets/xr.js').read_text()
   self.assertIn("kind:'3dmesh',parts:pieces.slice()",xr)
@@ -260,15 +260,21 @@ class XRMeshOwnershipAndLibraryRegressionTests(unittest.TestCase):
  def test_library_is_clearly_paginated_and_newest_first(self):
   xr=(ROOT/'frontend/assets/xr.js').read_text()
   self.assertIn('function galleryHeadingTexture(total,page,start,end)',xr)
-  self.assertIn('sort((a,b)=>b.id-a.id)',xr)
-  self.assertIn("label:direction>0?'OLDER  →':'←  NEWER'",xr)
+  self.assertIn('available.sort((a,b)=>b.id-a.id)',xr)
+  self.assertIn('function xrGalleryArrowTexture(direction)',xr)
+  self.assertIn("direction<0?'‹':'›'",xr)
+  self.assertIn("kind:'gallerynav'",xr)
   self.assertIn("c.kind==='gallery')&&c.captionNormal",xr)
-  self.assertIn("cards.filter(c=>c.kind!=='galleryheader')",xr)
+  self.assertIn("kind:'galleryheader'",xr)
+  self.assertIn("cards.push({id:'gallerynav'+direction",xr)
 
-# v0.10.63: Quest controllers, local axis gizmos and static library animation.
+# v0.10.64: Quest controllers, local axis gizmos and static library animation.
 class XRTransformAndLibraryTests(unittest.TestCase):
- def test_library_header_is_static_and_tween_skips_unanimated_cards(self):
-  self.assertIn("kind:'galleryheader',data:{},pos:[0,.67,-.04],from:[0,.67,-.04],to:[0,.67,-.04],start:0,duration:0",XR)
+ def test_library_header_is_draggable_and_tween_skips_unanimated_cards(self):
+  self.assertIn("kind:'galleryheader'",XR)
+  self.assertIn("card.kind==='galleryheader'&&held.anchor",XR)
+  self.assertIn("root[12]+=delta[0]",XR)
+  self.assertIn("xrGalleryAnchor=new Float32Array(root)",XR)
   self.assertIn("!Number.isFinite(c.duration)||c.duration<=0||!Array.isArray(c.from)",XR)
   self.assertIn("!Array.isArray(c.to)",XR)
   import shutil,subprocess
@@ -314,7 +320,7 @@ class XRTransformAndLibraryTests(unittest.TestCase):
   self.assertIn('mesh.parts',XR)
   self.assertNotIn('THREE.TransformControls',XR)
 
-# v0.10.63 — unified archive, native two-hand model dragging and Z-up presentation.
+# v0.10.64 — unified archive, native two-hand model dragging and Z-up presentation.
 class MediaArchiveDirectGrab42(unittest.TestCase):
  def test_media_tabs_group_3d_with_saved_sources(self):
   self.assertIn('id="archiveMediaNav"',HTML)

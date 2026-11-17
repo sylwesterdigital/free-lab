@@ -1,19 +1,34 @@
 {
-  "version": "0.10.63",
-  "title": "FREELAB v0.10.63 — Activity research and personal collection",
-  "datetime": "2026-11-16",
+  "version": "0.10.64",
+  "title": "FREELAB v0.10.64 — Spatial library and observational progress",
+  "datetime": "2026-11-17",
   "changes": [
-    "Enable the same Three.js landing mascot on Quest Browser and desktop, scaling rendering pixel density for Quest.",
-    "Store account-scoped Agency sessions in SQLite with elapsed play time, modes, scores, errors and point totals; record ongoing and completed sessions.",
-    "Provide a responsive longitudinal Play & Progress dashboard with selectable metric and 7/30/90/365-day or all-time windows.",
-    "Add per-activity comparisons, daily time series, free-play totals, correct/error counts, research CSV export and methodology disclosure.",
-    "Keep data private to the authenticated profile; no automatic AI analysis, model call or cognitive diagnosis.",
-    "Name successive image edits Edited (N) original name rather than stacking Edited prefixes; normalize existing names non-destructively for display.",
-    "Provide occurrence-counted object-name chips plus native date-calendar filtering on desktop and mobile.",
-    "Add XR Collection name and date filters and a compact XR progress board inside Agency.",
-    "Keep bundled watcher and complete application architecture; preserve persistent HLS video files outside the release."
+    "Replace broken XR filter image cards with accessible integrated library header controls: voice/keyboard search, top categories, recents, alphabetic and date sorting.",
+    "Use small white circular arrows for XR library pagination, matching Cinema controls.",
+    "Allow users to grab the XR library header and reposition the complete gallery in room space; preserve its position while changing pages or filters.",
+    "Record bounded, account-scoped accepted answer events with optional left/right hand/controller source, correctness, response interval and local time offset.",
+    "Expand desktop and mobile Play & Progress with input modality and time-of-day observations, and separate interaction-level CSV export.",
+    "Add an explicitly consented Meta Model API observation request with Scientist, Coach, Buddy and Satire voices; send only aggregate counts and times, no photos, identifiers or raw events.",
+    "Reuse the existing mascot and optional configured ElevenLabs speech engine for readable observational commentary; never generate a medical diagnosis.",
+    "Keep HLS streams and persisted collections independent of deploy ZIP and retain server-compatible tests and watcher update."
   ],
   "history": [
+    {
+      "version": "0.10.63",
+      "title": "FREELAB v0.10.63 — Activity research and personal collection",
+      "datetime": "2026-11-16",
+      "changes": [
+        "Enable the same Three.js landing mascot on Quest Browser and desktop, scaling rendering pixel density for Quest.",
+        "Store account-scoped Agency sessions in SQLite with elapsed play time, modes, scores, errors and point totals; record ongoing and completed sessions.",
+        "Provide a responsive longitudinal Play & Progress dashboard with selectable metric and 7/30/90/365-day or all-time windows.",
+        "Add per-activity comparisons, daily time series, free-play totals, correct/error counts, research CSV export and methodology disclosure.",
+        "Keep data private to the authenticated profile; no automatic AI analysis, model call or cognitive diagnosis.",
+        "Name successive image edits Edited (N) original name rather than stacking Edited prefixes; normalize existing names non-destructively for display.",
+        "Provide occurrence-counted object-name chips plus native date-calendar filtering on desktop and mobile.",
+        "Add XR Collection name and date filters and a compact XR progress board inside Agency.",
+        "Keep bundled watcher and complete application architecture; preserve persistent HLS video files outside the release."
+      ]
+    },
     {
       "version": "0.10.62",
       "title": "FREELAB v0.10.62 — Smooth XR video texture playback and clean dismissal",

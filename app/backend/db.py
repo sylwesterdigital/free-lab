@@ -112,6 +112,20 @@ CREATE TABLE IF NOT EXISTS agency_sessions (
  finished INTEGER NOT NULL DEFAULT 0 CHECK(finished IN (0,1))
 );
 CREATE INDEX IF NOT EXISTS agency_sessions_owner_date ON agency_sessions(owner_id,started_at);
+CREATE TABLE IF NOT EXISTS agency_events (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ session_id TEXT NOT NULL REFERENCES agency_sessions(id) ON DELETE CASCADE,
+ owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ at_utc TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+ handedness TEXT NOT NULL CHECK(handedness IN ('left','right','none')),
+ input_kind TEXT NOT NULL CHECK(input_kind IN ('hand','controller','unknown')),
+ correct INTEGER NOT NULL CHECK(correct IN (0,1)),
+ response_ms INTEGER NOT NULL DEFAULT 0,
+ offset_minutes INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS agency_events_owner_date ON agency_events(owner_id,at_utc);
+CREATE INDEX IF NOT EXISTS agency_events_session ON agency_events(session_id);
+
 CREATE INDEX IF NOT EXISTS auth_attempts_recent ON auth_attempts(fingerprint,created_at);
 '''
 

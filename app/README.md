@@ -1,6 +1,6 @@
-# FREELAB v0.10.63 — Personal progress and collection
+# FREELAB v0.10.64 — Personal progress and collection
 
-Adds Quest landing mascot parity, semantic names for repeated image edits, responsive collection name/date filters, and a private descriptive Agency activity dashboard. Place `FREE_LAB_RELEASE_v0.10.63.zip` in `updates/` as a complete release. HLS videos remain in the independently managed `videos/` directory.
+Adds Quest landing mascot parity, semantic names for repeated image edits, responsive collection name/date filters, and a private descriptive Agency activity dashboard. Place `FREE_LAB_RELEASE_v0.10.64.zip` in `updates/` as a complete release. HLS videos remain in the independently managed `videos/` directory.
 
 ## Progress data and scientific interpretation
 
