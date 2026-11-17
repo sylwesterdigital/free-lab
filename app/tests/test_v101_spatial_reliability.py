@@ -88,7 +88,8 @@ class SpatialXRTests(unittest.TestCase):
         self.assertIn("function agencyEnterLab(mode)",XR)
         self.assertIn("agencyNavCard('agency-return','AGENCY'",XR)
     def test_old_library_pages_and_frame_touch(self):
-        self.assertIn('galleryPage*8',XR)
+        self.assertIn('entries.slice(galleryPage*pageSize,(galleryPage+1)*pageSize)',XR)
+        self.assertIn('xl:8,m:16,s:32',XR)
         self.assertIn("gallerynav'+direction",XR)
         self.assertIn('function pollPlacedFrameTouch(',XR)
         self.assertIn("get('pinky-finger-tip')",XR)

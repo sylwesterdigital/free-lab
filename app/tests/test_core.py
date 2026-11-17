@@ -136,3 +136,86 @@ class ProductProgressGuards(unittest.TestCase):
   self.assertIn("'inputs':observations['inputs']",source)
   self.assertIn("'day_by_input':observations['by_day'][-60:]",source)
   self.assertNotIn("g.user['username']",source.split("def agency_analyse():",1)[1].split("@app.get('/api/agency/events.csv')",1)[0])
+
+class XRLibraryAndAnalysis65(unittest.TestCase):
+ """Functional contract tests for the 0.10.65 work, without XR or paid requests."""
+ def test_analysis_budget_is_separate_and_operator_configurable(self):
+  import ast,os
+  from unittest.mock import patch
+  source=(Path(__file__).parents[1]/'backend/app.py').read_text()
+  tree=ast.parse(source)
+  fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='analysis_inference_limits')
+  scope={'os':os}
+  exec(compile(ast.Module(body=[fn],type_ignores=[]),'<analysis_limits>','exec'),scope)
+  f=scope['analysis_inference_limits']
+  names=('FREE_LAB_ANALYSIS_ENFORCE_LIMITS','FREE_LAB_ANALYSIS_DAILY_LIMIT',
+         'FREE_LAB_ANALYSIS_USER_DAILY_LIMIT','FREE_LAB_ANALYSIS_COOLDOWN_SECONDS')
+  with patch.dict(os.environ,{x:'0' for x in names}):
+   self.assertEqual(f(),{'daily_cap':0,'user_cap':0,'cooldown':0})
+  with patch.dict(os.environ,dict(zip(names,['1','150','17','5']))):
+   self.assertEqual(f(),{'daily_cap':150,'user_cap':17,'cooldown':5})
+  with patch.dict(os.environ,dict(zip(names,['0','2','1','45']))):
+   self.assertEqual(f(),{'daily_cap':0,'user_cap':0,'cooldown':0})
+  self.assertIn("digest,'meta-analysis',**limits",source)
+  analysis=source.split('def agency_analyse():',1)[1].split("@app.get('/api/agency/events.csv')",1)[0]
+  self.assertNotIn('daily_cap=60',analysis)
+  self.assertNotIn('user_cap=6',analysis)
+
+ def test_thumb_generation_is_cached_jpeg_and_private(self):
+  import ast,tempfile,re,os,secrets
+  from PIL import Image
+  from unittest.mock import patch
+  source=(Path(__file__).parents[1]/'backend/app.py').read_text()
+  tree=ast.parse(source)
+  fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='_library_thumbnail')
+  class Response:
+   def __init__(self,path):self.path=Path(path);self.headers={}
+  def abort(code):raise AssertionError('Unexpected HTTP error '+str(code))
+  with tempfile.TemporaryDirectory() as folder:
+   target=Path(folder);Image.new('RGB',(1800,1000),(140,85,58)).save(target/'original.jpg','JPEG',quality=90)
+   scope={'IMAGE_DIR':target,'os':os,'secrets':secrets,'re':re,'abort':abort,
+          'send_file':lambda path,**kw:Response(path)}
+   exec(compile(ast.Module(body=[fn],type_ignores=[]),'<thumb>','exec'),scope)
+   result=scope['_library_thumbnail']('original.jpg','a'*64,19)
+   self.assertEqual(result.headers['Cache-Control'],'private, max-age=86400')
+   self.assertLess(result.path.stat().st_size,25000)
+   with Image.open(result.path) as image:self.assertLessEqual(max(image.size),224)
+   stamp=result.path.stat().st_mtime_ns
+   again=scope['_library_thumbnail']('original.jpg','a'*64,19)
+   self.assertEqual(again.path, result.path);self.assertEqual(stamp, again.path.stat().st_mtime_ns)
+   second_user=scope['_library_thumbnail']('original.jpg','a'*64,20)
+   self.assertNotEqual(second_user.path,result.path)
+  for route in ("@app.get('/api/captures/<int:cid>/thumbnail')","@app.get('/api/objects/<int:oid>/thumbnail')"):
+   section=source.split(route,1)[1].split('@app.',1)[0]
+   self.assertIn('@require_user',section)
+   self.assertIn("owner_id=?",section)
+
+ def test_gallery_controls_cleanup_and_sphere_coordinates(self):
+  import subprocess
+  xr=(Path(__file__).parents[1]/'frontend/assets/xr.js').read_text()
+  for control in ('gallery-kind-sources','gallery-kind-segments','gallery-kind-all','gallery-size-xl',
+                  'gallery-size-m','gallery-size-s','gallery-view-sphere','gallery-view-grid'):
+   self.assertIn(control,xr)
+  self.assertIn('xl:8,m:16,s:32',xr)
+  self.assertIn('function galleryThumbnailTexture(',xr)
+  self.assertIn("'/api/objects/'+o.id+'/thumbnail'",xr)
+  self.assertIn("'/api/captures/'+c.id+'/thumbnail'",xr)
+  self.assertIn('function sanitizeXRVertexState()',xr)
+  self.assertIn('if(!part.buffer||!gl.isBuffer(part.buffer))',xr)
+  self.assertIn('resource.tex&&gl.isTexture(resource.tex)',xr)
+  self.assertIn("if(session&&xrExperience==='stuff'&&cloud?.collapsed){void openGallery(galleryPage);}",xr)
+  # The sphere layout is genuinely three-dimensional, finite and deterministic.
+  function='function xrSpherePosition'+xr.split('function xrSpherePosition',1)[1].split('async function openGallery',1)[0]
+  js='const assert=require("node:assert/strict");'+function+'''
+  for(const n of [8,16,48]){
+    const points=Array.from({length:n},(_,i)=>xrSpherePosition(i,n));
+    assert(points.every(p=>p.length===3&&p.every(Number.isFinite)));
+    assert(points.some(p=>p[2]>0)&&points.some(p=>p[2]<0));
+    assert(points.some(p=>p[1]>0)&&points.some(p=>p[1]<0));
+    const unique=new Set(points.map(p=>p.map(v=>v.toFixed(3)).join(',')));
+    assert.equal(unique.size,n);
+    for(const p of points){const d=Math.hypot(...p);assert(d>1.7&&d<2.05);}
+  }
+  '''
+  result=subprocess.run(['node','-e',js],capture_output=True,text=True,timeout=12)
+  self.assertEqual(result.returncode,0,result.stdout+result.stderr)

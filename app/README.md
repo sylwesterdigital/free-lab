@@ -1,6 +1,6 @@
-# FREELAB v0.10.64 — Personal progress and collection
+# FREELAB v0.10.65 — Personal progress and collection
 
-Adds Quest landing mascot parity, semantic names for repeated image edits, responsive collection name/date filters, and a private descriptive Agency activity dashboard. Place `FREE_LAB_RELEASE_v0.10.64.zip` in `updates/` as a complete release. HLS videos remain in the independently managed `videos/` directory.
+Adds Quest landing mascot parity, semantic names for repeated image edits, responsive collection name/date filters, and a private descriptive Agency activity dashboard. Place `FREE_LAB_RELEASE_v0.10.65.zip` in `updates/` as a complete release. HLS videos remain in the independently managed `videos/` directory.
 
 ## Progress data and scientific interpretation
 
@@ -484,3 +484,42 @@ fits the old 100-member validation limit. The included watcher v0.9.5 accepts up
 2,048 safe members with bounded compressed/uncompressed sizes and automatically
 reloads the upgraded watcher after a successful release when running continuously.
 An older watcher already running in memory may require one restart after this upgrade.
+
+
+## v0.10.65 — XR library, private thumbnails, and configurable progress analysis
+
+The XR library header includes **ALL / SOURCES / SEGMENTS** collection facets;
+**XL 8 / M 16 / S 32** responsive-density options and an experimental
+**SPHERE** mosaic that arranges up to 48 thumbnails per page around the viewer.
+Every preview in these modes is served through a private, cached 224px JPEG
+endpoint (`/api/captures/<id>/thumbnail` or `/api/objects/<id>/thumbnail`),
+with original media unmodified. Sphere mode is opt-in and read-only; selecting a
+thumbnail opens its source or linked segment. The header remains a grab handle.
+Reload failures preserve the visible library and show an error instead of blanking
+all cards. Closing a source returns to LIB rather than an empty scene. Invalid
+and deleted GPU resources are not used for new draw calls.
+
+### Progress analysis inference limits
+
+**Progress-analysis quotas are separate from image, voice, and 3D quotas.**
+They are disabled by default. The server administrator may modify the existing,
+root-owned, non-versioned `/etc/free-lab.env` (not the repository), setting:
+
+```
+FREE_LAB_ANALYSIS_ENFORCE_LIMITS=1
+FREE_LAB_ANALYSIS_DAILY_LIMIT=120
+FREE_LAB_ANALYSIS_USER_DAILY_LIMIT=12
+FREE_LAB_ANALYSIS_COOLDOWN_SECONDS=10
+```
+
+These are **example values**, not fixed application ceilings. Set
+`FREE_LAB_ANALYSIS_ENFORCE_LIMITS=0` to disable limits; each numeric value of
+`0` disables that individual limit. Changes to the service environment require
+`sudo systemctl restart free-lab`. The pre-existing generic inference limits
+remain controlled independently by `FREE_LAB_ENFORCE_INFERENCE_LIMITS` and
+its associated settings. Provider-side billing or limits can still apply.
+
+### Hardware validation
+
+Quest GPU safety and the spherical selection/placement flow require headset
+verification after deploying, including a source with an attached 3D model.

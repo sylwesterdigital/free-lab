@@ -594,7 +594,8 @@ def agency_analyse():
         'When evidence is weak say so. Do not assume that more correct answers mean improved cognition. '
         'Finish with one optional next experiment the user can try.')
     digest=hashlib.sha256(json.dumps(prompt,sort_keys=True).encode()).hexdigest()
-    try:call=db.begin_inference(g.con,g.user['id'],digest,'meta',daily_cap=60,user_cap=6,cooldown=45)
+    limits=analysis_inference_limits()
+    try:call=db.begin_inference(g.con,g.user['id'],digest,'meta-analysis',**limits)
     except ValueError as e:return jsonify(error=str(e)),429
     payload=json.dumps({'model':os.getenv('META_ANALYSIS_MODEL','muse-spark-1.3'),
        'messages':[{'role':'system','content':instructions},{'role':'user','content':json.dumps(prompt)}],
@@ -1065,6 +1066,51 @@ def capture_cloud_image(cid):
     response.headers['Cache-Control']='private, no-store'
     return response
 
+def _library_thumbnail(image_name, image_sha, owner_id):
+    """Private, reusable low-bandwidth XR gallery image. Originals remain unchanged."""
+    from PIL import Image,ImageOps,UnidentifiedImageError
+    source=IMAGE_DIR/image_name
+    if not source.is_file():abort(404)
+    folder=IMAGE_DIR/'.xr-thumbnails';folder.mkdir(exist_ok=True)
+    # SHA is derived from the stored object, never from user-supplied path text.
+    digest=re.sub('[^a-f0-9]','',str(image_sha).lower())[:64]
+    target=folder/f'{owner_id}-{digest}-224.jpg'
+    if not target.is_file():
+        try:
+            with Image.open(source) as image:
+                image=ImageOps.exif_transpose(image)
+                if image.width*image.height>36_000_000:abort(413)
+                image.thumbnail((224,224),Image.Resampling.LANCZOS)
+                if image.mode!='RGB':
+                    rgb=Image.new('RGB',image.size,(31,39,35));
+                    if 'A' in image.getbands():rgb.paste(image,mask=image.getchannel('A'))
+                    else:rgb.paste(image.convert('RGB'))
+                    image=rgb
+                tmp=folder/f'.{owner_id}-{digest}-{secrets.token_hex(6)}.jpg'
+                try:
+                    image.save(tmp,'JPEG',quality=62,optimize=True,progressive=True)
+                    os.replace(tmp,target)
+                finally:tmp.unlink(missing_ok=True)
+        except (UnidentifiedImageError,OSError,ValueError):abort(404)
+    response=send_file(target,mimetype='image/jpeg',conditional=True,max_age=86400)
+    response.headers['Cache-Control']='private, max-age=86400'
+    response.headers['Vary']='Cookie'
+    return response
+
+@app.get('/api/captures/<int:cid>/thumbnail')
+@require_user
+def capture_xr_thumbnail(cid):
+    row=g.con.execute('SELECT image_name,sha256 FROM captures WHERE owner_id=? AND id=?',(g.user['id'],cid)).fetchone()
+    if not row:abort(404)
+    return _library_thumbnail(row['image_name'],row['sha256'],g.user['id'])
+
+@app.get('/api/objects/<int:oid>/thumbnail')
+@require_user
+def object_xr_thumbnail(oid):
+    row=g.con.execute('SELECT image_name,sha256 FROM objects WHERE owner_id=? AND id=?',(g.user['id'],oid)).fetchone()
+    if not row or not row['image_name']:abort(404)
+    return _library_thumbnail(row['image_name'],row['sha256'],g.user['id'])
+
 @app.patch('/api/captures/<int:cid>')
 @require_user
 def update_capture_cloud(cid):
@@ -1200,6 +1246,21 @@ def application_inference_limits():
     return {'daily_cap':max(0,int(os.getenv('FREE_LAB_DAILY_LIMIT','0'))),
             'user_cap':max(0,int(os.getenv('FREE_LAB_USER_DAILY_LIMIT','0'))),
             'cooldown':max(0,int(os.getenv('FREE_LAB_COOLDOWN_SECONDS','0')))}
+
+def analysis_inference_limits():
+    """Operator-controlled *separate* budget for explicitly requested progress summaries.
+
+    Set in /etc/free-lab.env, not in frontend code or a versioned release.
+    Disabled by default; zero means unlimited for that dimension.
+    """
+    enabled=os.getenv('FREE_LAB_ANALYSIS_ENFORCE_LIMITS','0').strip().lower() in ('1','true','yes','on')
+    if not enabled:return {'daily_cap':0,'user_cap':0,'cooldown':0}
+    def number(name):
+        try:return max(0,min(100000,int(os.getenv(name,'0'))))
+        except (ValueError,TypeError):return 0
+    return {'daily_cap':number('FREE_LAB_ANALYSIS_DAILY_LIMIT'),
+            'user_cap':number('FREE_LAB_ANALYSIS_USER_DAILY_LIMIT'),
+            'cooldown':number('FREE_LAB_ANALYSIS_COOLDOWN_SECONDS')}
 
 @app.post('/api/capture')
 @require_user

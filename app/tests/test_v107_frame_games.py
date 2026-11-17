@@ -80,7 +80,7 @@ if(!popped||c.boxes.length)throw Error('equal colours did not disappear');
                       'frameGames?.linkOnOverlap(frameLab.frames,df.id)', 'frameGames?.launch(frameLab.frames,frameTouch.id',
                       'pollFrameGames(t,pose)', 'drawFrameCubes(vp)', 'gl.drawArrays(gl.TRIANGLES,0,36)'):
             self.assertIn(token,XR)
-        self.assertIn('frame-games.js?v=0.10.64',PAGE)
+        self.assertIn('frame-games.js?v=0.10.65',PAGE)
         self.assertNotIn('cdn', (ROOT/'frontend/assets/frame-games.js').read_text())
 
 if __name__=='__main__':unittest.main()

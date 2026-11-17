@@ -622,8 +622,9 @@ async function useXRFrame(url){
  try{compress(image);}finally{image.close();}
 }
 async function listXRClouds(){
- const captures=(await api('/captures')).captures;
- const older=(await api('/objects')).objects.filter(o=>o.capture_id===null);
+ const [captureResponse,objectResponse]=await Promise.all([api('/captures'),api('/objects')]);
+ const captures=captureResponse.captures;
+ const older=objectResponse.objects.filter(o=>o.capture_id===null);
  if(older.length){
    const first=older.find(o=>o.has_image);
    captures.push({id:0,image_url:first?'/api/objects/'+first.id+'/image':null,objects:older,hidden:false,collapsed:false,legacy:true});
@@ -721,7 +722,7 @@ function startWavPrompt(){
      if(Date.now()-stateRecord.started>89500)finish(false);
    };
    if(audio.audioWorklet&&window.AudioWorkletNode){
-     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.64');
+     await audio.audioWorklet.addModule('/assets/mic-worklet.mjs?v=0.10.65');
      proc=new AudioWorkletNode(audio,'freelab-mic-recorder',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
      proc.port.onmessage=e=>{if(e.data?.samples)receiveSamples(e.data.samples)};
    }else{

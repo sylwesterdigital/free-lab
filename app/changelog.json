@@ -1,18 +1,33 @@
 {
-  "version": "0.10.64",
-  "title": "FREELAB v0.10.64 — Spatial library and observational progress",
+  "version": "0.10.65",
+  "title": "FREELAB v0.10.65 — Library mosaic and XR stability",
   "datetime": "2026-11-17",
   "changes": [
-    "Replace broken XR filter image cards with accessible integrated library header controls: voice/keyboard search, top categories, recents, alphabetic and date sorting.",
-    "Use small white circular arrows for XR library pagination, matching Cinema controls.",
-    "Allow users to grab the XR library header and reposition the complete gallery in room space; preserve its position while changing pages or filters.",
-    "Record bounded, account-scoped accepted answer events with optional left/right hand/controller source, correctness, response interval and local time offset.",
-    "Expand desktop and mobile Play & Progress with input modality and time-of-day observations, and separate interaction-level CSV export.",
-    "Add an explicitly consented Meta Model API observation request with Scientist, Coach, Buddy and Satire voices; send only aggregate counts and times, no photos, identifiers or raw events.",
-    "Reuse the existing mascot and optional configured ElevenLabs speech engine for readable observational commentary; never generate a medical diagnosis.",
-    "Keep HLS streams and persisted collections independent of deploy ZIP and retain server-compatible tests and watcher update."
+    "Make experimental progress-analysis quotas separately configurable through the persistent server environment; no default hardcoded Meta AI budget.",
+    "Place Sources, Segments, All, voice/keyboard search, common categories, dates and alphabetical sorting in the movable XR library header.",
+    "Add XL 8, M 16 and S 32 responsive XR gallery layouts, with masonry-style columns and instant selectable previews.",
+    "Introduce an opt-in spherical mosaic of up to 48 lightweight previews surrounding the viewer, with a movable central control header.",
+    "Serve account-protected cached 224-pixel JPEG XR thumbnails without changing or loading full-resolution originals for the gallery.",
+    "Keep the existing library visible while awaiting data and return to LIB after closing a source.",
+    "Prevent deferred image decoding from uploading into deleted WebGL textures; validate mesh buffers/textures and sanitize vertex attributes before drawing.",
+    "Maintain independent HLS media, privacy checks, previous Agency progress metrics and server-compatible application tests."
   ],
   "history": [
+    {
+      "version": "0.10.64",
+      "title": "FREELAB v0.10.64 — Spatial library and observational progress",
+      "datetime": "2026-11-17",
+      "changes": [
+        "Replace broken XR filter image cards with accessible integrated library header controls: voice/keyboard search, top categories, recents, alphabetic and date sorting.",
+        "Use small white circular arrows for XR library pagination, matching Cinema controls.",
+        "Allow users to grab the XR library header and reposition the complete gallery in room space; preserve its position while changing pages or filters.",
+        "Record bounded, account-scoped accepted answer events with optional left/right hand/controller source, correctness, response interval and local time offset.",
+        "Expand desktop and mobile Play & Progress with input modality and time-of-day observations, and separate interaction-level CSV export.",
+        "Add an explicitly consented Meta Model API observation request with Scientist, Coach, Buddy and Satire voices; send only aggregate counts and times, no photos, identifiers or raw events.",
+        "Reuse the existing mascot and optional configured ElevenLabs speech engine for readable observational commentary; never generate a medical diagnosis.",
+        "Keep HLS streams and persisted collections independent of deploy ZIP and retain server-compatible tests and watcher update."
+      ]
+    },
     {
       "version": "0.10.63",
       "title": "FREELAB v0.10.63 — Activity research and personal collection",
