@@ -1,6 +1,6 @@
-# FREELAB v0.10.65 — Personal progress and collection
+# FREELAB v0.10.66 — XR library, cinema and preview control
 
-Adds Quest landing mascot parity, semantic names for repeated image edits, responsive collection name/date filters, and a private descriptive Agency activity dashboard. Place `FREE_LAB_RELEASE_v0.10.65.zip` in `updates/` as a complete release. HLS videos remain in the independently managed `videos/` directory.
+Adds Quest landing mascot parity, semantic names for repeated image edits, responsive collection name/date filters, and a private descriptive Agency activity dashboard. Place `FREE_LAB_RELEASE_v0.10.66.zip` in `updates/` as a complete release. HLS videos remain in the independently managed `videos/` directory.
 
 ## Progress data and scientific interpretation
 
@@ -8,7 +8,7 @@ Agency play events are stored in `agency_sessions`, isolated by `owner_id`, and 
 
 `GET /api/agency/dashboard?days=7|30|90|365|all` returns per-user totals, daily counts and individual activities. `GET /api/agency/export.csv?days=...` downloads a private CSV with one row per session suitable for exploratory analysis. The dashboard provides descriptive trends only: the game tasks are not validated psychometric instruments; the app cannot infer intelligence, attention deficits, cognitive change, or clinical outcomes from these counts. Dates in the exported dataset are UTC. Scores are client-reported and are not cheating-resistant; experimenters should validate instrumentation, exposure, task difficulty, test-retest reliability and consent before formal research. Data recording begins with this release; earlier unrecorded sessions do not appear in the server history. No analytics information is transferred to a third-party model; Meta interpretation requires a separate, explicit consent and privacy/data-minimization design.
 
-The Collection filters use saved object labels (not additional AI inference), count available matches and offer date inputs that open the platform calendar. XR offers a compact progress board in Agency and source-library filter cards accessible through the magnifying-glass toolbar button. Consecutive image edits use `Edited (N) original name`, with the edit count based on the saved parent chain; stored historic labels are presented without repeated `Edited` strings.
+Collection filters use saved object labels (not additional AI inference), count available matches and offer date inputs that open the platform calendar. XR offers a compact progress board in Agency and source-library filter cards accessible through the magnifying-glass toolbar button. Consecutive image edits use `Edited (N) original name`, with the edit count based on the saved parent chain; stored historic labels are presented without repeated `Edited` strings.
 
 ## v0.10.62 — XR video performance and cleanup
 
@@ -523,3 +523,14 @@ its associated settings. Provider-side billing or limits can still apply.
 
 Quest GPU safety and the spherical selection/placement flow require headset
 verification after deploying, including a source with an attached 3D model.
+
+
+## v0.10.66 — XR interactions
+
+- **Voice/keyboard search** normalizes punctuation, accents and case (for example, `Bottle.` finds `bottle` and `bottles`). Search matches both sources and saved segments by default; filter pills can then narrow the results.
+- **Gallery placement** turns the complete library toward the user while the header is dragged, then stays fixed in the room at the new pose; page changes and filtering preserve that pose.
+- **Cinema** is a separate, room-fixed stage without head-pitch billboarding. Its image bottom sits just above the local-floor reference (or a conservative floor estimate when only `local` is available); previous/next/exit controls share the same floor-relative location while changing images.
+- **Sphere density** uses the same XL (8), M (16), S (32) selection as the grid/mosaic, with private 224px previews.
+- **Near/far preview** is off by default. Enable **XR Personalize → Near/far preview**, below **Voice features**. Point at or select an object/source; push either controller thumbstick **down** to bring the image closer and **up** to return to its saved original distance. With hand tracking, pinch the image and pull toward the user or push away to restore depth. Movement eases rapidly and is bounded at 52cm from the headset. The feature does **not** alter the saved 3D placement; disable it to retain ordinary free-movement pinching.
+
+HLS video streams remain independent static assets outside the versioned ZIP.

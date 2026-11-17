@@ -1,7 +1,7 @@
 /* FREELAB XR appearance and feature switches. All configuration is private to this browser. */
 (function(root){'use strict';
  const KEY='freelab-xr-ui-v1';
- const defaults=Object.freeze({theme:'current',borders:true,backgrounds:true,mascot:true,experimental:true,masked:true,voice:true,processing:'spin',generated:null});
+ const defaults=Object.freeze({theme:'current',borders:true,backgrounds:true,mascot:true,experimental:true,masked:true,voice:true,proximity:false,processing:'spin',generated:null});
  const choices=['current','dark','night','liquid'];
  const processing=['spin','glow','gradient','particles1','particles2','particles3'];
  const fonts=['system-ui','Arial','Verdana','Trebuchet MS','Georgia'];
@@ -16,7 +16,7 @@
  function valid(raw){const o={...defaults};if(raw&&typeof raw==='object'){
   if(choices.includes(raw.theme))o.theme=raw.theme;
   if(processing.includes(raw.processing))o.processing=raw.processing;
-  for(const k of ['borders','backgrounds','mascot','experimental','masked','voice'])if(typeof raw[k]==='boolean')o[k]=raw[k];
+  for(const k of ['borders','backgrounds','mascot','experimental','masked','voice','proximity'])if(typeof raw[k]==='boolean')o[k]=raw[k];
   if(raw.generated&&typeof raw.generated==='object'&&/^#[0-9a-f]{6}$/i.test(raw.generated.panel||'')&&/^#[0-9a-f]{6}$/i.test(raw.generated.panel2||'')&&/^#[0-9a-f]{6}$/i.test(raw.generated.accent||'')){
    const p=raw.generated;
    o.generated={panel:p.panel,panel2:p.panel2,text:contrast(p.panel,'#f7fbff')>=7?'#f7fbff':'#101820',muted:contrast(p.panel,'#c7dce0')>=4.5?'#c7dce0':'#1b2830',accent:p.accent,edge:p.edge||'#93c6b5',bottom:p.bottom||'#06191b',font:fonts.includes(p.font)?p.font:'system-ui'};

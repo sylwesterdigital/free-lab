@@ -594,7 +594,7 @@
 #profilePanel #xrGraphicsStatus{border-left:3px solid #9cf6e1;padding:8px 12px;background:rgba(255,255,255,.045);border-radius:0 12px 12px 0;color:#dffcf4;white-space:pre-line}
 @media(max-width:650px){#profilePanel .xr-graphics-grid{grid-template-columns:1fr}#profilePanel .xr-graphics-settings{padding:14px}}
 
-/* v0.10.65 — responsive collection facets and research-style progress metrics */
+/* v0.10.66 — responsive collection facets and research-style progress metrics */
 .collection-facets{display:flex;flex-direction:column;gap:10px;padding:9px 0 14px;border-bottom:1px solid #a4cdb12c}
 .facet-date-row{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.facet-date-row label{color:#b7d0c1;display:grid;gap:5px;font-size:11px;letter-spacing:.035em}.facet-date-row input{color:#eafbf0;background:#12231d;border:1px solid #809f9065;border-radius:12px;padding:10px;color-scheme:dark;min-height:42px}
 .facet-clear{background:transparent;color:#bdedcc;border:1px solid #7b9d8969;border-radius:12px;padding:11px 14px;min-height:42px}

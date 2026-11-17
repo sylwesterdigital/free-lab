@@ -1,18 +1,31 @@
 {
-  "version": "0.10.65",
-  "title": "FREELAB v0.10.65 — Library mosaic and XR stability",
+  "version": "0.10.66",
+  "title": "FREELAB v0.10.66 — XR search, world-fixed theatre and near/far previews",
   "datetime": "2026-11-17",
   "changes": [
-    "Make experimental progress-analysis quotas separately configurable through the persistent server environment; no default hardcoded Meta AI budget.",
-    "Place Sources, Segments, All, voice/keyboard search, common categories, dates and alphabetical sorting in the movable XR library header.",
-    "Add XL 8, M 16 and S 32 responsive XR gallery layouts, with masonry-style columns and instant selectable previews.",
-    "Introduce an opt-in spherical mosaic of up to 48 lightweight previews surrounding the viewer, with a movable central control header.",
-    "Serve account-protected cached 224-pixel JPEG XR thumbnails without changing or loading full-resolution originals for the gallery.",
-    "Keep the existing library visible while awaiting data and return to LIB after closing a source.",
-    "Prevent deferred image decoding from uploading into deleted WebGL textures; validate mesh buffers/textures and sanitize vertex attributes before drawing.",
-    "Maintain independent HLS media, privacy checks, previous Agency progress metrics and server-compatible application tests."
+    "Normalize voice and keyboard library searches using Unicode tokenization, removing punctuation and diacritics so speech like Bottle. matches saved bottle objects; search all source and segment types.",
+    "Turn the whole XR library panel towards the headset viewer while it is being dragged, then preserve the resulting world-space orientation across pagination and filters.",
+    "Anchor theatrical image previews to a stationary room stage, with the image lower edge aligned to floor level and arrows/exit grouped at a fixed floor-relative row across image changes.",
+    "Apply XL 8, M 16 and S 32 library density consistently to the experimental Sphere Mosaic without switching back to grid.",
+    "Add opt-in Near/far preview movement below Voice Features in XR Personalize: either controller thumbstick moves source/segment previews closer and back with fast smoothing; tracked-hand pinch and pull/push provides equivalent control without changing saved positions.",
+    "Preserve private thumbnail caching, AI budgets, Agency activities, HLS media and watcher-compatible deployment."
   ],
   "history": [
+    {
+      "version": "0.10.65",
+      "title": "FREELAB v0.10.65 — Library mosaic and XR stability",
+      "datetime": "2026-11-17",
+      "changes": [
+        "Make experimental progress-analysis quotas separately configurable through the persistent server environment; no default hardcoded Meta AI budget.",
+        "Place Sources, Segments, All, voice/keyboard search, common categories, dates and alphabetical sorting in the movable XR library header.",
+        "Add XL 8, M 16 and S 32 responsive XR gallery layouts, with masonry-style columns and instant selectable previews.",
+        "Introduce an opt-in spherical mosaic of up to 48 lightweight previews surrounding the viewer, with a movable central control header.",
+        "Serve account-protected cached 224-pixel JPEG XR thumbnails without changing or loading full-resolution originals for the gallery.",
+        "Keep the existing library visible while awaiting data and return to LIB after closing a source.",
+        "Prevent deferred image decoding from uploading into deleted WebGL textures; validate mesh buffers/textures and sanitize vertex attributes before drawing.",
+        "Maintain independent HLS media, privacy checks, previous Agency progress metrics and server-compatible application tests."
+      ]
+    },
     {
       "version": "0.10.64",
       "title": "FREELAB v0.10.64 — Spatial library and observational progress",

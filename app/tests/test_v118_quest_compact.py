@@ -1,4 +1,4 @@
-"""Regression guards for v0.10.65. No network, headset, camera, or paid API calls."""
+"""Regression guards for v0.10.66. No network, headset, camera, or paid API calls."""
 import json
 import re
 import unittest
@@ -87,13 +87,13 @@ class QuestCompact118(unittest.TestCase):
 
  def test_release_versions(self):
   for name in ('version.json','frontend/version.json','changelog.json','frontend/changelog.json'):
-   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.65')
-  self.assertIn('room-viewer.mjs?v=0.10.65',ROOMS)
-  self.assertIn('xr.js?v=0.10.65',HTML)
+   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.66')
+  self.assertIn('room-viewer.mjs?v=0.10.66',ROOMS)
+  self.assertIn('xr.js?v=0.10.66',HTML)
 
 
 
-"""v0.10.65 Agency XR regression checks: independent labs, text aspect, focus and reachable play."""
+"""v0.10.66 Agency XR regression checks: independent labs, text aspect, focus and reachable play."""
 import unittest
 from pathlib import Path
 XR=(Path(__file__).resolve().parents[1]/'frontend/assets/xr.js').read_text()
@@ -286,7 +286,7 @@ for(let i=0;i<14;i++){
 }
 ''')
  def test_video_overlay_navigation_and_hover(self):
-  self.assertIn('agency-video.js?v=0.10.65',PAGE)
+  self.assertIn('agency-video.js?v=0.10.66',PAGE)
   self.assertIn('agencyShowExplainer(agencyGame,agencyStartGame)',XR)
   for token in ('agencyVideoDismiss()',"'agency-video-screen'","'agency-video-play'","'agency-video-skip'", "'agency-howto'", 'agencyControlsReact(frame,t)',"agencyScreen='explainer'", 'agencySession.startedAt+=Date.now()-e.shownAt'):
    self.assertIn(token,XR)
