@@ -1,15 +1,26 @@
 {
-  "version": "0.10.70",
-  "title": "FREELAB v0.10.70 — Reliable avatar thumbnail fallback and Blender diagnostics",
+  "version": "0.10.71",
+  "title": "FREE-LAB.cam v0.10.71 — Hackathon project documentation",
   "datetime": "2026-11-17",
   "changes": [
-    "Prioritize the actual Blender OSError or ImportError over generic traceback wrappers in protected runtime diagnostics; identify possible Draco shared-library failures without exposing avatar contents.",
-    "If server Blender cannot render the GLB, use the existing authenticated Three.js/Draco viewer to create a private, 384-pixel avatar thumbnail on the user device without replacing the original avatar.",
-    "Validate browser-generated PNG dimensions and bytes on the server; bind the upload to the exact SHA-256 hash of the current avatar, re-encode to remove metadata and preserve owner-only access.",
-    "Store successful fallback thumbnails in the existing private thumbnail cache and label their origin in the UI; render attempts are bounded and only triggered after a server failure.",
-    "Retain server Blender as the primary thumbnail renderer and preserve the existing saved GLB, archive safety and other FREELAB features."
+    "Replace accumulated and outdated README release notes with a concise FREE-LAB.cam project landing page and two clear links: https://free-lab.cam/ and https://youtu.be/rJ0nFm7jKms.",
+    "Add ABOUT.md covering inspiration, two experience areas, Meta Quest capabilities, hands/controllers, technologies, challenges, what was learned and future research directions.",
+    "Document onboarding, desktop/mobile availability, scientific limitations, optional AI privacy, persistent HLS media and deployment/testing guidance; preserve previous release history in changelog.json.",
+    "Documentation and version metadata only: no gameplay, network API, data migration or XR rendering behavior changes."
   ],
   "history": [
+    {
+      "version": "0.10.70",
+      "title": "FREELAB v0.10.70 — Reliable avatar thumbnail fallback and Blender diagnostics",
+      "datetime": "2026-11-17",
+      "changes": [
+        "Prioritize the actual Blender OSError or ImportError over generic traceback wrappers in protected runtime diagnostics; identify possible Draco shared-library failures without exposing avatar contents.",
+        "If server Blender cannot render the GLB, use the existing authenticated Three.js/Draco viewer to create a private, 384-pixel avatar thumbnail on the user device without replacing the original avatar.",
+        "Validate browser-generated PNG dimensions and bytes on the server; bind the upload to the exact SHA-256 hash of the current avatar, re-encode to remove metadata and preserve owner-only access.",
+        "Store successful fallback thumbnails in the existing private thumbnail cache and label their origin in the UI; render attempts are bounded and only triggered after a server failure.",
+        "Retain server Blender as the primary thumbnail renderer and preserve the existing saved GLB, archive safety and other FREELAB features."
+      ]
+    },
     {
       "version": "0.10.69",
       "title": "FREELAB v0.10.69 — Headless avatar thumbnails and truthful render status",

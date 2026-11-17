@@ -1,5 +1,5 @@
 {
   "project": "free-lab",
-  "version": "0.10.70",
-  "description": "Avatar thumbnail diagnostics, bounded Blender status and retry, contextual avatar buttons, admin-only runtime log viewer"
+  "version": "0.10.71",
+  "description": "Hackathon-ready README.md and ABOUT.md, video/live demo links and clear FREE-LAB.cam project story; no application behavior changes"
 }

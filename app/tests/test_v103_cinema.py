@@ -111,8 +111,8 @@ if(Math.abs(darkPrevious.pos[0]-.755)>1e-6||Math.abs(darkNext.pos[0]-1)>1e-6||Ma
   self.assertIn('mascotReactionTarget=handGesturePositions[side]',XR)
 
  def test_release_version(self):
-  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.70')
-  self.assertIn('xr.js?v=0.10.70',INDEX)
+  self.assertEqual(json.loads((ROOT/'version.json').read_text())['version'],'0.10.71')
+  self.assertIn('xr.js?v=0.10.71',INDEX)
 
 class VisionTests(unittest.TestCase):
  def test_explicit_description_refresh_instead_of_stale_dialogue(self):

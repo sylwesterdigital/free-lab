@@ -1,535 +1,119 @@
-# FREELAB v0.10.70 — Avatar reliability and admin diagnostics
+# FREE-LAB.cam
 
-This complete release makes avatar preview actions conditional on an actual saved avatar, replaces misleading indefinite thumbnail rendering with bounded status and retry feedback, and adds **Settings → Logs** for administrators. Blender thumbnails remain private and asynchronous. The app event log is stored under the persistent `FREE_LAB_DATA_DIR` (`runtime-events.jsonl`); service journal access depends on system permissions. No private GLB, API key or request body is recorded in app events. Upload `FREE_LAB_RELEASE_v0.10.70.zip` to `updates/`.
+**Your world. Your agency.**
 
-## v0.10.70 — Thumbnail states and admin runtime logs
+FREE-LAB.cam is a browser-based mixed-reality experience for exploring the things around us and experimenting with attention, coordination, and creative problem-solving. It brings a personal spatial archive and ten playful XR activities into one experience.
 
-- Preview 3D and Remove are disabled when no saved avatar is present.
-- Blender queue status reports elapsed time, failures and a Retry thumbnail option; model preview remains available if rendering fails.
-- Admins can open the read-only Logs tab in Desktop settings: App runtime events, recent API requests, and the `free-lab.service` journal when the service user can read it.
-- Log access is admin-only and bounded; credentials are scrubbed from journal excerpts.
+**[▶ Watch the 3-minute project film](https://youtu.be/rJ0nFm7jKms)** · **[Try the live demo](https://free-lab.cam/)** · **[Read our project story](ABOUT.md)**
 
-## v0.10.62 — XR video performance and cleanup
+[![Watch FREE-LAB.cam — a three-minute walk through our mixed-reality world](https://img.youtube.com/vi/rJ0nFm7jKms/hqdefault.jpg)](https://youtu.be/rJ0nFm7jKms)
 
-Agency HOW TO PLAY videos now use a decoded video frame transferred directly
-from the HTMLVideoElement to a **reused WebGL video texture**. With
-`requestVideoFrameCallback()` or decoded-video frame counters, each frame
-uploads at most once; there is no artificial 12.5-fps video cap. The rounded
-video mask uses the GPU shader, while border, status and progress elements
-render separately. At the end of playback, exit or retry, all player surfaces
-are removed at once (no transparent geometry remains to cover gameplay).
-Video files remain independent from application releases under
-`/videos/<activity>/video_hls/index.m3u8` or `/videos/<activity>/video.mp4`.
-Browser/headset capabilities and stream encoding still determine achievable
-playback rate. Quest hardware tests are required for a performance guarantee.
+> Built for Meta Quest Browser with WebXR; the desktop and mobile interfaces make the collection, settings, and activity history accessible without a headset. Not a clinical or medical application.
 
-## v0.10.61 — Responsive XR HOW TO PLAY
+## Two sides of one experience
 
-The explainer panel now opens on selection, even if media is not yet published.
-If the HLS playlist or MP4 is missing, it shows **VIDEO NOT PUBLISHED** and
-a **RETRY VIDEO** control. Games remain available without a video. Video files
-are independent of the application ZIP: place them in the repo at
-`videos/<activity>/video_hls/index.m3u8` (or `videos/<activity>/video.mp4`),
-then run `./watch-free-lab.sh --sync-videos`. This command must actually be
-executed on the development machine; deploying the application ZIP alone does
-not upload media. Check publication directly in a browser at
-`https://free-lab.cam/videos/shape_garden/video_hls/index.m3u8` and look for
-`#EXTM3U`. HLS streaming requires a compatible browser or an HLS.js decoder.
+| **MY STUFF** · Explore the world | **AGENCY** · Explore what you can do |
+| --- | --- |
+| Capture and organize discoveries, photographs, and objects. | Choose from ten mixed-reality activities, from guided tasks to free play. |
+| Browse sources and segments, search by voice or keyboard, and filter collections. | Use tracked hands or Meta Quest controllers to point, pinch, move, draw, sort, and play. |
+| Open spatial galleries, cinematic image previews, an experimental Sphere Mosaic, and 3D models. | Explore shapes, numbers, colours, spatial coordination, and playful creative interaction. |
 
-# FREELAB — Spatial Agency v0.10.60
+The two experiences complement each other: **My Stuff** turns observations into a personal universe; **Agency** invites intentional interaction. The “two hemispheres” idea is a metaphor for the experience, not a claim about how the human brain is divided.
 
-Self-hosted Quest 3 WebXR application served at https://free-lab.cam/. Deploy `FREE_LAB_RELEASE_v0.10.60.zip` by placing it in the macOS watcher's `updates/` directory. Watcher v0.9.5 is bundled with this complete release; the existing installed watcher validates it before deployment.
+### Ten Agency activities
 
-## v0.10.60 — Independent HLS explainer videos and Spatial Agency
+| Activity | Explore |
+| --- | --- |
+| Shape Garden | Visual matching and shapes |
+| Number Flow | Numbers and problem-solving |
+| Hand Harmony | Left/right responses and coordination |
+| Spatial Frames | Arranging and exploring spatial frames |
+| Shape Sort | Classifying and sorting shapes |
+| Chain Lab | Connecting and sequencing |
+| Cube Lab | Building and interacting with cubes |
+| Throw Lab | Throwing objects toward spatial targets |
+| Five Note | Finger-based musical and rhythmic exploration |
+| Thumb String | Colourful strings and finger gestures |
 
-Each activity reads its explainer media from the public, **persistent** folder `videos/<activity>/video_hls/index.m3u8` (public URL: `/videos/<activity>/video_hls/index.m3u8`), with its MPEG-TS segments beside the index. The folder sits in the repository root, NOT in the release ZIP. `video.mp4` directly in an activity folder is an optional playback fallback. These are public tutorial clips, not private captures or user documents.
+Some games offer free play; structured modes record attempts, accuracy, and elapsed time. Performance summaries are descriptive, **not medical diagnoses or evidence of improved cognitive health**.
 
-Supported folder names: `shape_garden`, `number_flow`, `hand_harmony`, `spatial_frames`, `shape_sort`, `chain_lab`, `cube_lab`, `throw_lab`, `five_note`, and `thumb_string`. The installer ensures `/var/www/free-lab.cam/videos` survives release/rollback and is available as `https://free-lab.cam/videos/` via the existing versioned Nginx document root (no shared-Nginx rewrite). Put the media folders in the repository root's `videos/`, then from macOS run **`./watch-free-lab.sh --sync-videos`**. This command only syncs the public video tree, removes orphaned media files within that tree, and does not deploy an application release or alter your database. Video files are not committed by the release watcher; Git working tree changes inside `videos/` do not prevent a release.
+## Try it
 
-Quest Chromium generally requires Media Source Extensions for `.m3u8`: the app first attempts native HLS, then `hls.js` from `/videos/hls.min.js` (optional, self-hosted); if that file is absent, it uses a pinned hls.js 1.7.4 CDN script. An available `video.mp4` is used as a fallback when HLS playback is unavailable. A missing video does not stop the game. The player only decodes while visible and releases its resources when closed. Quest headset decoder behavior needs physical testing.
+**Meta Quest 3 / Quest Browser:**
 
-Spatial Frames capture uses a **real granted camera stream** only; AR passthrough visible through XR is not readable as web pixels. The captured rectangle paints immediately (not after database upload), then stores the same JPEG asynchronously. View-to-camera calibration remains approximate and cannot produce pixel-exact passthrough without a calibrated camera API. To grant camera access, select Spatial Frames and follow the browser camera permission request.
+1. Open **https://free-lab.cam/** in Meta Quest Browser and sign in.
+2. Choose **My Stuff** to explore the spatial collection, or **Agency** to choose an activity.
+3. Enter XR and interact using either Touch controllers or tracked hands. Grant microphone or camera permission only when prompted for a feature that needs it.
+4. Explore **Play & Progress** to review your recorded activity.
 
-## First use
+**Desktop or mobile:** Open the same [live demo](https://free-lab.cam/) to access the browser interface, personal content, progress, rooms, and configuration. Immersive passthrough and full XR hand interactions require compatible headset hardware and browser support.
 
-1. Sign in, test the Quest environment camera and look at the live feed. Passthrough visible through the headset does **not** imply camera pixels are available to web pages; an uploaded JPEG remains a fallback.
-2. For voice prompting, use **Enable mic** near the mascot **before Enter XR**. Grant the microphone permission; no sound is recorded or uploaded at that time. The stream is kept alive for the immersive session.
-3. Enter XR. Use the compact toolbar, controller trigger/grip, or hand pinch. The central eye is now half size. Camera capture plays a short procedural shutter sound.
-4. Tap **Extract** on the source to run one user-triggered Meta recognition request. Image crops expand around the real capture. The original stays in place. Model results can be empty; open **LOG** to inspect the status and HTTP error. Source object crops are rectangular rather than decoded SAM transparent masks.
-5. Select a photo, choose **Restore** to prefill an image-restoration prompt, or choose **Prompt** for an arbitrary instruction. The source remains saved and every generated result becomes a child. **Apply** is the only trigger for the paid image-edit request.
-6. Speak an instruction through **SPEAK** (one paid speech-transcription request), or use **TYPE** to focus Quest Browser's native system keyboard *without ending XR*. Quest Browser 26.1+ is required for system keyboard integration; if not supported, the session stays active and displays an explanation. Keep the headset software updated.
-7. Saying “Find my backpack”, “Where is my backpack?”, or “Highlight the backpack” searches labeled images in your private local collection and sparkles matching cards. Searches don't re-infer photo contents or know where an unrecognized object is in the physical room.
-8. Select any two images (even source photos), press **MIX** after each or drop on the MIX target while dragging, then provide a composition instruction. This uses the same Meta Muse Image model; only **APPLY** sends a chargeable request. Mixer references are checked for profile ownership on the server.
-9. Tap the X on a card to close it spatially without deleting it. Bin an object to privatize it, or Bin a source capture to hide the whole capture; the Bin gallery can restore both. Binning uses a generated paper-crumple sound.
-10. **Settings** has browser-local toggles for the small pointer mascot, optional spoken status feedback and playful commentary. Speech output is provided by the browser and is not guaranteed on every headset build.
+**See it first:** [Watch the hackathon video on YouTube](https://youtu.be/rJ0nFm7jKms).
 
-## Model routing, privacy and cost
+## Highlights
 
-The interface uses action names; model routing stays internal: Meta Muse Ember/Spark for understanding, SAM for region segmentation, Muse Image for image restoration/mixing, and Muse Voice Transcribe for speech recognition. Request budgets and cooldowns are configured by `/etc/free-lab.env` on Ubuntu. A zero limit means unlimited requests in the current code but **not** unlimited spending at Meta. No call is made until explicit user action. Camera and mic permissions remain controlled by the browser and OS.
+- **Spatial personal collection:** Searchable source images and segments, account-scoped galleries, 3D objects, voice search, and lightweight image thumbnails.
+- **Mixed-reality interaction:** WebXR passthrough on Meta Quest; controller rays, trigger/grip, tracked hands, and hand pinch.
+- **Spatial activities:** Ten activities, free and structured modes, colourful 3D visual feedback, and streaming HOW TO PLAY explainers when the corresponding media is published.
+- **Play & Progress:** Session history, time spent, attempts, scores, response patterns, and left/right hand or controller comparisons. An optional experimental AI analyser describes aggregate trends with explicit consent.
+- **Shared spatial rooms:** Public and private rooms and personal avatars, with capabilities depending on browser and server configuration.
+- **Across devices:** Quest XR plus desktop/mobile browser views.
 
-Admin-only `/api/admin/diagnostics` reports a rolling window of HTTP paths/status codes/durations in **the current Flask worker process**. Request payloads, prompt text, camera images, bearer keys and provider responses are not logged there. The immersive LOG view also shows client-side errors. It is diagnostic metadata, not a full centralized server journal. Usage and billing data are separate from logs.
+## Technology
 
-Credentials saved to the server remain encrypted with the existing `/etc/free-lab-vault.key` and persisted in SQLite. Back up the vault key and DB securely. The database migration is additive; this release does not reset captures or user profiles.
+| Layer | Implementation |
+| --- | --- |
+| XR / interaction | WebXR, Meta Quest Browser, JavaScript, WebGL, Three.js, hand tracking, controllers |
+| Frontend | Browser UI, spatial galleries, custom XR rendering, video textures, HLS explainers |
+| Backend | Python, Flask, SQLite, private per-user assets and progress data |
+| 3D workflows | GLB models, Blender-based processing, browser-side rendering fallback |
+| Optional services | Configured image/3D/voice providers; optional Meta AI commentary and ElevenLabs speech |
+| Operations | Versioned ZIP releases, SHA-256 manifest checks, watcher-driven validation and deployment |
 
-## Important limits
+The live demo may need a user account and optional provider credentials. AI generation and speech services can involve usage costs; their availability is not required for every core activity.
 
-- A system keyboard in immersive XR requires the Quest Browser's `XRSession.isSystemKeyboardSupported`; older browsers will show a warning without exiting XR. If microphone permission has not been pre-granted, use the preflight control outside XR. An in-XR microphone dialog may be blocked or interrupt the session on specific firmware builds.
-- Current XR image cards are 2D photos in world-space, not real occlusion-accurate meshes or persistent world anchors. The optional floating mascot is an original 2D sprite matching the landing character, not an imported Three.js rig.
-- Voice "find" matches text labels/descriptions already in the private collection. It is not live object localization and may require an Extract request first.
-- Image restoration is generative enhancement, **not a guaranteed pixel-perfect super-resolution algorithm**. Mix produces one generated child image and uses paid inference when Apply is pressed.
-- Live Quest mic, system keyboard, haptics, camera permissions and provider returns must be validated on the physical headset; automated smoke testing cannot prove browser permissions or real-world camera access.
-- The landing still loads pinned Three.js from a CDN with a CSS mascot fallback; full offline vendoring remains a separate task.
+## Privacy, limitations, and research integrity
 
-## Diagnostics and release validation
+- Personal captures and user records are account-scoped. Public rooms and shared content are separate from private collection data.
+- Optional inference features require explicit user action; progress commentary is opt-in and uses aggregates, not raw personal captures. Review the application's controls before sending data to an external provider.
+- **Quest passthrough is not automatically a camera image accessible to JavaScript.** Spatial Frames can capture from a separately permissioned, readable camera stream where supported; results vary by device and browser.
+- Activity metrics are exploratory, task-dependent, and sensitive to practice, difficulty, and sample size. **FREE-LAB.cam is not a clinically validated cognitive assessment or rehabilitation tool.** Research claims require external validation.
+- Device-specific graphics, camera capture, 3D models, and optional model APIs depend on the headset, network, permissions, and server configuration.
 
-`./watch-free-lab.sh --dry-run` from the repo root validates manifests and runs Python/JS checks before deployment. The existing watcher runs continuously and processes `updates/FREE_LAB_RELEASE_v0.7.0.zip`; do not replace it.
+## Development and deployment
 
-Official references: https://developers.meta.com/vr/documentation/web/webxr-keyboard/ and https://dev.meta.ai/docs/image-generation
+Repository layout (within the application root):
 
-
-## v0.8.0 — spatial transforms and image-to-3D
-
-- Enter XR, turn and walk: navigation follows with inertia. Pin preserves room position but keeps its menu upright and user-facing. Grab its header to offset it. The eye follows separately at a slower rate.
-- Captured photos open at the current headset position (separate from navigation). Select an image for the rotating Extract / Restore / Prompt / 3D / Mix / Folder / Bin actions attached directly beneath it.
-- Tracked hands display a real WebXR joint-point skeleton when joints are exposed by Quest Browser; controller and hand rays still work. `depth-sensing` is optional and its availability appears in the XR Log. **Actual environment-depth occlusion and photoreal hand meshes are not implemented in v0.8.0.**
-- To generate a 3D model: add a Meshy API key under Admin → Model Connections; select a saved photo or object in XR → 3D → Generate 3D (paid confirmation). The private image is passed as a data URI, not published. Polling is read-only. Completed GLB downloads and credits are listed in Collection → Your 3D Models. Signed asset links expire and can be refreshed. No GLB rendering inside XR yet.
-- Existing profiles, encrypted keys, SQLite collections, and configured request quotas remain unchanged. The existing ZIP watcher requires no replacement.
-
-## v0.9.0 — one menu, 3D mascot, gestures and watcher colours
-
-- Source images: top-left **EXTRACT** badge triggers Muse for that photo, top-right **···** toggles a single vertical menu attached to the image. No always-visible duplicate image toolbars.
-- Restore is an explicit paid one-click Meta image edit. Prompt opens Quest input; Enter submits the paid request. Voice transcripts appear in a small floating head-proximal status banner.
-- 3D generation is a paid, explicitly confirmed Meshy task; progress and GLB URL live in personal Collection. Submission returns a task ID; the XR renderer remains responsive while the provider works.
-- Configurable **3D / 2D / Off** XR mascot. The 3D version consists of shaded meshes in native WebGL, not the landing Three.js asset. Gesture classification uses tracked WebXR joint geometry and can be wrong; it is not an ML pose model. The idle bounce is in a virtual volume, NOT physical room-wall detection.
-- No environment-depth occlusion. Current Quest WebXR support must be feature-detected; hand tracking does not imply depth sensing.
-- The watcher is included as v0.9.0 and self-installs after a successful release. Restart the currently running watcher once to see its new colored and silent-idle terminal behavior.
-
-## v0.9.2 — reliable XR image controls and mascot gesture feedback
-
-Press/release gestures on image-card Extract / … / × are latched at press time and cannot turn into a move/rotate action. Hitboxes follow the 600-pixel texture layout and the actual height of each image. Gesture classification now causes only a brief speech label at the mascot and optional speech synthesis, with cooldowns; dictation status continues to work normally. The watcher is unchanged from 0.9.0.
-
-### v0.9.2 voice and spatial controls
-
-The XR voice microphone records up to 12 seconds, transcribes once, then shows the full recognized text and separate OK/Cancel roundels. Accepting a Find command searches locally; accepting image instruction sends a billed edit with the selected card. The body of the audio is not stored by the application. Camera permission remains dependent on Quest Browser. Pinned navigation remains fixed in position and orientation. No watcher change.
-
-## v0.9.3 — String Lab (experimental)
-
-In immersive XR, click the **right controller thumbstick** to toggle the lab. If the headset stops exposing that controller after switching to bare hands, the lab stays enabled. Bring both tracked thumb tips within approximately 5 cm for 160 ms; pulling apart creates a coloured musical string. Its tone increases from roughly 95 Hz to 635 Hz across 0–1 metre. At 1 metre it breaks with a procedural sound and falling fragments. The hands must separate at least 10.5 cm before they can start a new string. To turn the mode off, click the right thumbstick again while it is tracked (or exit the XR session).
-
-This uses tracked thumb-tip joints and runs locally. It does not require camera pixel access, inference credentials or network requests. Because Quest may prefer either controllers or bare hands, verify that both hand `XRInputSource` objects are available after enabling the mode. The 3D break and floor motion are stylised rather than a physics engine; real-world occlusion is not implemented. Browser audio may require the first gesture to unlock the AudioContext.
-
-## v0.9.4 — Five-Finger Chord Lab (experimental)
-
-With WebXR active, click **left controller thumbstick** to toggle the independent Five-Finger Chord Lab. Put down controllers if Quest switches input modalities, then bring matching fingertips of both tracked hands together to form up to five independent coloured strings. Left/right thumb gives C4, index D4, middle E4, ring F4, and pinky G4. Each string bends upward in pitch and changes colour as stretched, snaps at its individual randomized threshold (~0.66–1.0 m), and plays a quiet A4 snap sound. Fragments fall and fade. Separate and re-touch to rearm. Press the **right** thumbstick to switch to the original thumb-only String Lab.
-
-All processing stays on-device, no cloud inference. Quest Browser may temporarily stop exposing controller data when switching to hand tracking: toggle with controllers *before* starting hand gestures. No guaranteed hardware compatibility without physical Quest tests. Five-string polyphony is intentionally quiet.
-
-
-## v0.9.5 — Stable spatial strings (rendering hotfix)
-
-Both the original right-thumbstick String Lab and left-thumbstick Five-Finger Chord Lab now draw **one continuous triangle strip per active string**, instead of separate overlapping quads for each segment plus a co-planar glow overlay. A single fragment shader supplies the luminous centre and fading glow; transparent strings do not write into the depth buffer, avoiding the flickering green rectangles observed on Quest 3. Smooth miter joins share their vertices, with bounded thickness at sharp bends and a stable camera-facing fallback. Music, colours, break thresholds, and gestures are unchanged. No server/data migrations or new inference costs. Validate on Quest hardware after the v0.9.5 upgrade.
-
-
-### Experimental Mode Selector (0.9.6)
-
-In immersive WebXR, hold the **left controller thumbstick (L3)** to show a small controller-following dark mode pill. Tilt left or right (return to centre between steps) to highlight **Frames**, **Five Strings**, **Two Thumbs** or **Off**; release L3 to apply. Switching modes stops the preceding audio voices but does not remove previously placed spatial frames.
-
-**Frames:** With both hands tracked, bring left/right index fingertips together and left/right thumb tips together. Slowly separate your hands while maintaining a frame at least 13 cm wide and 4.5 cm high. Hold for the configured 1.5, 3 or 5 seconds, then the rectangular outline becomes independent of the hands in the current WebXR reference space. Repeat to place more (up to 32 per session). Frames are session-only; exiting XR clears them. Requires environment hand tracking, and some Quest builds require putting down controllers for hand tracking to activate. This lab runs locally without any inference charge.
-
-### v0.9.7 XR camera and Extract fix
-The three spatial roundels are always present. Extract is dim until an active source photo is visible. The optional camera feed preview floats 24.5 cm above the eye, not over the Extract button, and disappears after capture. Segmentation still requires a user-triggered paid recognition request.
-
-### v0.9.9 – Capture and AI extraction correction
-The immersive camera preview was removed. The eye requests permission when needed and captures on the next press. A capture is selectable for Extract only after `/api/captures` confirms its persistent ID; failure clears temporary `SAVING` state and exposes the error in XR diagnostics. The source card's top-left Extract button is visible for saved frames.
-
-**Inference limits are disabled by default**. The installer no longer imposes 24/8 requests. On an existing server, old `FREE_LAB_DAILY_LIMIT` values are ignored unless `FREE_LAB_ENFORCE_INFERENCE_LIMITS=1` is explicitly configured. Optional `FREE_LAB_DAILY_LIMIT`, `FREE_LAB_USER_DAILY_LIMIT`, `FREE_LAB_COOLDOWN_SECONDS` may be configured by the operator. Provider-level spend and rate limits still apply. No dollar hard cap is claimed.
-
-
-## v0.10.2 · XR workbench
-
-The selected image provides one contextual popover: EXTRACT, DESCRIBE, REFINE, PROMPT, VOICE, 3D. The XR microphone is press-to-record / press-to-stop (up to 90 seconds for the server upload safety limit), with a live frequency ring and user-confirmed transcript. DESCRIBE explicitly calls Meta vision once and caches the private description for subsequent views. Sound preference defaults to browser speech; ElevenLabs TTS is strictly opt-in with an encrypted server-side API key.
-
-The LOG window is moveable and resizable independently of the navigation. 3D generation is an asynchronous, explicitly confirmed Meshy paid job: status is polled and displayed in XR. When ready, a small untextured triangle-only preview is decoded from eligible GLB v2 content (12 MB server download ceiling; max 3,600 preview triangles). Some provider-compressed GLB formats cannot be previewed and remain downloadable from LIB. No free claim about Meshy inference is made. The preview never uploads additional photographs.
-
-For images outside Quest, upload via the camera panel and use **Save photo to Spatial Library**. Open LIB in XR to view the capture and use Extract. No new quotas are introduced.
-
-## v0.10.2 · XR scene and provider hotfix
-
-- 3D provider is explicitly selected per profile under Admin → Model Connections. Aholo Lux3D is preferred when an Aholo key exists; Meshy is not a silent fallback. Aholo uses a signed, two-hour-lifetime image URL sent to Aholo on the paid task. The full resulting GLB is available from the Library; geometry preview is best-effort.
-- DESCRIBE uses a paid Meta vision request on the actual image (not the image-refine prompt). Private follow-up conversations are stored in `image_dialogue`; editing metadata remains untouched.
-- In XR, Library pages include historic captures (within the existing 500-result server query); the client shows 8 per page. Darkroom, camera-pitch billboarding, slow mascot orbit and manual frame manipulation are local-only.
-- No new caps, no changes to the running ZIP watcher. Actual Quest Browser tracking and new Aholo generation need device/API testing.
-
-## v0.10.2 · spatial interaction refinement
-
-Status fades without typewriter audio or independent drift. Spatial experimental frames rotate with a grabbing hand using wrist orientation and a fixed index-fingertip contact offset. The mascot banks into travel and displays a larger, animated speech bubble. No watcher, backend, or quota changes.
-
-
-## v0.10.3 — immersive cinema and interaction reliability
-
-- Cinema: opaque black WebXR stereo frame, image at approximately 2.35 m, head-aligned pitch/yaw, large X exit, subtle simulated glossy floor. No loss of the immersive session.
-- Clear status: short, muted green, one line beneath camera hint. Microphone silence says “No speech” once.
-- Vision: DESCRIBE always makes an explicit Meta Spark image-analysis call, stores the result privately and shows actual error diagnostics if it fails. **This action is billable.**
-- Mascot: head-first directional swimming, open-palm approach, fist/forward escape and two-ray avoidance. Gesture recognition remains experimental.
-- No watcher changes or application request quotas.
-
-### v0.10.6 Meta image descriptions
-DESCRIBE uses `POST /v1/responses` with a private JPEG as a `user` `input_image` data URL and a concise `input_text` instruction. Responses `output` message text is parsed and usage retained; reasoning items are not displayed. Meta 503 retries remain bounded, with provider error code and request ID exposed without image data or secrets. This integration is locally mocked and must be tested with actual credentials on Ubuntu.
-
-## Recursive image tree (v0.10.6)
-
-Every saved capture is the root of a tree. Extract, SAM segmentation, and Muse Image edits
-can use any saved child object at any depth. Parent relationships are stored as `parent_object_id`
-within the same private capture. The XR scene displays **seven direct children per page**
-to protect Quest rendering; that number is **not a storage, inference, or tree-depth limit**.
-Open an object menu (`··· → OPEN BRANCH`) to see that object's children; use the
-`PARENT`, `PREVIOUS`, and `NEXT` spatial cards to navigate without making AI calls.
-
-Nested operations bill according to the selected model; browsing an existing tree does not.
-
-
-## v0.10.8 Experimental Physics Games
-Hold the left controller thumbstick, tilt to select FRAME, CHAIN, CUBES, THROW, FIVE STRINGS, THUMBS, OFF; release to activate. Draw a frame by joining both pairs of thumb/index fingertips, opening it, and holding for the configured frame-detach interval. CHAIN links two placed frames when a grabbed frame intersects another; a pendulum/hinge constraint lets a child swing as the parent moves. CUBES converts each completed frame into a shaded cuboid that drops onto a local-floor-based plane and stacks against previously placed cuboids. THROW lets a grabbed frame fly using fingertip velocity; it fades and disappears after about 1.6 seconds. Games work offline without model inference. Physics is a small bounded built-in solver for this experiment (not the Rapier WASM engine), with limited axis-aligned box collisions, max 22 cuboids and no environment mesh collisions.
-
-## v0.10.8 Persistent Experimental Menu & Mascot Impacts
-Press **X on the left controller** to open the experiment selector; it stays visible beside the controller. Tilt **left stick** left or right (with a return to centre between choices) and press the **left trigger** to apply. Press X again to dismiss without changing the mode. Selecting a mode no longer depends on holding/releasing L3. In THROW mode, a frame striking the flying mascot produces a one-second orange glow, warm procedural sparks and a synthetic impact pop. Each thrown frame can trigger this impact only once. All of this is local and has no inference cost.
-
-## SAM 3.1 transparent cutouts (v0.10.9)
-XR EXTRACT uses Muse recognition plus one SAM 3.1 box-prompt request to produce masked PNG child objects. Further explicit SAM segmentation also saves transparent PNG descendants. This is an additional paid Meta Model API request, not a simulated or client-side rectangle crop. The official `meta-sam-parser==0.2.0` decoder is installed with Python dependencies. The server preserves historic JPEG crop records. Meta live model calls and physical Quest 3 rendering must be verified after deployment.
-
-
-## XR Personalization and spatial trees (v0.10.10)
-
-In immersive Quest XR, the **CONFIG** cog sits immediately before EXIT on the pink-text toolbar.
-The window can be grabbed and moved independently like LOG. It saves local browser
-preferences: Current/Dark/Night/Liquid theme, random contrast-safe palette and font,
-window borders and backgrounds, mascot visibility, experiment menu, SAM mask-versus-rectangle,
-voice (microphone, descriptive speech and voice prompts) and one of six processing visualizations.
-Disabling masks changes future saved child images only; existing PNG cutouts remain untouched.
-The setting does not change inference permission, billing or saved objects.
-
-Image families remain persisted in SQLite without a depth limit. Choosing OPEN BRANCH
-shows the selected image and its children, with the actual ancestor image thumbnails
-stepping away in depth; tap an ancestor to return. Page controls exist only when there
-are more than seven direct children, to bound GPU texture usage. No fake PARENT image.
-The LIB icon displays the number of historical source captures. The entire 2D panel
-orientation checks the viewer's position to avoid mirrored labels.
-
-Not tested on Quest hardware in the build environment.
-
-
-## Spatial shape sorter, private rooms (v0.10.11)
-
-### Experiments
-
-Press X on the Quest 3 left controller, select SHAPES with the left stick and press its trigger.
-Draw rectangle frames using both index fingers and thumbs. To start a triangular frame,
-touch left thumb and index tip to any right-hand fingertip, then separate the 3 tips to
-form a real triangle in world space; hold briefly or let go after stretching.
-Two floating target volumes render as glowing outline triangular and rectangular prisms.
-Grab a frame near an edge with thumb/index pinch and carry it to the target. The target
-accepts only its matching shape. Frame geometry stays on-device; no model request.
-
-### Shared room access and privacy
-
-Every entry into XR asks Private or Public; Private is the default. Your signed-in account
-owns a persistent room. **Public only exposes the live room to other signed-in profiles**:
-viewers must explicitly join it. Private rooms require a specific invitation followed by
-acceptance. Use ROOMS on the desktop to invite or spectate. Room-state traffic at most once
-a second contains only a headset xyz location and bounded object/capture identifiers and
-world-space xyz positions; camera video, audio, API keys and prompts are never transmitted
-as room state. Individual image URLs are served only to joined attendees and only while
-published as a room object. Other profile objects remain private.
-
-The desktop spectator is a local canvas perspective renderer with wireframe room bounds,
-grey floor grid, simulated ambient stars and perspective image cards. Drag to orbit, mouse
-wheel to zoom. This is a polling-based read-only spatial audience; it does NOT replicate
-Quest's raw passthrough imagery or provide bidirectional avatar controls.
-
-### 3D provider scopes
-
-Admin settings: choose a provider and toggle sharing. Every provider defaults to admin-only;
-Shared grants authenticated profiles the ability to use the encrypted server key without
-reading it. Previously saved vault entries remain intact. Aholo model tasks retain their
-status and only report success if an actual GLB output exists. Aholo task failures can
-still occur at the upstream provider due to its service, credits, or remote image fetching.
-An Aholo key being present in the vault does not prove generation will succeed. The new
-error path includes the provider task id and any available provider failure detail.
-
-### Galleries
-
-Open the desktop Collection to enter a full-window overview and click an object photo
-for a large image viewer. Prev/Next and swipe/keyboard navigation browse source capture
-and descendants; the filmstrip follows the selection. The headset cinema has left/right
-browsing controls, keeping the immersive black room visible. Window headers are sticky.
-
-No inference work is performed without the existing explicit user action; no API keys are
-included. Hardware Quest operation, real-world hand tracking and live Aholo tasks must be
-checked on the target system; unit tests do not establish those properties.
-
-
-## Compact Admin model connections (v0.10.12)
-
-Settings is divided into Experience, APIs and Users. Admin model connections use
-server-encrypted credentials only. Each row has Save, read-only Test and a
-Private/Shared toggle; credentials are never returned to the browser. Shared means
-other authenticated profiles can invoke the provider without receiving the key.
-The four connected providers (Meta Muse + SAM, Aholo Lux3D, Meshy 3D and ElevenLabs)
-appear first, with other saved connections in an optional collapsed list. Provider
-checks that lack a verified read-only endpoint report an unverified result without
-submitting an inference call. The per-profile 3D-provider choice has moved from
-desktop Admin to the XR CONFIG window. The server preference remains persisted.
-No schema migrations, account resets or watcher updates are required.
-
-
-## Compact Admin model connections (v0.10.12)
-
-Settings is divided into Experience, APIs and Users. Admin model connections use
-server-encrypted credentials only. Each row has Save, read-only Test and a
-Private/Shared toggle; credentials are never returned to the browser. Shared means
-other authenticated profiles can invoke the provider without receiving the key.
-The four connected providers (Meta Muse + SAM, Aholo Lux3D, Meshy 3D and ElevenLabs)
-appear first, with other saved connections in an optional collapsed list. Provider
-checks that lack a verified read-only endpoint report an unverified result without
-submitting an inference call. The per-profile 3D-provider choice has moved from
-desktop Admin to the XR CONFIG window. The server preference remains persisted.
-No schema migrations, account resets or watcher updates are required.
-
-
-## Real-time 3D room spectator (v0.10.13)
-
-The desktop Rooms spectator uses Three.js r181, loaded lazily when a room is
-opened. It has a continuously rendered requestAnimationFrame WebGL scene (subject
-to actual device refresh rate), smooth mouse/touch orbit, zoom/pan and an Explore
-mode with WASD movement, Q/E altitude and Shift to move faster. F fits the current
-room. The live headset position and orientation, published media positions and
-orientations, and permitted media metadata are interpolated independently of
-the polling cadence (XR publishing every 250 ms; desktop state queries every
-350 ms while visible). The viewer represents the headset as a pink camera avatar,
-loads authenticated media on real 3D planes and shows curved lineage links where
-parent and child are both in the published room scene. Select a card to inspect
-its original image, saved description and immediately visible family links.
-Large-image inspection stays in the desktop room. Privacy and group membership
-are unchanged; raw XR passthrough camera pixels are not shared. Three.js requires
-access to the pinned CDN; the viewer shows an explicit loading error if the
-module is unavailable. WebGL framerate depends on spectator hardware.
-
-## v0.10.19 release note
-
-- Nginx `.mjs` MIME override and public module signature check protect desktop rooms.
-- Full-window desktop 3D room uses requestAnimationFrame; GPU/browser frame rate is measured, not guaranteed. Spatial labels are HTML overlays to maintain readable screen-space text across depths.
-- Mobile camera workspace stores a capture, then allows explicitly billed extraction, nested segmentation, scene description, image editing, optional transcription and 3D model generation.
-- Profile photo is private JPEG/PNG data in SQLite, served only to the signed-in user.
-- No existing credentials, images, Git, watcher environment or TLS files are cleared.
-
-## v0.10.19 hotfix
-
-Fix Ubuntu release testing: the repository-root `watch-free-lab.sh` is packaged with
-the ZIP but intentionally is not copied into `/var/www/free-lab.cam/releases/vX.Y.Z`.
-Tests validate watcher details only when that file is present in local staging.
-The server-side application checks still run without it, including nginx ES module
-MIME checks. The release is bumped because previous v0.10.14 files may remain
-on disk after a rejected install and cannot be safely overwritten.
-
-## v0.10.19 — active nginx MIME repair
-
-On previous deployments `/etc/nginx/sites-available/free-lab.cam` could be
-different from the configuration that nginx actually serves. `nginx -t` only
-checks syntax; it does not establish that the active virtual host was updated.
-This release discovers the active config from `nginx -T` and updates both the
-canonical and active files when separate. It refuses to overwrite a shared
-config for unrelated hosts or multiple conflicting site configs. It checks
-`room-viewer.mjs` and `scene.mjs` over local HTTPS and rolls back the release,
-nginx and service files if their HTTP responses are not valid JavaScript.
-
-
-### v0.10.19
-The capture studio uses inline quick AI actions, a compact instruction composer, a 3-dot menu for advanced camera options, a filterable image-first collection and an enlarged swipeable gallery. The Quest XR path prioritizes a WebGL2 compositor with minimal optional features and no DOM overlay. On non-WebXR browsers, Enter 3D previews local sources in Three.js.
-
-### v0.10.19
-Desktop/mobile captures share three primary roundels. A context menu exposes 3D, and a multiline composer accepts image and text-guided instructions. AHOLO receives an authenticated, encoded reference image with asynchronous status checks; successful GLB outputs are cached privately when the provider download host passes the allowlist. Saved description threads are read-only retrievable. All paid provider tasks require in-app confirmation. AudioWorklet replaces main-thread audio recording when supported.
-
-## Cognitive Agency (v0.10.47)
-
-After sign-in, the two-card entrance offers **My Stuff** (the unchanged spatial
-camera, model generation, rooms and private Collection) or **Agency**. Agency is an
-experimental, offline practice space with three playable activities:
-
-- **Shape Garden:** matching 2D and stylised 3D shapes to containers, with
-  multiple randomly generated shapes in Free Play;
-- **Number Flow:** three-choice arithmetic with four difficulty levels;
-- **Hand Harmony:** left/right response targets; keyboard L/R on desktop or
-  tracked hand touch / matching hand-controller trigger in Quest.
-
-Modes are Free Play (no timer), Timed (120 seconds), and a repeatable eight-item
-Daily Challenge. Sessions display correct answers, retries and elapsed time.
-Progress is browser-local and namespaced per signed-in user; it is not sent to
-the API or synced across headsets. This is an experimental activity, not a
-clinical treatment or cognitive diagnostic. The games never submit paid
-provider requests.
-
-Agency XR uses the existing FREELAB WebXR rendering context and supports its
-controller rays and tracked hand pinch. On a Quest, select **Agency** from the
-entrance and choose **Enter Agency in XR**. The separate My Stuff entry opens
-the existing spatial collection workflow. The other seven proposed games are
-shown as upcoming ideas, not advertised as implemented features.
-
-No server routes, database migrations, Nginx configuration or watcher version
-are changed in this release. Backup and deploy with the normal watcher.
-
-
-## Cognitive Agency immersive XR entrance — v0.10.49
-
-The browser is the **launch surface only**. After sign-in, select **Enter XR**.
-The WebXR session begins at a neon-lit 3D entrance with two sculpted choices:
-**My Stuff**, which opens the existing spatial collection and capture tools;
-**Agency**, which opens the 3D lobby for Shape Garden, Number Flow and Hand Harmony.
-Nothing in the browser asks users to choose between these experiences.
-
-Agency's spatial activities reuse the tested private, local game rules.
-Headset interactions: controller trigger/squeeze ray pick, hand pinch and
-index-fingertip touch. RE-CENTER repositions the XR activity space around the current headset pose, and system reduced-motion preferences disable decorative floating. In Shape Garden, pinch/hold a real 3D polygon and drop
-into a geometrically open container; on release outside a bin the object resets.
-Number Flow accepts touches or controller selections on 3D answer blocks.
-Hand Harmony requires an identifiable left/right XR input source.
-Modes are Free Play, 2-minute Timed and Daily Challenge, with levels 0–3.
-
-The My Stuff toolbar includes HOME to return to the immersive entrance without
-leaving the XR session. Agency has its own HOME and My Stuff paths.
-Private Agency summaries remain local to the current browser profile.
-These are recreational exercises, not diagnosis or validated treatment.
-
-This patch does not change the backend, database schema, server ports or
-watcher v0.9.2. The installer is tightened to **preserve the existing
-shared Nginx configuration without a reload** and fail closed if the FREELAB
-vhost lacks its required asset routing; it still restarts the dedicated
-free-lab systemd unit. Local automation can verify syntax and
-game logic, but cannot validate true Quest hand-tracking, optics, or the live
-Ubuntu server. Perform headset QA before treating the release as production-ready.
-
-
-## v0.10.49 — headset entrance correction
-
-Enter XR before choosing a destination. The entrance now contains **two large upright rectangular panels only**: **MY STUFF** and **AGENCY**, with their labels integrated into the panel surfaces. No flying shapes, arches, trays or pedestal objects are used in this entrance. Hand-pinch, fingertip touch and controller trigger select the complete panel.
-
-This change deliberately does not redesign Agency activities or My Stuff. The existing release watcher and shared-server installation safeguards remain unchanged. A local watcher `--dry-run` validates structure and tests; final visual fit, tracking and legibility require testing in the Quest Browser.
-
-
-## v0.10.50 — premium XR entrance
-
-Browser → Enter XR → **MY STUFF** / **AGENCY** inside the headset. The entrance has
-exactly two selectable large transparent curved-row panels with broad white rounded
-strokes, a unified bright mint-cyan accent, material-style drawings of belongings /
-brain, no dark panels, no flying abstract objects, and spacious raised typography.
-The placement begins 0.99 m from the current HMD with slightly inward-turned cards,
-then follows yaw and body motion with soft inertia and a dead zone. Rays, hand-pinch
-and direct fingertip contact share one geometry-correct hit region, including the
-card angles and gentle hover scaling. The white title layers rise independently
-on proximity; hover chimes and selection jingles use the bundled WebAudio system.
-
-No database, backend, nginx or watcher changes. The downloadable ZIP is suitable
-for the normal *local* watcher validation, but final headset visual/performance
-acceptance remains required.
-
-## v0.10.51 — headset graphics quality controls
-
-Settings → Experience → Graphics quality controls framebuffer scale (0.8×, 1.0×, 1.2×, 1.5×, 2.0×), XR antialiasing and fixed foveation. Use Balanced by default; higher scales use considerably more GPU and memory and may reduce frame rate. Settings persist in the current browser only, with strict input validation. Foveation changes can take effect during an immersive XR session when supported; framebuffer scaling and AA are applied when **re-entering XR**. The existing in-headset My Stuff CONFIG panel includes an XR GRAPHICS submenu for in-session experimentation. A browser may cap requested scaling and ignore unsupported foveation; use the diagnostic framebuffer dimensions to verify actual behavior. If a graphics layer cannot be allocated, a safe lower-resolution layer is tried; no server or model API call is involved. Device-specific visual sharpness, thermal throttling and frame timing must be tested on the target headset.
-
-## v0.10.56 — Gentle Cognitive Agency
-
-- Smooth scene crossfades with immediate input locking, a breathing gap after answers, two-hand collision prevention, and finger withdrawal before reactivation.
-- Preserve manually moved tabletop position when replaying; move the hand-icon MOVE handle to the far left and place mode/AGENCY controls on the right.
-- Put translucent large game headings and scores at greater depth, and include the signed-in profile name and optional private avatar photograph.
-- Require an explicit second selection to exit XR from the Agency lobby, reducing accidental exit.
-- Add colour-coded Throw Lab targets and no-timer matching scores, pastel fading target effects, new frame colours, and fresh clean rounds.
-- Add individually coloured falling cubes that stack or cancel in matching-colour pairs, distinct hanging frame colours, and correct/incorrect Shape Sort sparkles.
-- Keep experimental activities in Agency rather than My Stuff, preserve passthrough and private progress, and avoid new paid requests.
-
-
-## v0.10.57 — Agency interaction refinement and release tooling
-
-The immersive Agency activity board has a taller subdued glass panel, a readable
-activity label within its top margin and 20%-smaller icons. BACK TO MAIN and
-EXIT XR share one depth outside the board, and the decorative corner dot is
-removed. In play, Number Flow answers are individually coloured and separated;
-ARENA timer and score sit at greater depth, while the AGENCY return control
-stays outside the active workspace. The hand/controller ray and game state
-remain independent of My Stuff.
-
-Throw Lab scatters six smaller targets through the upper space; wrong-colour
-collisions dispose of their projectiles with corrective red feedback. Private
-or public room selection is restored before immersive entry, with a separate
-depth-capable choice. The temporary My Stuff camera prompt and closer voice
-indicator use readable non-squashed text. The Quest keyboard submission has
-single-submit guards. The obsolete controller Experimental selector and its
-asset have been removed, and labs are entered only through Agency.
-
-Watcher 0.9.3 is bundled. This release is deliberately packaged to fit watcher
-0.9.2, which can then upgrade itself. Subsequent releases may contain up to
-2,048 entries and 128 MiB of uncompressed app files; every file still requires
-a SHA-256 match, and unsafe paths, symlinks, encrypted members, oversized
-members and suspicious ZIP expansion ratios are rejected. These ceilings are
-security/resource budgets, not architecture or module-count targets.
-
-Quest Browser hand tracking, camera availability and 3D-avatar GLB loading
-still require acceptance testing on the headset. Neither the deployment
-watcher dry run nor local unit tests reproduce those device-specific paths.
-
-## v0.10.60 — Compatible watcher upgrade
-
-This release retains every Agency gameplay feature from v0.10.58 while consolidating
-the corresponding regression suite into the existing Quest tests so the release archive
-fits the old 100-member validation limit. The included watcher v0.9.5 accepts up to
-2,048 safe members with bounded compressed/uncompressed sizes and automatically
-reloads the upgraded watcher after a successful release when running continuously.
-An older watcher already running in memory may require one restart after this upgrade.
-
-
-## v0.10.65 — XR library, private thumbnails, and configurable progress analysis
-
-The XR library header includes **ALL / SOURCES / SEGMENTS** collection facets;
-**XL 8 / M 16 / S 32** responsive-density options and an experimental
-**SPHERE** mosaic that arranges up to 48 thumbnails per page around the viewer.
-Every preview in these modes is served through a private, cached 224px JPEG
-endpoint (`/api/captures/<id>/thumbnail` or `/api/objects/<id>/thumbnail`),
-with original media unmodified. Sphere mode is opt-in and read-only; selecting a
-thumbnail opens its source or linked segment. The header remains a grab handle.
-Reload failures preserve the visible library and show an error instead of blanking
-all cards. Closing a source returns to LIB rather than an empty scene. Invalid
-and deleted GPU resources are not used for new draw calls.
-
-### Progress analysis inference limits
-
-**Progress-analysis quotas are separate from image, voice, and 3D quotas.**
-They are disabled by default. The server administrator may modify the existing,
-root-owned, non-versioned `/etc/free-lab.env` (not the repository), setting:
-
-```
-FREE_LAB_ANALYSIS_ENFORCE_LIMITS=1
-FREE_LAB_ANALYSIS_DAILY_LIMIT=120
-FREE_LAB_ANALYSIS_USER_DAILY_LIMIT=12
-FREE_LAB_ANALYSIS_COOLDOWN_SECONDS=10
+```text
+README.md             Project overview, demo and getting started
+ABOUT.md              Inspiration, project story and research direction
+frontend/             Browser UI, WebXR scenes and game interactions
+backend/              Flask API, data access and optional services
+deploy/               Server installation and release management
+requirements.txt      Python dependencies
+tests/                 Regression checks
+version.json          Current release version
+changelog.json        Release notes and full version history
 ```
 
-These are **example values**, not fixed application ceilings. Set
-`FREE_LAB_ANALYSIS_ENFORCE_LIMITS=0` to disable limits; each numeric value of
-`0` disables that individual limit. Changes to the service environment require
-`sudo systemctl restart free-lab`. The pre-existing generic inference limits
-remain controlled independently by `FREE_LAB_ENFORCE_INFERENCE_LIMITS` and
-its associated settings. Provider-side billing or limits can still apply.
+Local development (from the application root; use only for development):
 
-### Hardware validation
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m unittest discover -s tests
+python -m flask --app backend.app run --debug
+```
 
-Quest GPU safety and the spherical selection/placement flow require headset
-verification after deploying, including a source with an attached 3D model.
+For the maintained deployment workflow, place a complete `FREE_LAB_RELEASE_vX.Y.Z.zip` in the watcher's `updates/` directory. The bundled `watch-free-lab.sh` validates the manifest, checksums, syntax, tests, and remote readiness. Use `./watch-free-lab.sh --dry-run` to validate without deploying. Server configuration and credentials belong outside versioned code (for example `/etc/free-lab.env`).
 
+Explainer videos are **persistent static assets**, not part of release ZIPs. Each activity can read `/videos/<activity>/video_hls/index.m3u8` (with adjacent HLS segments) or fall back to `video.mp4`. Publish the repository's `videos/` tree independently using `./watch-free-lab.sh --sync-videos`. Updating those media assets does not require a software release.
 
-## v0.10.67 — XR interactions
+For past changes, see [changelog.json](changelog.json). The application is evolving; consult the live demo for current device-specific behavior.
 
-- **Voice/keyboard search** normalizes punctuation, accents and case (for example, `Bottle.` finds `bottle` and `bottles`). Search matches both sources and saved segments by default; filter pills can then narrow the results.
-- **Gallery placement** turns the complete library toward the user while the header is dragged, then stays fixed in the room at the new pose; page changes and filtering preserve that pose.
-- **Cinema** is a separate, room-fixed stage without head-pitch billboarding. Its image bottom sits just above the local-floor reference (or a conservative floor estimate when only `local` is available); previous/next/exit controls share the same floor-relative location while changing images.
-- **Sphere density** uses the same XL (8), M (16), S (32) selection as the grid/mosaic, with private 224px previews.
-- **Near/far preview** is off by default. Enable **XR Personalize → Near/far preview**, below **Voice features**. Point at or select an object/source; push either controller thumbstick **down** to bring the image closer and **up** to return to its saved original distance. With hand tracking, pinch the image and pull toward the user or push away to restore depth. Movement eases rapidly and is bounded at 52cm from the headset. The feature does **not** alter the saved 3D placement; disable it to retain ordinary free-movement pinching.
+## Project story and next steps
 
-HLS video streams remain independent static assets outside the versioned ZIP.
+See **[ABOUT.md](ABOUT.md)** for the inspiration, design choices, lessons learned, challenges, and future cognitive-science research direction. The core question remains: **Can technology help us become more active participants in the world around us?**
+
+**FREE-LAB.cam — My Stuff. My Agency. My World.**

@@ -1,4 +1,4 @@
-"""Regression guards for v0.10.70. No network, headset, camera, or paid API calls."""
+"""Regression guards for v0.10.71. No network, headset, camera, or paid API calls."""
 import json
 import re
 import unittest
@@ -87,13 +87,13 @@ class QuestCompact118(unittest.TestCase):
 
  def test_release_versions(self):
   for name in ('version.json','frontend/version.json','changelog.json','frontend/changelog.json'):
-   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.70')
-  self.assertIn('room-viewer.mjs?v=0.10.70',ROOMS)
-  self.assertIn('xr.js?v=0.10.70',HTML)
+   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.71')
+  self.assertIn('room-viewer.mjs?v=0.10.71',ROOMS)
+  self.assertIn('xr.js?v=0.10.71',HTML)
 
 
 
-"""v0.10.70 Agency XR regression checks: independent labs, text aspect, focus and reachable play."""
+"""v0.10.71 Agency XR regression checks: independent labs, text aspect, focus and reachable play."""
 import unittest
 from pathlib import Path
 XR=(Path(__file__).resolve().parents[1]/'frontend/assets/xr.js').read_text()
@@ -286,7 +286,7 @@ for(let i=0;i<14;i++){
 }
 ''')
  def test_video_overlay_navigation_and_hover(self):
-  self.assertIn('agency-video.js?v=0.10.70',PAGE)
+  self.assertIn('agency-video.js?v=0.10.71',PAGE)
   self.assertIn('agencyShowExplainer(agencyGame,agencyStartGame)',XR)
   for token in ('agencyVideoDismiss()',"'agency-video-screen'","'agency-video-play'","'agency-video-skip'", "'agency-howto'", 'agencyControlsReact(frame,t)',"agencyScreen='explainer'", 'agencySession.startedAt+=Date.now()-e.shownAt'):
    self.assertIn(token,XR)
@@ -325,5 +325,25 @@ for(let i=0;i<14;i++){
   self.assertIn('window.FreeLab.saveXRFrame({image})',XR)
   self.assertIn('drawFramePhotos(vp)',XR)
   self.assertIn('framePhotoBusy=false',XR)
+
+class SubmissionDocsTests(unittest.TestCase):
+ def test_hackathon_readme_links_brand_and_project_story(self):
+  readme=(ROOT/'README.md').read_text()
+  about=(ROOT/'ABOUT.md').read_text()
+  self.assertTrue(readme.startswith('# FREE-LAB.cam'))
+  for doc in (readme,about):
+   self.assertIn('https://free-lab.cam/',doc)
+   self.assertIn('https://youtu.be/rJ0nFm7jKms',doc)
+   self.assertIn('My Stuff',doc)
+   self.assertIn('Agency',doc)
+  self.assertIn('[Read our project story](ABOUT.md)',readme)
+  self.assertIn('[Back to README](README.md)',about)
+  self.assertIn('not a clinically validated',readme)
+
+ def test_readme_does_not_claim_passthrough_pixel_capture(self):
+  readme=(ROOT/'README.md').read_text()
+  self.assertIn('passthrough is not automatically a camera image',readme)
+  self.assertIn('/videos/<activity>/video_hls/index.m3u8',readme)
+  self.assertIn('./watch-free-lab.sh --sync-videos',readme)
 
 if __name__ == "__main__": unittest.main()
