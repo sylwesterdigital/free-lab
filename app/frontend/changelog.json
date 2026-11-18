@@ -1,12 +1,12 @@
 {
-  "version": "0.10.71",
-  "title": "FREE-LAB.cam v0.10.71 — Hackathon project documentation",
-  "datetime": "2026-11-17",
+  "version": "0.10.72",
+  "title": "FREE-LAB.cam v0.10.72 — GitHub root docs and technical developer guide",
+  "datetime": "2026-11-18",
   "changes": [
-    "Replace accumulated and outdated README release notes with a concise FREE-LAB.cam project landing page and two clear links: https://free-lab.cam/ and https://youtu.be/rJ0nFm7jKms.",
-    "Add ABOUT.md covering inspiration, two experience areas, Meta Quest capabilities, hands/controllers, technologies, challenges, what was learned and future research directions.",
-    "Document onboarding, desktop/mobile availability, scientific limitations, optional AI privacy, persistent HLS media and deployment/testing guidance; preserve previous release history in changelog.json.",
-    "Documentation and version metadata only: no gameplay, network API, data migration or XR rendering behavior changes."
+    "Publish the GitHub root README.md and ABOUT.md after a successful release, using canonical application documentation sources and a safe watcher 0.9.6 Git push.",
+    "Move the public hackathon introduction, video, demo, and technology showcase to the repository landing README; keep the project story in ABOUT.md.",
+    "Rewrite app/README.md as a technical guide covering architecture, development environment, tests, safe deployment, HLS media, configuration, and privacy.",
+    "Preserve all application behavior and validated deployment controls; allow explicit --publish-docs after --once deployments."
   ],
   "history": [
     {

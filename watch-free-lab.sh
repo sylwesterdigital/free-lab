@@ -10,7 +10,7 @@ from pathlib import Path,PurePosixPath
 
 ROOT=Path(sys.argv[1]).resolve();sys.argv=[sys.argv[0]]+sys.argv[2:]
 UPDATES=ROOT/'updates';UPLOADS=ROOT/'uploads';STATE=ROOT/'.free-lab'
-VERSION='0.9.5';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
+VERSION='0.9.6';PROJECT='free-lab';ZIP_RE=re.compile(r'^FREE_LAB_RELEASE_v(\d+\.\d+\.\d+)\.zip$')
 REPO='git@github.com:sylwesterdigital/free-lab.git'
 HOST=os.getenv('FREE_LAB_SSH_HOST','root@46.62.232.64')
 PORT=os.getenv('FREE_LAB_SSH_PORT','333')
@@ -342,6 +342,67 @@ def sync_videos():
     run(cmd,timeout=300)
     say('HLS assets published to https://free-lab.cam/videos/ without a software release','PASS')
 
+def publish_repo_docs():
+    """Publish canonical, validated application docs to the GitHub landing page.
+
+    The older watcher only permits app/ paths in signed release manifests.
+    Publishing after the verified release preserves that compatibility while
+    updating the actual GitHub repository root. No network or Git mutation is
+    performed by ZIP validation, tests or a dry run.
+    """
+    if not (ROOT/'.git').is_dir():raise Failure('Repository .git directory missing')
+    if version_tuple(last_version()) < (0,10,72):
+        raise Failure('Repository docs require a successful v0.10.72+ release first')
+    docs=(('app/docs/GITHUB_README.md','README.md'),('app/ABOUT.md','ABOUT.md'))
+    updates=[]
+    for from_name,to_name in docs:
+        src=ROOT/from_name;dest=ROOT/to_name
+        if not src.is_file() or src.is_symlink() or dest.is_symlink():
+            raise Failure('Missing or unsafe repository documentation: '+from_name)
+        data=src.read_bytes()
+        if not data.startswith(b'# ') or len(data)>100*1024:
+            raise Failure('Malformed project document: '+from_name)
+        if dest.exists() and dest.read_bytes()==data:continue
+        if dest.exists() and run(['git','ls-files','--error-unmatch','--',to_name],cwd=ROOT,check=False).returncode:
+            raise Failure('Refusing untracked repository documentation collision: '+to_name)
+        if run(['git','status','--porcelain','--',to_name],cwd=ROOT).stdout.strip():
+            raise Failure('Repository document has local edits: '+to_name)
+        updates.append((dest,data))
+    if not updates:
+        return False
+    if run(['git','branch','--show-current'],cwd=ROOT).stdout.strip()!='main':
+        raise Failure('Only Git main can publish project documentation')
+    if run(['git','remote','get-url','origin'],cwd=ROOT).stdout.strip() not in (
+        REPO,'ssh://git@github.com/sylwesterdigital/free-lab.git'):
+        raise Failure('Unexpected Git origin; cannot publish documentation')
+    # The release watcher has already committed and pushed the source files;
+    # this separate docs commit updates only the repository landing page.
+    changed=[dest.relative_to(ROOT).as_posix() for dest,_ in updates]
+    backups=[(dest,dest.read_bytes() if dest.exists() else None) for dest,_ in updates]
+    try:
+        for dest,data in updates:
+            tmp=dest.with_name(dest.name+'.free-lab-docs-new')
+            tmp.write_bytes(data);os.replace(tmp,dest)
+        run(['git','add','--',*changed],cwd=ROOT)
+        check=run(['git','diff','--cached','--quiet'],cwd=ROOT,check=False)
+        if check.returncode==1:
+            run(['git','commit','-m','Publish FREE-LAB.cam GitHub project documentation'],cwd=ROOT)
+        elif check.returncode:
+            raise Failure('Cannot validate staged project documentation')
+    except Exception:
+        for dest,old in backups:
+            if old is None:dest.unlink(missing_ok=True)
+            else:dest.write_bytes(old)
+        run(['git','reset','--quiet','--',*changed],cwd=ROOT,check=False)
+        raise
+    head=run(['git','rev-parse','HEAD'],cwd=ROOT).stdout.strip()
+    pushed=run(['git','push','-u','origin','main'],cwd=ROOT,timeout=145,check=False)
+    remote=run(['git','ls-remote','origin','refs/heads/main'],cwd=ROOT,timeout=65).stdout
+    if not remote.startswith(head+'\t'):
+        raise Failure('Documentation committed locally; GitHub push unverified: '+pushed.stderr[-500:])
+    say('GitHub root README.md and ABOUT.md published at '+head[:12],'PASS')
+    return True
+
 def mark_deployed(v):
     tmp=STATE/'deployed.json.new'
     tmp.write_text(json.dumps({'version':v,'utc':dt.datetime.now(dt.timezone.utc).isoformat(),'url':URL},indent=2)+'\n')
@@ -383,7 +444,7 @@ def main():
     global LOG
     p=argparse.ArgumentParser(description='FREE LAB secure release watcher')
     opts=p.add_mutually_exclusive_group()
-    for opt in ('once','dry-run','status','tail','diagnose','rollback','sync-videos'):opts.add_argument('--'+opt,action='store_true')
+    for opt in ('once','dry-run','status','tail','diagnose','rollback','sync-videos','publish-docs'):opts.add_argument('--'+opt,action='store_true')
     p.add_argument('--interval',type=int,default=3)
     args=p.parse_args()
     if args.interval<1:p.error('--interval must be 1+')
@@ -392,6 +453,8 @@ def main():
     STATE.chmod(0o700)
     if args.sync_videos:
         sync_videos();return 0
+    if args.publish_docs:
+        publish_repo_docs();return 0
     if args.status:
         say('Watcher '+VERSION+' | last verified '+last_version())
         try:say('Public health: '+str(json.loads(public_get('api/health'))),'PASS')
@@ -408,6 +471,11 @@ def main():
         say(ssh(script,timeout=130),'WARN')
         say('Server rolled back. Git main and SQLite data not rolled back.','WARN')
         return 0
+    # Also refresh the GitHub landing page after the old watcher has upgraded.
+    # A --dry-run or --once must never publish documentation.
+    if not (args.once or args.dry_run):
+        try:publish_repo_docs()
+        except Failure as e:say('Project documentation sync deferred: '+str(e),'WARN')
     lock=(STATE/'watch.lock').open('w')
     try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
     except BlockingIOError:raise Failure('Watcher already running')

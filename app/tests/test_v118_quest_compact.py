@@ -1,4 +1,4 @@
-"""Regression guards for v0.10.71. No network, headset, camera, or paid API calls."""
+"""Regression guards for v0.10.72. No network, headset, camera, or paid API calls."""
 import json
 import re
 import unittest
@@ -87,13 +87,13 @@ class QuestCompact118(unittest.TestCase):
 
  def test_release_versions(self):
   for name in ('version.json','frontend/version.json','changelog.json','frontend/changelog.json'):
-   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.71')
-  self.assertIn('room-viewer.mjs?v=0.10.71',ROOMS)
-  self.assertIn('xr.js?v=0.10.71',HTML)
+   self.assertEqual(json.loads((ROOT/name).read_text())['version'],'0.10.72')
+  self.assertIn('room-viewer.mjs?v=0.10.72',ROOMS)
+  self.assertIn('xr.js?v=0.10.72',HTML)
 
 
 
-"""v0.10.71 Agency XR regression checks: independent labs, text aspect, focus and reachable play."""
+"""v0.10.72 Agency XR regression checks: independent labs, text aspect, focus and reachable play."""
 import unittest
 from pathlib import Path
 XR=(Path(__file__).resolve().parents[1]/'frontend/assets/xr.js').read_text()
@@ -286,7 +286,7 @@ for(let i=0;i<14;i++){
 }
 ''')
  def test_video_overlay_navigation_and_hover(self):
-  self.assertIn('agency-video.js?v=0.10.71',PAGE)
+  self.assertIn('agency-video.js?v=0.10.72',PAGE)
   self.assertIn('agencyShowExplainer(agencyGame,agencyStartGame)',XR)
   for token in ('agencyVideoDismiss()',"'agency-video-screen'","'agency-video-play'","'agency-video-skip'", "'agency-howto'", 'agencyControlsReact(frame,t)',"agencyScreen='explainer'", 'agencySession.startedAt+=Date.now()-e.shownAt'):
    self.assertIn(token,XR)
@@ -314,7 +314,7 @@ for(let i=0;i<14;i++){
   watcher=WATCH_PATH.read_text()
   self.assertIn('def sync_videos():',watcher)
   self.assertIn('args.sync_videos',watcher)
-  self.assertIn("VERSION='0.9.5'",watcher)
+  self.assertIn("VERSION='0.9.6'",watcher)
   self.assertIn("'--delete'",watcher)
   self.assertIn(':/var/www/free-lab.cam/videos/',watcher)
  def test_spatial_photo_visible_prior_to_server_write(self):
@@ -328,22 +328,41 @@ for(let i=0;i<14;i++){
 
 class SubmissionDocsTests(unittest.TestCase):
  def test_hackathon_readme_links_brand_and_project_story(self):
-  readme=(ROOT/'README.md').read_text()
+  landing=(ROOT/'docs/GITHUB_README.md').read_text()
+  technical=(ROOT/'README.md').read_text()
   about=(ROOT/'ABOUT.md').read_text()
-  self.assertTrue(readme.startswith('# FREE-LAB.cam'))
-  for doc in (readme,about):
+  self.assertTrue(landing.startswith('# FREE-LAB.cam'))
+  self.assertTrue(technical.startswith('# FREE-LAB.cam — Application & Developer Guide'))
+  for doc in (landing,technical,about):
    self.assertIn('https://free-lab.cam/',doc)
    self.assertIn('https://youtu.be/rJ0nFm7jKms',doc)
    self.assertIn('My Stuff',doc)
    self.assertIn('Agency',doc)
-  self.assertIn('[Read our project story](ABOUT.md)',readme)
+  self.assertIn('[**Read the project story**](ABOUT.md)',landing)
+  self.assertIn('[**Developer guide**](app/README.md)',landing)
   self.assertIn('[Back to README](README.md)',about)
-  self.assertIn('not a clinically validated',readme)
+  self.assertIn('not a diagnostic',landing.lower())
 
- def test_readme_does_not_claim_passthrough_pixel_capture(self):
-  readme=(ROOT/'README.md').read_text()
-  self.assertIn('passthrough is not automatically a camera image',readme)
-  self.assertIn('/videos/<activity>/video_hls/index.m3u8',readme)
-  self.assertIn('./watch-free-lab.sh --sync-videos',readme)
+ def test_technical_readme_and_release_docs_are_separate(self):
+  technical=(ROOT/'README.md').read_text()
+  landing=(ROOT/'docs/GITHUB_README.md').read_text()
+  self.assertIn('## Local development',technical)
+  self.assertIn('## Runtime configuration',technical)
+  self.assertIn('## Release & deployment',technical)
+  self.assertIn('passthrough access',technical)
+  self.assertIn('/videos/<activity>/video_hls/index.m3u8',technical)
+  self.assertIn('./watch-free-lab.sh --sync-videos',technical)
+  self.assertIn('[![FREE-LAB.cam',landing)
+  self.assertNotIn('python -m pip install',landing)
+
+ def test_repository_docs_publisher_is_gated(self):
+  if not WATCH_PATH.is_file():
+   self.skipTest('Watcher ships outside server application')
+  watcher=WATCH_PATH.read_text()
+  self.assertIn('def publish_repo_docs():',watcher)
+  self.assertIn("('app/docs/GITHUB_README.md','README.md')",watcher)
+  self.assertIn("('app/ABOUT.md','ABOUT.md')",watcher)
+  self.assertIn('if not (args.once or args.dry_run):',watcher)
+  self.assertIn('if args.publish_docs:',watcher)
 
 if __name__ == "__main__": unittest.main()
